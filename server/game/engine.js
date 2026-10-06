@@ -2,7 +2,7 @@
 // One instance per lobby. Owns the full (secret) game state, schedules CPU turns
 // and round transitions, and reports every state change through onState.
 
-import { initializeGame, findPlayerWithCard, secureRandom } from "./deckUtils.js";
+import { initializeGame, compareCards, secureRandom } from "./deckUtils.js";
 import {
   createGameState,
   playCards,
@@ -28,10 +28,19 @@ export const DEFAULT_DELAYS = {
 
 const cardValue = (card) => card.rankValue * 4 + card.suitValue;
 
+/** One 13-card hand per seat, whatever the table size; the rest of the deck sits out. */
+const dealTo = (count, rng) => initializeGame(rng).hands.slice(0, count);
+
+/** The first round's lead: the lowest card dealt (the 3♦ whenever someone holds it). */
+const openingLead = (hands) =>
+  hands
+    .flatMap((hand, seat) => hand.map((card) => ({ seat, card })))
+    .reduce((low, next) => (compareCards(next.card, low.card) < 0 ? next : low)).seat;
+
 export class ThirteenGame {
   /**
    * @param {Object} opts
-   * @param {Array} opts.seats - 4 entries of { type: "HUMAN"|"AI", name, socketId, avatar? }
+   * @param {Array} opts.seats - 2–4 entries of { type: "HUMAN"|"AI", name, socketId?, avatar?, level? }
    * @param {String} opts.aiDifficulty
    * @param {Function} opts.onState - called after every state change
    * @param {Function} opts.onRoundEnd - called once per completed round
@@ -50,15 +59,14 @@ export class ThirteenGame {
     this.dealEndsAt = 0;
     this.destroyed = false;
     this.state = null;
-    this.startMatch(seats, { matchNumber: 1, matchWins: [0, 0, 0, 0] }, aiDifficulty);
+    this.startMatch(seats, { matchNumber: 1, matchWins: seats.map(() => 0) }, aiDifficulty);
   }
 
   startMatch(seats, matchMeta, aiDifficulty) {
-    const { hands } = initializeGame(this.rng);
-    const starting = findPlayerWithCard(hands, "3", "♦");
+    const hands = dealTo(seats.length, this.rng);
     const state = createGameState(
       hands,
-      starting >= 0 ? starting : 0,
+      openingLead(hands),
       aiDifficulty || this.state?.aiDifficulty,
       matchMeta,
     );
@@ -68,6 +76,7 @@ export class ThirteenGame {
       type: seats[i].type,
       socketId: seats[i].socketId || null,
       avatar: seats[i].avatar || null,
+      level: seats[i].type === "AI" ? seats[i].level || "MEDIUM" : null,
     }));
     this.startedAt = new Date();
     this.finishedAt = null;
@@ -91,10 +100,11 @@ export class ThirteenGame {
       name: p.name,
       socketId: p.socketId,
       avatar: p.avatar,
+      level: p.level,
     }));
     const matchMeta = {
       matchNumber: (this.state.matchNumber || 1) + 1,
-      matchWins: this.state.matchWins || [0, 0, 0, 0],
+      matchWins: this.state.matchWins || seats.map(() => 0),
     };
     this.clearTimers();
     this.startMatch(seats, matchMeta);
@@ -157,7 +167,9 @@ export class ThirteenGame {
     if (!s || !s.players[seatIndex]) return;
     // A CPU taking over gets a stock face (avatar null).
     s.players = s.players.map((p, i) =>
-      i === seatIndex ? { ...p, type, name, socketId: socketId || null, avatar: avatar || null } : p,
+      i === seatIndex
+        ? { ...p, type, name, socketId: socketId || null, avatar: avatar || null, level: type === "AI" ? "MEDIUM" : null }
+        : p,
     );
     this.broadcast();
     this.scheduleAI();
@@ -215,7 +227,7 @@ export class ThirteenGame {
   }
 
   beginNextRound() {
-    const { hands } = initializeGame(this.rng);
+    const hands = dealTo(this.state.players.length, this.rng);
     this.state = startNextRound(this.state, hands);
     this.dealEndsAt = Date.now() + this.delays.deal;
     this.broadcast();

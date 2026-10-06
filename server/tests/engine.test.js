@@ -159,6 +159,56 @@ describe("the deal", () => {
   });
 });
 
+describe("tables of 2 and 3", () => {
+  const seatsOf = (n) => Array.from({ length: n }, (_, i) => ({ type: "HUMAN", name: `P${i}`, socketId: `s${i}` }));
+  const cpus = (levels) => levels.map((level, i) => ({ type: "AI", name: `C${i}`, level }));
+
+  it.each([2, 3])("deals 13 cards to each of %i players", (n) => {
+    const { game } = newGame({ seats: seatsOf(n), rng: seededRandom(n) });
+    expect(game.state.players.map((p) => p.hand.length)).toEqual(Array(n).fill(13));
+    expect(game.state.matchWins).toEqual(Array(n).fill(0));
+    game.destroy();
+  });
+
+  it("the lowest card dealt leads the first round, the 3♦ when someone has it", () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const { game } = newGame({ seats: seatsOf(2), rng: seededRandom(seed) });
+      const dealt = game.state.players.flatMap((p, seat) => p.hand.map((c) => ({ seat, v: c.rankValue * 4 + c.suitValue })));
+      const lowest = dealt.reduce((a, b) => (b.v < a.v ? b : a));
+      expect(game.state.currentPlayerIndex).toBe(lowest.seat);
+      game.destroy();
+    }
+  });
+
+  it.each([2, 3])("a table of %i CPUs plays a whole match on its own", (n) => {
+    const { game, calls } = newGame({ seats: cpus(["EASY", "HARD", "MEDIUM"].slice(0, n)), delays: { aiTurn: 1, deal: 1, roundEnd: 1 }, rng: seededRandom(n * 7) });
+    for (let i = 0; i < 50000 && game.state.gameState !== GAME_STATES.GAME_OVER; i++) vi.advanceTimersByTime(1);
+    expect(game.state.gameState).toBe(GAME_STATES.GAME_OVER);
+    expect(game.state.players).toHaveLength(n);
+    expect(calls.gameOver).toBe(1);
+  });
+
+  it("CPUs keep their seat's level; a rematch keeps the seats and levels", () => {
+    const { game } = newGame({ seats: [seatsOf(1)[0], ...cpus([undefined, "HARD"])] });
+    expect(game.state.players.map((p) => p.level)).toEqual([null, "MEDIUM", "HARD"]);
+    game.state = { ...game.state, gameState: GAME_STATES.GAME_OVER };
+    expect(game.rematch()).toEqual({ ok: true });
+    expect(game.state.players.map((p) => p.level)).toEqual([null, "MEDIUM", "HARD"]);
+    expect(game.state.matchWins).toHaveLength(3);
+    expect(game.state.matchNumber).toBe(2);
+    game.destroy();
+  });
+
+  it("a CPU taking over a seat plays at MEDIUM, whatever sat there before", () => {
+    const { game } = newGame({ seats: [seatsOf(1)[0], ...cpus(["HARD"])] });
+    game.replaceSeat(1, { type: "HUMAN", name: "LATE", socketId: "s9" });
+    expect(game.state.players[1].level).toBeNull();
+    game.replaceSeat(1, { type: "AI", name: "LATE (CPU)", socketId: null });
+    expect(game.state.players[1].level).toBe("MEDIUM");
+    game.destroy();
+  });
+});
+
 describe("handleMove", () => {
   let game;
   beforeEach(() => {
