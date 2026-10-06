@@ -14,7 +14,7 @@ const table = (over = {}) => ({
   code: "ABC123",
   mySeat: 0,
   isHost: true,
-  seats: [human("HOSTY #0001", { isHost: true }), { kind: "cpu", name: "Bot Saturn" }, null, human("PAL #0002", { connected: false })],
+  seats: [human("HOSTY #0001", { isHost: true }), { kind: "cpu", name: "Bot Saturn", level: "MEDIUM" }, null, human("PAL #0002", { connected: false })],
   ...over,
 });
 
@@ -25,6 +25,7 @@ const props = (over = {}) => ({
   onExit: vi.fn(),
   onAddCpu: vi.fn(),
   onRemoveCpu: vi.fn(),
+  onSetCpuLevel: vi.fn(),
   onStart: vi.fn(),
   ...over,
 });
@@ -47,9 +48,15 @@ describe("a five-seat (Muushig) table", () => {
     expect(screen.getAllByText("EMPTY SEAT")).toHaveLength(2);
   });
 
+  it("can start alone: START fills the empty seats with MEDIUM CPUs", () => {
+    render(<WaitingTable {...props({ table: five({ seats: [null, null, human("ME #0003", { isHost: true }), null, null] }) })} title="MUUSHIG" fillsEmptySeats />);
+    expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled();
+    expect(screen.getByText("Empty seats are filled with MEDIUM CPUs when you start.")).toBeInTheDocument();
+  });
+
   it("lets a non-host see every seat but no host controls", () => {
     render(<WaitingTable {...props({ table: five({ isHost: false }) })} title="MUUSHIG" />);
-    expect(screen.queryByRole("button", { name: /add cpu/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /add \w+ cpu/i })).toBeNull();
     expect(screen.getByText(/waiting for ANN to start/i)).toBeInTheDocument();
   });
 });
@@ -76,12 +83,32 @@ describe("WaitingTable", () => {
     const user = userEvent.setup();
     const p = props();
     render(<WaitingTable {...p} />);
-    await user.click(screen.getByRole("button", { name: "Add CPU to seat 3" }));
-    expect(p.onAddCpu).toHaveBeenCalledWith(2);
+    await user.click(screen.getByRole("button", { name: "Add HARD CPU to seat 3" }));
+    expect(p.onAddCpu).toHaveBeenCalledWith(2, "HARD");
     await user.click(screen.getByRole("button", { name: "Remove Bot Saturn" }));
     expect(p.onRemoveCpu).toHaveBeenCalledWith(1);
     await user.click(screen.getByRole("button", { name: /start game/i }));
     expect(p.onStart).toHaveBeenCalled();
+  });
+
+  it("the host taps a CPU's level to cycle it", async () => {
+    const user = userEvent.setup();
+    const p = props();
+    render(<WaitingTable {...p} />);
+    await user.click(screen.getByRole("button", { name: "Bot Saturn: MEDIUM. Change level" }));
+    expect(p.onSetCpuLevel).toHaveBeenCalledWith(1, "HARD");
+  });
+
+  it("others see a CPU's level but can't change it", () => {
+    render(<WaitingTable {...props({ table: table({ isHost: false, mySeat: 3 }) })} />);
+    expect(screen.getByText("MEDIUM")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /change level/i })).not.toBeInTheDocument();
+  });
+
+  it("Thirteen can't start until 2 seats are filled; empty seats stay empty", () => {
+    render(<WaitingTable {...props({ table: table({ seats: [human("HOSTY #0001", { isHost: true }), null, null, null] }) })} />);
+    expect(screen.getByRole("button", { name: /start game/i })).toBeDisabled();
+    expect(screen.getByText("Start with 2 to 4 players. Empty seats stay empty.")).toBeInTheDocument();
   });
 
   it("copies the code and the invite link", async () => {
@@ -106,7 +133,7 @@ describe("WaitingTable", () => {
     );
     expect(screen.getByText("Waiting for HOSTY to start")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /start game/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /add cpu/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add \w+ cpu/i })).not.toBeInTheDocument();
     expect(screen.getAllByText("EMPTY SEAT")).toHaveLength(2);
   });
 

@@ -406,7 +406,8 @@ const GameThirteen = () => {
   };
 
   // --- WAITING TABLE (host) ---
-  const handleAddCpu = (seat) => socket.emit("add_cpu", { lobbyId, seat });
+  const handleAddCpu = (seat, level) => socket.emit("add_cpu", { lobbyId, seat, level });
+  const handleSetCpuLevel = (seat, level) => socket.emit("set_cpu_level", { lobbyId, seat, level });
   const handleRemoveCpu = (seat) => socket.emit("remove_cpu", { lobbyId, seat });
   const handleStart = () => socket.emit("start_game", { lobbyId });
 
@@ -559,6 +560,7 @@ const GameThirteen = () => {
         onExit={handleExit}
         onAddCpu={handleAddCpu}
         onRemoveCpu={handleRemoveCpu}
+        onSetCpuLevel={handleSetCpuLevel}
         onStart={handleStart}
         errorMessage={errorMessage}
         myFace={{ variant: identity.avatar, customAvatarData: identity.customAvatar }}

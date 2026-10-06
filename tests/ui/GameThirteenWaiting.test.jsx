@@ -63,12 +63,16 @@ describe("GameThirteen before the deal", () => {
     serverSends("table_update", table);
     expect(screen.getByText("WAITING FOR PLAYERS")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Add CPU to seat 2" }));
-    expect(fakeSocket.emit).toHaveBeenCalledWith("add_cpu", { lobbyId: "PUB-ABC123", seat: 1 });
+    await user.click(screen.getByRole("button", { name: "Add MEDIUM CPU to seat 2" }));
+    expect(fakeSocket.emit).toHaveBeenCalledWith("add_cpu", { lobbyId: "PUB-ABC123", seat: 1, level: "MEDIUM" });
 
-    serverSends("table_update", { ...table, seats: [table.seats[0], { kind: "cpu", name: "Bot Saturn" }, null, null] });
+    serverSends("table_update", { ...table, seats: [table.seats[0], { kind: "cpu", name: "Bot Saturn", level: "MEDIUM" }, null, null] });
     await user.click(screen.getByRole("button", { name: "Remove Bot Saturn" }));
     expect(fakeSocket.emit).toHaveBeenCalledWith("remove_cpu", { lobbyId: "PUB-ABC123", seat: 1 });
+
+    serverSends("table_update", { ...table, seats: [table.seats[0], { kind: "cpu", name: "Bot Saturn", level: "MEDIUM" }, null, null] });
+    await user.click(screen.getByRole("button", { name: "Bot Saturn: MEDIUM. Change level" }));
+    expect(fakeSocket.emit).toHaveBeenCalledWith("set_cpu_level", { lobbyId: "PUB-ABC123", seat: 1, level: "HARD" });
 
     await user.click(screen.getByRole("button", { name: /start game/i }));
     expect(fakeSocket.emit).toHaveBeenCalledWith("start_game", { lobbyId: "PUB-ABC123" });

@@ -329,8 +329,10 @@ function OnlineMuushig({ lobbyId, playerName }) {
         messages={messages}
         onSendMessage={sendChat}
         onExit={exit}
-        onAddCpu={(seat) => socket.emit("add_cpu", { lobbyId, seat })}
+        onAddCpu={(seat, level) => socket.emit("add_cpu", { lobbyId, seat, level })}
         onRemoveCpu={(seat) => socket.emit("remove_cpu", { lobbyId, seat })}
+        onSetCpuLevel={(seat, level) => socket.emit("set_cpu_level", { lobbyId, seat, level })}
+        fillsEmptySeats
         onStart={() => socket.emit("start_game", { lobbyId })}
         errorMessage={rejection?.text}
         myFace={{ variant: identity?.avatar ?? 1, customAvatarData: identity?.customAvatar }}

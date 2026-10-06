@@ -1,6 +1,7 @@
 // WAITING TABLE — an online table before the deal (Thirteen's 4 seats or
 // Muushig's 5). Seats sit where they will during the match (you at the
-// bottom); empty ones are shadow spots the host can fill with CPUs. The felt
+// bottom); empty ones are shadow spots the host can fill with CPUs at a
+// chosen level, and the host taps a seated CPU's level to change it. The felt
 // holds the invite panel and the START button. The game page shows this until
 // the server's first game state.
 //
@@ -19,6 +20,9 @@ import { useUnread } from "../../hooks/useUnread";
 import { TableHeader, TableSidebar } from "../TableChrome";
 
 const SIDE_SEAT_W = 224;
+const LEVELS = ["EASY", "MEDIUM", "HARD"];
+const LEVEL_COLOR = { EASY: "#9bd14f", MEDIUM: "#f4c430", HARD: "#e85a7a" };
+const nextLevel = (level) => LEVELS[(LEVELS.indexOf(level) + 1) % LEVELS.length];
 
 const shortName = (name = "") => name.split(" #")[0];
 
@@ -27,7 +31,7 @@ function seatFace(seat, index) {
   return seat.kind === "cpu" ? { variant: (index % 5) + 1, customAvatarData: null } : seatAvatar(seat, index);
 }
 
-function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, face, small = false }) {
+function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, face, small = false }) {
   const base = `relative flex flex-col items-center justify-center gap-2 py-3 text-center ${small ? "flex-1 min-w-0 px-1.5" : "px-3"}`;
   const size = small ? { maxWidth: 132, minHeight: 112 } : { width: 184, minHeight: 124 };
 
@@ -40,20 +44,26 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, face, small = fa
         <PixelIcon name="user" size={24} color="#2a234d" />
         <div className="font-pixel-display text-[10px] text-bone/40">EMPTY SEAT</div>
         {isHost && (
-          <button
-            onClick={() => onAddCpu(index)}
-            aria-label={`Add CPU to seat ${index + 1}`}
-            className="pixel-btn font-pixel-display text-[9px] px-2 py-1.5"
-            style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}
-          >
-            + ADD CPU
-          </button>
+          <div className="flex flex-wrap justify-center gap-1">
+            {LEVELS.map((level) => (
+              <button
+                key={level}
+                onClick={() => onAddCpu(index, level)}
+                aria-label={`Add ${level} CPU to seat ${index + 1}`}
+                className="pixel-btn font-pixel-display text-[8px] px-1.5 py-1.5"
+                style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: LEVEL_COLOR[level] }}
+              >
+                + {level}
+              </button>
+            ))}
+          </div>
         )}
       </div>
     );
   }
 
   const isCpu = seat.kind === "cpu";
+  const level = seat.level || "MEDIUM";
   const avatar = face || seatFace(seat, index);
   return (
     <div
@@ -88,6 +98,21 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, face, small = fa
       <div className="font-pixel-display text-[10px] text-parchment truncate max-w-full">
         {isCpu ? seat.name : shortName(seat.name)}
       </div>
+      {isCpu &&
+        (isHost ? (
+          <button
+            onClick={() => onSetCpuLevel(index, nextLevel(level))}
+            aria-label={`${seat.name}: ${level}. Change level`}
+            className="pixel-btn font-pixel-display text-[8px] px-2 py-1"
+            style={{ backgroundColor: "#0a0712", borderColor: "#2a234d", color: LEVEL_COLOR[level] }}
+          >
+            {level} ▸
+          </button>
+        ) : (
+          <span className="font-pixel-display text-[8px]" style={{ color: LEVEL_COLOR[level] }}>
+            {level}
+          </span>
+        ))}
       {!isCpu && !seat.connected && (
         <div className="font-pixel-body text-[16px] text-rose blink">reconnecting…</div>
       )}
@@ -95,7 +120,7 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, face, small = fa
   );
 }
 
-function InvitePanel({ table, seatedCount, hostName, onStart, errorMessage }) {
+function InvitePanel({ table, seatedCount, hostName, onStart, errorMessage, fillsEmptySeats }) {
   const [copied, setCopied] = useState(null);
   // One START per press: a double-click would be rejected after the game has
   // already begun. A rejection (e.g. no longer host) re-arms the button.
@@ -115,6 +140,8 @@ function InvitePanel({ table, seatedCount, hostName, onStart, errorMessage }) {
     }
   };
   const link = `${window.location.origin}/join/${table.code}`;
+  // Muushig fills empty seats at START; Thirteen plays with whoever is seated.
+  const canStart = fillsEmptySeats || seatedCount >= 2;
 
   return (
     <div
@@ -161,13 +188,17 @@ function InvitePanel({ table, seatedCount, hostName, onStart, errorMessage }) {
               setStarting(true);
               onStart();
             }}
-            disabled={starting}
+            disabled={starting || !canStart}
             className="pixel-btn font-pixel-display text-[14px] px-8 py-4 flex items-center gap-3"
             style={{ backgroundColor: "#f4c430", borderColor: "#c89820", color: "#1a1024" }}
           >
             <PixelIcon name="play" size={14} /> START GAME
           </button>
-          <div className="font-pixel-body text-[18px] text-bone/60">Empty seats are filled with CPUs when you start.</div>
+          <div className="font-pixel-body text-[18px] text-bone/60">
+            {fillsEmptySeats
+              ? "Empty seats are filled with MEDIUM CPUs when you start."
+              : "Start with 2 to 4 players. Empty seats stay empty."}
+          </div>
         </>
       ) : (
         <div className="font-pixel-display text-[10px] text-bone/70 blink">Waiting for {hostName} to start</div>
@@ -183,9 +214,11 @@ export default function WaitingTable({
   onExit,
   onAddCpu,
   onRemoveCpu,
+  onSetCpuLevel,
   onStart,
   errorMessage,
   myFace,
+  fillsEmptySeats = false,
   title = "THIRTEEN",
   titleClass = "text-glow-gold",
   titleColor,
@@ -206,6 +239,7 @@ export default function WaitingTable({
       isHost={table.isHost}
       onAddCpu={onAddCpu}
       onRemoveCpu={onRemoveCpu}
+      onSetCpuLevel={onSetCpuLevel}
       face={pos === "bottom" ? myFace : undefined}
       small={small}
     />
@@ -221,7 +255,14 @@ export default function WaitingTable({
   const hostName = shortName(table.seats.find((s) => s?.isHost)?.name || "the host");
   const invite = (
     <div className="flex flex-col items-center gap-3">
-      <InvitePanel table={table} seatedCount={seatedCount} hostName={hostName} onStart={onStart} errorMessage={errorMessage} />
+      <InvitePanel
+        table={table}
+        seatedCount={seatedCount}
+        hostName={hostName}
+        onStart={onStart}
+        errorMessage={errorMessage}
+        fillsEmptySeats={fillsEmptySeats}
+      />
       {errorMessage && (
         <div role="alert" className="font-pixel-body text-[20px] px-3 py-1" style={{ backgroundColor: "#7a1530", color: "#ead8b1" }}>
           {errorMessage}
