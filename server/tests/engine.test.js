@@ -24,11 +24,12 @@ const newGame = (opts = {}) => {
   return { game, calls };
 };
 
-/** Replace the dealt state with an exact one (seats keep their names/types). */
+/** Replace the dealt state with an exact one (seats keep their names/types), its deal already over. */
 const rig = (game, spec) => {
   const s = stateWith(logic, spec);
   s.players = s.players.map((p, i) => ({ ...p, name: game.state.players[i].name, type: spec.types?.[i] ?? game.state.players[i].type }));
   game.state = s;
+  game.dealEndsAt = 0;
   return s;
 };
 
@@ -128,6 +129,33 @@ describe("round transitions", () => {
     expect(calls.rounds).toHaveLength(1);
     expect(calls.gameOver).toBe(1);
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("the deal", () => {
+  it("holds every human's move until it has played out on everyone's screen", () => {
+    const { game } = newGame();
+    const starter = game.state.currentPlayerIndex;
+    const play = () => game.handleMove(starter, "play", ["3♦"]);
+    expect(game.dealMsLeft()).toBe(DEFAULT_DELAYS.deal);
+    expect(play()).toEqual({ ok: false, error: "Still dealing" });
+    vi.advanceTimersByTime(DEFAULT_DELAYS.deal - 1);
+    expect(play()).toEqual({ ok: false, error: "Still dealing" });
+    vi.advanceTimersByTime(1);
+    expect(game.dealMsLeft()).toBe(0);
+    expect(play()).toEqual({ ok: true });
+    game.destroy();
+  });
+
+  it("every new round deals again", () => {
+    const { game } = newGame();
+    rig(game, { hands: ["3♦", "4♦ 5♦", "6♦", "7♦"], current: 0 });
+    game.handleMove(0, "play", ["3♦"]);
+    vi.advanceTimersByTime(DEFAULT_DELAYS.roundEnd);
+    expect(game.state.roundNumber).toBe(2);
+    expect(game.dealMsLeft()).toBe(DEFAULT_DELAYS.deal);
+    expect(game.handleMove(0, "play", [game.state.players[0].hand[0].id])).toEqual({ ok: false, error: "Still dealing" });
+    game.destroy();
   });
 });
 

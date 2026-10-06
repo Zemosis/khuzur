@@ -8,6 +8,13 @@
 //
 // Defaults are Thirteen's (4 seats, 13 cards each); Muushig passes its own
 // seat layout and 5 cards.
+//
+// Online, `endsAt` (a performance.now() time, from the server's dealMsLeft)
+// is when the deal ends at every seat, and the server takes no move before
+// it. The deal plays faster if it has less time than it needs (you're behind,
+// or rejoined mid-deal) and the table waits for that moment if it finished
+// sooner (reduced animations, a hidden tab), so the turn opens for everyone
+// together. Without it (practice) the deal ends when its animation does.
 
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { PixelCard } from "../PixelCard";
@@ -43,6 +50,7 @@ const DealAnimation = ({
   seats = SEATS, // data-deal-seat names, clockwise from the player
   seatRotation = SEAT_ROTATION, // landing rotation per seat name
   cardsPerSeat = 13,
+  endsAt = null,
   onDealProgress,
   onComplete,
 }) => {
@@ -74,6 +82,10 @@ const DealAnimation = ({
     const reduce = reducedMotion();
     const fly = reduce ? 0.12 : DEAL_FLY;
     const stagger = reduce ? 0.02 : DEAL_STAGGER;
+    const synced = endsAt != null;
+    const budget = synced ? Math.max(0, endsAt - performance.now()) / 1000 : null;
+    // Card flights run off the timeline, so they take its speed-up by hand.
+    let speed = 1;
 
     let order = [...layers];
     // Explicit values everywhere: StrictMode runs this effect twice, and a
@@ -171,7 +183,7 @@ const DealAnimation = ({
               y: t.y,
               rotation: (rotations[pos] || 0) + gsap.utils.random(-6, 6),
               scale: FAN_CARD_W / deckWidth,
-              duration: fly,
+              duration: fly / speed,
               ease: "power2.out",
               overwrite: true,
               onComplete: () => {
@@ -192,16 +204,22 @@ const DealAnimation = ({
       done = true;
       completeRef.current?.();
     };
-    tl.call(finish, null, `>${fly + 0.2}`);
+    if (synced) {
+      speed = Math.max(1, (tl.duration() + fly + 0.2) / Math.max(budget, 0.001));
+      tl.timeScale(speed);
+    } else {
+      tl.call(finish, null, `>${fly + 0.2}`);
+    }
 
     // Without animation frames the timeline stalls and holds the game (your
     // turn, and solo CPUs, wait on the deal) until the player looks again.
-    // Skip straight to the dealt table instead.
+    // Skip straight to the dealt table instead; online, that's still at the
+    // deal's set end.
     const skipToEnd = () => {
       if (done) return;
       tl.kill();
       gsap.killTweensOf(pool);
-      finish();
+      if (!synced) finish();
     };
     // A hidden tab says so...
     const skipIfHidden = () => document.hidden && skipToEnd();
@@ -209,8 +227,14 @@ const DealAnimation = ({
     document.addEventListener("visibilitychange", skipIfHidden);
     // ...but a window merely covered by another (GNOME/Wayland) gets no frames
     // while still counting as visible. Timers keep running there, so the deal
-    // also ends on the clock once its own length has passed.
-    const deadline = setTimeout(skipToEnd, (tl.duration() + 0.5) * 1000);
+    // also ends on the clock once its own length (online: its set end) has passed.
+    const deadline = setTimeout(
+      () => {
+        skipToEnd();
+        finish();
+      },
+      synced ? budget * 1000 : (tl.duration() + 0.5) * 1000,
+    );
 
     return () => {
       clearTimeout(deadline);
@@ -218,7 +242,7 @@ const DealAnimation = ({
       tl.kill();
       gsap.killTweensOf(pool);
     };
-  }, [dealerIndex, viewIndex, deckWidth, seatsKey, layoutKey, cardsPerSeat]);
+  }, [dealerIndex, viewIndex, deckWidth, seatsKey, layoutKey, cardsPerSeat, endsAt]);
 
   const cardBox = { position: "absolute", marginLeft: -deckWidth / 2, marginTop: -deckH / 2 };
 

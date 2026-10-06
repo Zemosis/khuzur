@@ -191,6 +191,16 @@ card ownership and combination legality, then either updates state and
 broadcasts or replies `move_rejected`. There is no path by which a client sets
 state directly.
 
+**Deal clock** — the server decides when a deal is over, not each browser.
+Each engine records when the deal ends (Thirteen: `DEAL_DELAY_MS`, 7.5s;
+Muushig: the round's opening — `roundStart`, plus `drawReveal` in a match's
+first round), every state sent carries `dealMsLeft`, and human moves before
+then get `move_rejected` "Still dealing". The browser fits its deal animation
+into that time (`DealAnimation`'s `endsAt`): faster when it is short (behind,
+or rejoined mid-deal), and holding the table when it finished early (reduced
+animations, a hidden tab). Each browser used to time its own deal, so a player
+with reduced animations or a backgrounded tab could start ~6s before the rest.
+
 **Redaction** — `redactState(state, seatIndex)` replaces every other player's
 hand with `{hidden: true}` placeholders, preserving length so card backs render
 correctly. Each client receives a state shaped for its own seat.

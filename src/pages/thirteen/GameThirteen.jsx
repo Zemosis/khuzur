@@ -84,6 +84,8 @@ const GameThirteen = () => {
   const [roundEndData, setRoundEndData] = useState(null);
   const [isDealing, setIsDealing] = useState(true);
   const [dealCounts, setDealCounts] = useState([0, 0, 0, 0]);
+  // Online: when the deal ends, at every seat (see DealAnimation's endsAt).
+  const [dealEndsAt, setDealEndsAt] = useState(null);
 
   const [showSettings, setShowSettings] = useState(false);
   const [showRules, setShowRules] = useState(false);
@@ -225,6 +227,7 @@ const GameThirteen = () => {
         if (isNewRoundOrMatch) {
           dealOrderRef.current = null;
           setDealCounts([0, 0, 0, 0]);
+          setDealEndsAt(newState.dealMsLeft == null ? null : performance.now() + newState.dealMsLeft);
           setIsDealing(true);
         }
       }
@@ -699,6 +702,7 @@ const GameThirteen = () => {
           viewIndex={viewIndex}
           deckWidth={deckW}
           seatsIn={playersList.map((p) => !p.isEliminated)}
+          endsAt={isSoloGame ? null : dealEndsAt}
           onDealProgress={handleDealProgress}
           onComplete={handleDealComplete}
         />

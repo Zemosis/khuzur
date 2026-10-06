@@ -15,8 +15,10 @@ import { GAME_STATES } from "./constants.js";
 const AI_TURN_DELAY = 1500;
 // Client round-end overlay shows for ~4s before expecting the next round.
 const ROUND_END_DELAY = 4500;
-// Client deal animation (shuffle + 52 cards + sort) runs ~3s; CPUs wait it out.
-const DEAL_ANIMATION_DELAY = 4000;
+// The deal (shuffle + 52 cards) takes this long on every player's screen: the
+// browsers fit their animation to it, CPUs wait it out and humans can't move
+// before it ends, so nobody starts the round ahead of the others.
+const DEAL_ANIMATION_DELAY = 7500;
 
 export const DEFAULT_DELAYS = {
   aiTurn: AI_TURN_DELAY,
@@ -45,6 +47,7 @@ export class ThirteenGame {
     this.onGameOver = onGameOver;
     this.aiTimer = null;
     this.roundTimer = null;
+    this.dealEndsAt = 0;
     this.destroyed = false;
     this.state = null;
     this.startMatch(seats, { matchNumber: 1, matchWins: [0, 0, 0, 0] }, aiDifficulty);
@@ -69,8 +72,14 @@ export class ThirteenGame {
     this.startedAt = new Date();
     this.finishedAt = null;
     this.state = state;
+    this.dealEndsAt = Date.now() + this.delays.deal;
     this.broadcast();
     this.scheduleAI(this.delays.deal);
+  }
+
+  /** Milliseconds until the current deal ends on everyone's screen (0 once it has). */
+  dealMsLeft() {
+    return Math.max(0, this.dealEndsAt - Date.now());
   }
 
   rematch() {
@@ -97,6 +106,9 @@ export class ThirteenGame {
     const s = this.state;
     if (!s || s.gameState !== GAME_STATES.PLAYING) {
       return { ok: false, error: "Game is not active" };
+    }
+    if (this.dealMsLeft() > 0) {
+      return { ok: false, error: "Still dealing" };
     }
     if (s.currentPlayerIndex !== seatIndex) {
       return { ok: false, error: "Not your turn" };
@@ -205,6 +217,7 @@ export class ThirteenGame {
   beginNextRound() {
     const { hands } = initializeGame(this.rng);
     this.state = startNextRound(this.state, hands);
+    this.dealEndsAt = Date.now() + this.delays.deal;
     this.broadcast();
     this.scheduleAI(this.delays.deal);
   }

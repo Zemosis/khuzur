@@ -262,7 +262,10 @@ function OnlineMuushig({ lobbyId, playerName }) {
       socket.emit("join_lobby", { lobbyId, playerName });
       socket.emit("check_game_status", { lobbyId });
     };
-    const onState = (v) => {
+    const onState = (sent) => {
+      // When the round's opening ends at every seat, on this page's clock
+      // (the server says how far off it is; see DealAnimation's endsAt).
+      const v = sent.dealMsLeft == null ? sent : { ...sent, dealEndsAt: performance.now() + sent.dealMsLeft };
       if (!firstRef.current) {
         firstRef.current = v;
         setFirst(v);
@@ -997,6 +1000,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
                   seatRotation={DEAL_ROTATION}
                   seatsIn={ALL_SEATS_IN}
                   cardsPerSeat={5}
+                  endsAt={game.dealEndsAt ?? null}
                   onDealProgress={handleDealProgress}
                   onComplete={handleDealComplete}
                 />

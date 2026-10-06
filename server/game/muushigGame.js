@@ -92,6 +92,7 @@ export class MuushigGame {
     this.onGameOver = onGameOver;
     this.aiTimer = null;
     this.stepTimer = null;
+    this.dealEndsAt = 0;
     this.destroyed = false;
     this.startedAt = new Date();
     this.finishedAt = null;
@@ -115,6 +116,7 @@ export class MuushigGame {
     const player = this.state.players[seat];
     if (!player) return { ok: false, error: "Not your turn" };
     if (player.type !== "HUMAN") return { ok: false, error: "That seat is played by a CPU" };
+    if (this.dealMsLeft() > 0) return { ok: false, error: "Still dealing" };
     const bad = spec.check(move);
     if (bad) return { ok: false, error: bad };
     let next;
@@ -156,6 +158,8 @@ export class MuushigGame {
   applyState(next) {
     const prev = this.state;
     this.state = next;
+    const opening = this.opening(next.events.slice(prev.events.length));
+    if (opening) this.dealEndsAt = Date.now() + opening;
     this.broadcast();
 
     const scored = (s) => s.phase === PHASES.ROUND_END || s.phase === PHASES.MATCH_OVER;
@@ -177,12 +181,28 @@ export class MuushigGame {
     this.scheduleCpu(this.pause(s.events.slice(seen)));
   }
 
+  /**
+   * How long a round's opening (the winning draw, the dealer banner and the
+   * deal) shows, if `fresh` events start one; else 0. Every player's table
+   * shows it in this time, and nobody moves before it's over.
+   */
+  opening(fresh) {
+    const has = (type) => fresh.some((e) => e.type === type);
+    if (!has("round")) return 0;
+    return this.delays.roundStart + (has("firstDealer") ? this.delays.drawReveal : 0);
+  }
+
+  /** Milliseconds until the round's opening ends on everyone's screen (0 once it has). */
+  dealMsLeft() {
+    return Math.max(0, this.dealEndsAt - Date.now());
+  }
+
   /** How long a CPU waits before its move: thinking, plus whatever the table is still showing. */
   pause(fresh) {
     const d = this.delays;
     const has = (type) => fresh.some((e) => e.type === type);
     let wait = has("drawTie") ? d.tie : d[THINK[this.state.phase]] ?? 0;
-    if (has("round")) wait += d.roundStart + (has("firstDealer") ? d.drawReveal : 0);
+    wait += this.opening(fresh);
     if (has("eat")) wait += d.eat;
     if (fresh.some((e) => (e.type === "swap" && e.count > 0) || e.type === "fold" || e.type === "takeTrump")) wait += d.flight;
     return wait;

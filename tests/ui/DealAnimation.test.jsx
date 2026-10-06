@@ -63,3 +63,31 @@ describe("DealAnimation", () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 });
+
+// Online the server sets when the deal ends, and every seat's deal ends then.
+describe("DealAnimation online (endsAt)", () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  it("holds the table until the set end, even when the animation is done sooner", async () => {
+    // Reduced animations (the test setup) deal in about 1.5s.
+    const onComplete = vi.fn();
+    render(<DealAnimation endsAt={performance.now() + 2500} onComplete={onComplete} />);
+    await wait(2100);
+    expect(onComplete).not.toHaveBeenCalled();
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1), { timeout: 1500 });
+  }, 8000);
+
+  it("a hidden tab still ends at the set time, not before", async () => {
+    const onComplete = vi.fn();
+    render(<DealAnimation endsAt={performance.now() + 600} onComplete={onComplete} />);
+    setHidden(true);
+    expect(onComplete).not.toHaveBeenCalled();
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1), { timeout: 1500 });
+  });
+
+  it("a deal already over (rejoining late) ends at once", async () => {
+    const onComplete = vi.fn();
+    render(<DealAnimation endsAt={performance.now() - 100} onComplete={onComplete} />);
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1), { timeout: 200 });
+  });
+});

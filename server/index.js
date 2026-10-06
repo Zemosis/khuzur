@@ -253,6 +253,7 @@ function broadcastState(lobby, game = lobby.game) {
     io.to(member.socketId).emit(stateEvent, {
       ...view(game.state, member.seatIndex ?? -1),
       amHost: lobby.hostKey === member.key,
+      dealMsLeft: game.dealMsLeft(),
     });
   }
 }
@@ -264,6 +265,7 @@ function sendStateTo(lobby, socket) {
   socket.emit(stateEvent, {
     ...view(lobby.game.state, member?.seatIndex ?? -1),
     amHost: !!member && lobby.hostKey === member.key,
+    dealMsLeft: lobby.game.dealMsLeft(),
   });
 }
 

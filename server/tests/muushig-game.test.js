@@ -157,6 +157,23 @@ describe("a human's moves", () => {
   });
 });
 
+describe("the round's opening", () => {
+  it("holds every human's move until it has played out on everyone's table", () => {
+    newGame({ seats: [0, 1, 2, 3, 4].map(human), rng: rngStartingWith(0), delays: { ...FAST, roundStart: 1000, drawReveal: 500 } });
+    expect(game.dealMsLeft()).toBe(0);
+    while (game.state.phase === PHASES.DRAW) game.move(game.state.turn, { type: "drawForDeal", depth: 1 });
+    // The first round: the winning draw, the dealer banner and the deal.
+    expect(game.dealMsLeft()).toBe(1500);
+    const turn = game.state.turn;
+    expect(game.move(turn, { type: "decide", play: true })).toEqual({ ok: false, error: "Still dealing" });
+    vi.advanceTimersByTime(1499);
+    expect(game.move(turn, { type: "decide", play: true })).toEqual({ ok: false, error: "Still dealing" });
+    vi.advanceTimersByTime(1);
+    expect(game.dealMsLeft()).toBe(0);
+    expect(game.move(turn, { type: "decide", play: true })).toEqual({ ok: true });
+  });
+});
+
 describe("seats changing hands", () => {
   it("a CPU taking over a human's seat plays their turn; handing it back stops the CPU", () => {
     newGame({ seats: [human(0), cpu(1), cpu(2), cpu(3), cpu(4)], rng: rngStartingWith(0), delays: { ...FAST, draw: 100 } });

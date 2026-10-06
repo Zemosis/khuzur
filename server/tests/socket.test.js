@@ -556,6 +556,8 @@ describe("a running match", () => {
       socks.push(s);
     }
     const states = await startMatch(socks[0], lobbyId, socks.slice(1));
+    // Nobody moves before the deal is over (see ThirteenGame.dealMsLeft).
+    await new Promise((r) => setTimeout(r, Math.max(...states.map((s) => s.dealMsLeft))));
     return { socks, lobbyId, states };
   };
 
@@ -689,8 +691,11 @@ describe("a whole match over sockets", () => {
       const key = `${s.roundNumber}:${s.moveHistory.length}`;
       if (key === lastMoveKey) return;
       lastMoveKey = key;
-      if (s.currentPlay) host.emit("request_move", { lobbyId, action: "pass" });
-      else host.emit("request_move", { lobbyId, action: "play", data: { cards: [lowest(s.players[0].hand).id] } });
+      // Like the browser, wait out the deal first.
+      setTimeout(() => {
+        if (s.currentPlay) host.emit("request_move", { lobbyId, action: "pass" });
+        else host.emit("request_move", { lobbyId, action: "play", data: { cards: [lowest(s.players[0].hand).id] } });
+      }, s.dealMsLeft);
     };
     host.on("game_state_update", autoplay);
     const rejections = [];
@@ -731,7 +736,8 @@ describe("muushig tables", () => {
       if (key === last) return;
       last = key;
       const { seat, ...move } = aiAction(v);
-      sock.emit("muushig_move", { lobbyId, move });
+      // Like the browser, wait out the round's opening first.
+      setTimeout(() => sock.emit("muushig_move", { lobbyId, move }), v.dealMsLeft);
     };
     sock.on("muushig_state", play);
     if (sock.muushig.length) play(sock.muushig.at(-1)); // a turn that already arrived
