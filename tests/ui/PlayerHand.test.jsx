@@ -4,6 +4,7 @@ import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import PlayerHand from "../../src/components/thirteen/PlayerHand";
 import { cards } from "../helpers/cards.js";
+import { setReducedMotion } from "../../src/utils/motion";
 
 const faces = (container) => [...container.querySelectorAll(".pixel-card:not(.pixel-card-back)")];
 const label = (el) => el.querySelector(".corner.tl").textContent;
@@ -63,6 +64,21 @@ describe("PlayerHand", () => {
     await user.click(byLabel(container, "7♥"));
     await user.keyboard("{/Shift}");
     expect(selected(container)).toEqual(["4♦", "5♣", "6♥", "7♥"]);
+  });
+
+  it("takes clicks while the hand sorts itself after the deal", async () => {
+    // Your turn opens as the deal ends, just as the hand arcs into order; a
+    // click then used to be dropped, leaving PLAY grey.
+    setReducedMotion(false);
+    try {
+      const user = userEvent.setup();
+      const { container, rerender } = render(<Harness hand={HAND} isDealing />);
+      rerender(<Harness hand={HAND} />);
+      await user.click(byLabel(container, "7♥"));
+      expect(selected(container)).toEqual(["7♥"]);
+    } finally {
+      setReducedMotion(true);
+    }
   });
 
   it("ignores clicks while inactive or dealing", async () => {

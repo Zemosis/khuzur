@@ -64,7 +64,6 @@ const PlayerHand = ({
   const prevDealingRef = useRef(isDealing);
   const prevSortModeRef = useRef(sortMode);
   const sortTlRef = useRef(null);
-  const sortingRef = useRef(false);
   const lastSelectedIndex = useRef(-1);
 
   const cardH = Math.round(cardWidth * CARD_RATIO);
@@ -106,16 +105,13 @@ const PlayerHand = ({
     if (startSort || !isDealing) {
       sortTlRef.current?.kill();
       sortTlRef.current = null;
-      sortingRef.current = false;
     }
 
     let sortTl = null;
     if (startSort) {
-      sortingRef.current = true;
       sortTl = gsap.timeline({
         delay: dealEnded ? SORT_HOLD : 0,
         onComplete: () => {
-          sortingRef.current = false;
           sortTlRef.current = null;
         },
       });
@@ -207,7 +203,9 @@ const PlayerHand = ({
   const canSelect = isActive && !isDealing;
 
   const toggleCardSelection = (card, e) => {
-    if (!canSelect || sortingRef.current || isPlayable?.(card) === false) return;
+    // Clicks count while the hand sorts itself too: the turn is already open,
+    // and the card clicked is the one selected wherever it's headed.
+    if (!canSelect || isPlayable?.(card) === false) return;
     const currentIndex = displayHand.findIndex((c) => c.id === card.id);
 
     if (e?.shiftKey && lastSelectedIndex.current !== -1) {

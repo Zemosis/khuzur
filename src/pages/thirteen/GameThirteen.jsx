@@ -61,9 +61,25 @@ const GameThirteen = () => {
   const [gameState, setGameState] = useState(null);
   // The waiting table before the deal (server `table_update`); null once dealt.
   const [table, setTable] = useState(null);
-  const [selectedCards, setSelectedCards] = useState([]);
+  // Selection and errors belong to one turn: any move, a new round or a new
+  // match starts clean. A selection kept past a PASS used to ride into the
+  // next deal holding cards no longer in your hand, so a good pick read
+  // "Invalid" until CLEAR.
+  const turnKey = gameState
+    ? `${gameState.matchNumber || 1}-${gameState.roundNumber}-${gameState.moveHistory.length}`
+    : "waiting";
+  const turnKeyRef = useRef(turnKey);
+  const [selection, setSelection] = useState({ key: null, cards: [] });
+  const selectedCards = selection.key === turnKey ? selection.cards : [];
+  const [error, setError] = useState({ key: null, text: "" });
+  const errorMessage = error.key === turnKey ? error.text : "";
+  const setErrorMessage = (text) => setError({ key: turnKeyRef.current, text });
+  // A new pick replaces the last error, so its combo name shows again.
+  const setSelectedCards = (cards) => {
+    setSelection({ key: turnKey, cards });
+    setError({ key: null, text: "" });
+  };
   const [messages, setMessages] = useState([]);
-  const [errorMessage, setErrorMessage] = useState("");
   const [showRoundEnd, setShowRoundEnd] = useState(false);
   const [roundEndData, setRoundEndData] = useState(null);
   const [isDealing, setIsDealing] = useState(true);
@@ -111,6 +127,9 @@ const GameThirteen = () => {
   useEffect(() => {
     gameStateRef.current = gameState;
   }, [gameState]);
+  useEffect(() => {
+    turnKeyRef.current = turnKey;
+  }, [turnKey]);
 
   // A rejected waiting-table command shows for 4s, then clears.
   useEffect(() => {
