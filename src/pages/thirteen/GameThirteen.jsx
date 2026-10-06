@@ -38,6 +38,7 @@ import PixelIcon from "../../components/PixelIcon";
 import { MotionToggle } from "../../components/SettingsModal";
 import { TableHeader, TableSidebar, ConnectionSignal } from "../../components/TableChrome";
 import { useUnread } from "../../hooks/useUnread";
+import { positionOf, seatPositions } from "../../utils/seatPosition";
 
 const AVATAR_COLOR = { 1: "#f4c430", 2: "#5fd4d6", 3: "#e85a7a", 4: "#9bd14f", 5: "#c5a8ff", custom: "#ead8b1" };
 
@@ -581,7 +582,7 @@ const GameThirteen = () => {
   const viewIndex = iAmSpectator ? 0 : myIndex;
 
   const playersList = gameState.players || [];
-  if (playersList.length < 4)
+  if (playersList.length < 2)
     return (
       <div className="flex items-center justify-center h-full starfield font-pixel-display text-rose">
         Error: Invalid Player Count
@@ -609,15 +610,16 @@ const GameThirteen = () => {
       })
     : playersList;
 
-  const rotatedPlayers = [
-    ...visiblePlayers.slice(viewIndex),
-    ...visiblePlayers.slice(0, viewIndex),
-  ];
-
-  const bottomPlayer = rotatedPlayers[0];
-  const leftPlayer = rotatedPlayers[1];
-  const topPlayer = rotatedPlayers[2];
-  const rightPlayer = rotatedPlayers[3];
+  // Each player at their spot around the table: you at the bottom, the rest
+  // clockwise (2 players: across; 3: left and right).
+  const at = {};
+  visiblePlayers.forEach((p, i) => {
+    at[positionOf(i, viewIndex, playersList.length)] = p;
+  });
+  const bottomPlayer = at.bottom;
+  const leftPlayer = at.left;
+  const topPlayer = at.top;
+  const rightPlayer = at.right;
 
   const isMyTurn = !isDealing && gameState.currentPlayerIndex === myIndex;
   const canPlay = selectedCards.length > 0 && isMyTurn;
@@ -636,7 +638,7 @@ const GameThirteen = () => {
           index: i,
           cards: move.cards,
           type: move.combination?.type,
-          seat: ["bottom", "left", "top", "right"][(move.playerIndex - viewIndex + 4) % 4],
+          seat: positionOf(move.playerIndex, viewIndex, playersList.length),
         });
       }
     }
@@ -674,16 +676,20 @@ const GameThirteen = () => {
       ? playersList[gameState.lastPlayedBy].name
       : null;
 
-  const opponent = (player, position) => (
-    <OpponentSection
-      player={player}
-      isActive={!isDealing && gameState.currentPlayerIndex === player.id}
-      hasPassed={player.hasPassed}
-      position={position}
-      face={faceFor(player.id)}
-      layout={seats}
-    />
-  );
+  // A spot nobody sits at (2 or 3 players) keeps its place in the layout.
+  const opponent = (player, position) =>
+    !player ? (
+      <div aria-hidden="true" />
+    ) : (
+      <OpponentSection
+        player={player}
+        isActive={!isDealing && gameState.currentPlayerIndex === player.id}
+        hasPassed={player.hasPassed}
+        position={position}
+        face={faceFor(player.id)}
+        layout={seats}
+      />
+    );
 
   // The felt: the round's plays, and the deck while dealing.
   const felt = (className) => (
@@ -703,6 +709,7 @@ const GameThirteen = () => {
           dealerIndex={gameState.dealerIndex}
           viewIndex={viewIndex}
           deckWidth={deckW}
+          seats={seatPositions(playersList.length)}
           seatsIn={playersList.map((p) => !p.isEliminated)}
           endsAt={isSoloGame ? null : dealEndsAt}
           onDealProgress={handleDealProgress}

@@ -66,6 +66,12 @@ describe("positionOf", () => {
     expect([0, 1, 2, 3].map((s) => positionOf(s, 0))).toEqual(["bottom", "left", "top", "right"]);
     expect([0, 1, 2, 3].map((s) => positionOf(s, 2))).toEqual(["top", "right", "bottom", "left"]);
   });
+
+  it("seats 2 across from each other and 3 left and right", () => {
+    expect([0, 1].map((s) => positionOf(s, 1, 2))).toEqual(["top", "bottom"]);
+    expect([0, 1, 2].map((s) => positionOf(s, 0, 3))).toEqual(["bottom", "left", "right"]);
+    expect([0, 1, 2].map((s) => positionOf(s, 2, 3))).toEqual(["left", "right", "bottom"]);
+  });
 });
 
 describe("WaitingTable", () => {

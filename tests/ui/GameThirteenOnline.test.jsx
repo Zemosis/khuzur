@@ -119,4 +119,35 @@ describe("GameThirteen online", () => {
     expect(screen.queryByText("Must beat the current play")).not.toBeInTheDocument();
     expect(screen.getByText("2 selected")).toBeInTheDocument();
   }, 20000);
+
+  const seatsShown = () => ["left", "top", "right"].filter((pos) => document.querySelector(`[data-deal-seat="${pos}"]`));
+
+  it("a two-player table seats your opponent across from you", async () => {
+    const s = stateWith(logic, { hands: ["3♦ 7♥", "4♣ 6♣"], current: 0 });
+    open();
+    await act(async () => {});
+    serverSends("game_state_update", view(s));
+    await yourTurn();
+    expect(seatsShown()).toEqual(["top"]);
+    expect(screen.getAllByText("Bot Saturn").length).toBeGreaterThan(0);
+  }, 20000);
+
+  it("a three-player table seats the others left and right", async () => {
+    const s = stateWith(logic, { hands: ["3♦ 7♥", "4♣ 6♣", "8♦ 10♦"], current: 0 });
+    open();
+    await act(async () => {});
+    serverSends("game_state_update", view(s));
+    await yourTurn();
+    expect(seatsShown()).toEqual(["left", "right"]);
+  }, 20000);
+
+  it("someone who joins a full two-player table watches it", async () => {
+    const s = stateWith(logic, { hands: ["3♦ 7♥", "4♣ 6♣"], current: 0 });
+    const watched = { ...view(s), players: view(s).players.map((p, i) => ({ ...p, name: ["ANN #0005", "BOB #0006"][i], socketId: null })) };
+    open();
+    await act(async () => {});
+    serverSends("game_state_update", watched);
+    expect(await screen.findByText(/Waiting for ANN/, {}, { timeout: 8000 })).toBeInTheDocument();
+    expect(seatsShown()).toEqual(["top"]);
+  }, 20000);
 });
