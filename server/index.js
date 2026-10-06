@@ -80,7 +80,7 @@ const io = new Server(server, {
  *     key, userId, name, tag, displayName,
  *     socketId, connected, seatIndex, disconnectTimer
  *   }>,
- *   seats: Array(4 or 5) of { kind: "human", key } | { kind: "cpu", name } | null,
+ *   seats: Array(4 or 5) of { kind: "human", key } | { kind: "cpu", name, level } | null,
  *     // who sits where while the table waits; frozen into the game at start
  *   roster: Map<playerKey, seat ledger>,   // never pruned — see below
  *   rounds: Array<round summary>,
@@ -122,6 +122,8 @@ const makeLobbyId = (isPrivate) => {
 // The 6 characters people type or share; public ids carry a "PUB-" prefix.
 const shareCode = (id) => id.replace(/^PUB-/, "");
 
+const CPU_LEVELS = ["EASY", "MEDIUM", "HARD"];
+
 /** The first BOT_NAMES name not already used at this table ("Bot n" past the list). */
 function nextCpuName(seats) {
   const used = new Set(seats.filter((s) => s?.kind === "cpu").map((s) => s.name));
@@ -155,7 +157,7 @@ function tableViewFor(lobby, member) {
     isHost: lobby.hostKey === member.key,
     seats: lobby.seats.map((s) => {
       if (!s) return null;
-      if (s.kind === "cpu") return { kind: "cpu", name: s.name };
+      if (s.kind === "cpu") return { kind: "cpu", name: s.name, level: s.level };
       const m = lobby.members.get(s.key);
       return {
         kind: "human",
@@ -359,11 +361,19 @@ function beginSession(lobby) {
 }
 
 function startGame(lobby) {
-  // Empty seats become CPUs; seat i is engine player i.
-  lobby.seats = lobby.seats.map((s) => s ?? { kind: "cpu", name: null });
+  if (lobby.gameType === "thirteen") {
+    // Thirteen plays with the filled seats only. Close the gaps so lobby seat
+    // i is still engine player i, and tell each member their new seat.
+    lobby.seats = lobby.seats.filter(Boolean);
+    lobby.seats.forEach((s, i) => {
+      if (s.kind === "human") lobby.members.get(s.key).seatIndex = i;
+    });
+  }
+  // Muushig always seats 5: empty seats become MEDIUM CPUs.
+  lobby.seats = lobby.seats.map((s) => s ?? { kind: "cpu", name: null, level: "MEDIUM" });
   for (const s of lobby.seats) if (s.kind === "cpu" && !s.name) s.name = nextCpuName(lobby.seats);
   const seats = lobby.seats.map((s) => {
-    if (s.kind === "cpu") return { type: "AI", name: s.name, socketId: null };
+    if (s.kind === "cpu") return { type: "AI", name: s.name, socketId: null, level: s.level };
     const m = lobby.members.get(s.key);
     return { type: "HUMAN", name: m.displayName, socketId: m.socketId, avatar: m.avatar };
   });
@@ -630,19 +640,28 @@ io.on("connection", (socket) => {
 
   socket.on("start_game", ({ lobbyId } = {}) => {
     const lobby = hostCommand(lobbyId);
-    if (lobby) startGame(lobby);
+    if (!lobby) return;
+    if (lobby.gameType === "thirteen" && lobby.seats.filter(Boolean).length < 2) {
+      socket.emit("move_rejected", { reason: "Add a player or a CPU to start" });
+      return;
+    }
+    startGame(lobby);
   });
 
   const isSeat = (lobby, seat) => Number.isInteger(seat) && seat >= 0 && seat < lobby.seats.length;
 
-  socket.on("add_cpu", ({ lobbyId, seat } = {}) => {
+  socket.on("add_cpu", ({ lobbyId, seat, level = "MEDIUM" } = {}) => {
     const lobby = hostCommand(lobbyId);
     if (!lobby) return;
     if (!isSeat(lobby, seat) || lobby.seats[seat] !== null) {
       socket.emit("move_rejected", { reason: "That seat isn't empty" });
       return;
     }
-    lobby.seats[seat] = { kind: "cpu", name: nextCpuName(lobby.seats) };
+    if (!CPU_LEVELS.includes(level)) {
+      socket.emit("move_rejected", { reason: "Pick EASY, MEDIUM or HARD" });
+      return;
+    }
+    lobby.seats[seat] = { kind: "cpu", name: nextCpuName(lobby.seats), level };
     broadcastTable(lobby);
   });
 
@@ -654,6 +673,21 @@ io.on("connection", (socket) => {
       return;
     }
     lobby.seats[seat] = null;
+    broadcastTable(lobby);
+  });
+
+  socket.on("set_cpu_level", ({ lobbyId, seat, level } = {}) => {
+    const lobby = hostCommand(lobbyId);
+    if (!lobby) return;
+    if (!isSeat(lobby, seat) || lobby.seats[seat]?.kind !== "cpu") {
+      socket.emit("move_rejected", { reason: "There's no CPU in that seat" });
+      return;
+    }
+    if (!CPU_LEVELS.includes(level)) {
+      socket.emit("move_rejected", { reason: "Pick EASY, MEDIUM or HARD" });
+      return;
+    }
+    lobby.seats[seat] = { ...lobby.seats[seat], level };
     broadcastTable(lobby);
   });
 

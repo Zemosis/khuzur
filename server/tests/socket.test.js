@@ -129,6 +129,13 @@ const startMatch = async (host, lobbyId, others = []) => {
   return Promise.all(firsts);
 };
 
+/** Thirteen's START leaves empty seats empty: seat a CPU in each first, then start. */
+const startFull = async (host, lobbyId, others = []) => {
+  const t = await tableWhere(host, (t) => t.lobbyId === lobbyId && t.seats.filter(Boolean).length === 1 + others.length);
+  t.seats.forEach((s, seat) => s || host.emit("add_cpu", { lobbyId, seat }));
+  return startMatch(host, lobbyId, others);
+};
+
 const mySeat = (state) => state.players.findIndex((p) => p.hand.length && !p.hand[0].hidden);
 const lowest = (hand) => [...hand].sort((a, b) => a.rankValue * 4 + a.suitValue - (b.rankValue * 4 + b.suitValue))[0];
 
@@ -276,7 +283,7 @@ describe("the waiting table", () => {
     expect(seen.seats[1]).toMatchObject({ kind: "human", isHost: false, connected: true });
   });
 
-  it("only the host can start; start fills empty seats with CPUs and deals", async () => {
+  it("only the host can start; START deals to the seated players", async () => {
     const host = await guest();
     const lobbyId = await createLobby(host);
     const b = await guest();
@@ -290,14 +297,13 @@ describe("the waiting table", () => {
     expect(hs.gameState).toBe("PLAYING");
     expect(mySeat(hs)).toBe(0);
     expect(mySeat(bs)).toBe(1);
-    expect(hs.players.map((p) => p.type)).toEqual(["HUMAN", "HUMAN", "AI", "AI"]);
-    expect(hs.players.slice(2).map((p) => p.name)).toEqual(["Bot Saturn", "Bot Venus"]);
+    expect(hs.players.map((p) => p.type)).toEqual(["HUMAN", "HUMAN"]);
   });
 
   it("start_game twice is rejected and does not re-deal", async () => {
     const host = await guest();
     const lobbyId = await createLobby(host);
-    const [first] = await startMatch(host, lobbyId);
+    const [first] = await startFull(host, lobbyId);
     const r = next(host, "move_rejected");
     host.emit("start_game", { lobbyId });
     expect((await r).reason).toBe("The game has already started");
@@ -310,7 +316,7 @@ describe("the waiting table", () => {
   it("check_game_status on a playing table sends the game state", async () => {
     const host = await guest();
     const lobbyId = await createLobby(host);
-    await startMatch(host, lobbyId);
+    await startFull(host, lobbyId);
     const again = next(host, "game_state_update");
     host.emit("check_game_status", { lobbyId });
     expect((await again).gameState).toBeDefined();
@@ -328,8 +334,8 @@ describe("the waiting table", () => {
     host.emit("add_cpu", { lobbyId, seat: 2 });
     host.emit("add_cpu", { lobbyId, seat: 3 });
     const both = await bothAdded;
-    expect(both.seats[2]).toEqual({ kind: "cpu", name: "Bot Saturn" });
-    expect(both.seats[3]).toEqual({ kind: "cpu", name: "Bot Venus" });
+    expect(both.seats[2]).toEqual({ kind: "cpu", name: "Bot Saturn", level: "MEDIUM" });
+    expect(both.seats[3]).toEqual({ kind: "cpu", name: "Bot Venus", level: "MEDIUM" });
 
     const removedP = next(b, "table_update", (t) => t.seats[2] === null);
     host.emit("remove_cpu", { lobbyId, seat: 2 });
@@ -369,7 +375,7 @@ describe("the waiting table", () => {
   it("CPU commands are rejected once the game has started", async () => {
     const host = await guest();
     const lobbyId = await createLobby(host);
-    await startMatch(host, lobbyId);
+    await startFull(host, lobbyId);
     const r = next(host, "move_rejected");
     host.emit("add_cpu", { lobbyId, seat: 1 });
     expect((await r).reason).toBe("The game has already started");
@@ -458,7 +464,7 @@ describe("the waiting table", () => {
     expect(joined.isHost).toBe(true);
     const t = await tableWhere(back, (x) => x.seats[0]?.connected);
     expect(t).toMatchObject({ mySeat: 0, isHost: true });
-    expect(t.seats[3]).toEqual({ kind: "cpu", name: "Bot Saturn" });
+    expect(t.seats[3]).toEqual({ kind: "cpu", name: "Bot Saturn", level: "MEDIUM" });
   });
 
   it("staying away past the grace period frees the seat", async () => {
@@ -505,6 +511,84 @@ describe("the waiting table", () => {
   });
 });
 
+describe("CPU levels and short Thirteen tables", () => {
+  it("the host seats CPUs at a level and changes it; everyone sees it", async () => {
+    const host = await guest();
+    const lobbyId = await createLobby(host);
+    const b = await guest();
+    await joinLobby(b, lobbyId);
+    host.emit("add_cpu", { lobbyId, seat: 2, level: "HARD" });
+    host.emit("add_cpu", { lobbyId, seat: 3 }); // an older browser: no level
+    const t = await tableWhere(b, (t) => t.seats[3]?.kind === "cpu");
+    expect(t.seats[2]).toMatchObject({ kind: "cpu", level: "HARD" });
+    expect(t.seats[3]).toMatchObject({ kind: "cpu", level: "MEDIUM" });
+    host.emit("set_cpu_level", { lobbyId, seat: 2, level: "EASY" });
+    const changed = await tableWhere(b, (t) => t.seats[2]?.level === "EASY");
+    expect(changed.seats[2].name).toBe(t.seats[2].name);
+  });
+
+  it("rejects a bad level, a non-host, and a seat without a CPU", async () => {
+    const host = await guest();
+    const lobbyId = await createLobby(host);
+    const b = await guest();
+    await joinLobby(b, lobbyId);
+    const reason = async (sock, event, payload) => {
+      const r = next(sock, "move_rejected");
+      sock.emit(event, { lobbyId, ...payload });
+      return (await r).reason;
+    };
+    expect(await reason(host, "add_cpu", { seat: 2, level: "GODLIKE" })).toBe("Pick EASY, MEDIUM or HARD");
+    host.emit("add_cpu", { lobbyId, seat: 2, level: "EASY" });
+    await tableWhere(host, (t) => t.seats[2]?.kind === "cpu");
+    expect(await reason(host, "set_cpu_level", { seat: 2, level: "NOPE" })).toBe("Pick EASY, MEDIUM or HARD");
+    expect(await reason(b, "set_cpu_level", { seat: 2, level: "HARD" })).toBe("Only the host can do that");
+    expect(await reason(host, "set_cpu_level", { seat: 1, level: "HARD" })).toBe("There's no CPU in that seat");
+  });
+
+  it("a Thirteen table won't start with the host alone", async () => {
+    const host = await guest();
+    const lobbyId = await createLobby(host);
+    await tableWhere(host);
+    const r = next(host, "move_rejected");
+    host.emit("start_game", { lobbyId });
+    expect((await r).reason).toBe("Add a player or a CPU to start");
+    expect(host.states).toEqual([]);
+  });
+
+  it("two seated players start a 2-player game; seats close up and moves reach the right player", async () => {
+    const host = await guest();
+    const lobbyId = await createLobby(host);
+    for (const seat of [1, 2]) host.emit("add_cpu", { lobbyId, seat });
+    await tableWhere(host, (t) => t.seats[2]);
+    const b = await guest();
+    await joinLobby(b, lobbyId); // takes seat 3, the first empty one
+    for (const seat of [1, 2]) host.emit("remove_cpu", { lobbyId, seat });
+    await tableWhere(b, (t) => t.mySeat === 3 && !t.seats[1] && !t.seats[2]);
+
+    const [hs, bs] = await startMatch(host, lobbyId, [b]);
+    expect(hs.players.map((p) => p.type)).toEqual(["HUMAN", "HUMAN"]);
+    expect(mySeat(hs)).toBe(0);
+    expect(mySeat(bs)).toBe(1);
+    expect(hs.players.map((p) => p.hand.length)).toEqual([13, 13]);
+
+    await new Promise((r) => setTimeout(r, hs.dealMsLeft));
+    const turn = hs.currentPlayerIndex;
+    const actor = turn === 0 ? host : b;
+    const card = lowest((turn === 0 ? hs : bs).players[turn].hand);
+    const seen = [host, b].map((s) => next(s, "game_state_update", (st) => st.currentPlay));
+    actor.emit("request_move", { lobbyId, action: "play", data: { cards: [card.id] } });
+    (await Promise.all(seen)).forEach((st) => expect(st.currentPlay.cards[0].id).toBe(card.id));
+  });
+
+  it("CPUs start at the level the host gave them", async () => {
+    const host = await guest();
+    const lobbyId = await createLobby(host);
+    host.emit("add_cpu", { lobbyId, seat: 1, level: "HARD" });
+    const [state] = await startMatch(host, lobbyId);
+    expect(state.players.map((p) => p.level)).toEqual([null, "HARD"]);
+  });
+});
+
 describe("who is host, as each player's game state says", () => {
   it("a player promoted at the waiting table is host in the game (can rematch)", async () => {
     const host = await guest();
@@ -513,7 +597,7 @@ describe("who is host, as each player's game state says", () => {
     await joinLobby(b, lobbyId);
     host.emit("leave_lobby", { lobbyId });
     await tableWhere(b, (t) => t.isHost);
-    const [bs] = await startMatch(b, lobbyId);
+    const [bs] = await startFull(b, lobbyId);
     expect(bs.amHost).toBe(true);
   });
 
@@ -536,7 +620,7 @@ describe("malformed payloads", () => {
     const a = await guest();
     const events = [
       "create_lobby", "join_lobby", "leave_lobby", "leave_page", "check_game_status", "add_cpu",
-      "remove_cpu", "start_game", "request_move", "request_rematch", "send_chat", "get_public_lobbies", "leave_public_lobbies",
+      "remove_cpu", "set_cpu_level", "start_game", "request_move", "request_rematch", "send_chat", "get_public_lobbies", "leave_public_lobbies",
       "muushig_move",
     ];
     for (const ev of events) a.emit(ev, null);
@@ -561,10 +645,10 @@ describe("a running match", () => {
     return { socks, lobbyId, states };
   };
 
-  it("each player sees only their own hand; CPUs fill empty seats", async () => {
+  it("each player sees only their own hand; CPUs the host seated play too", async () => {
     const host = await guest("SOLO");
     const lobbyId = await createLobby(host);
-    const [state] = await startMatch(host, lobbyId);
+    const [state] = await startFull(host, lobbyId);
     expect(mySeat(state)).toBe(0);
     expect(state.players[0].hand).toHaveLength(13);
     expect(state.players.slice(1).map((p) => p.type)).toEqual(["AI", "AI", "AI"]);
@@ -667,7 +751,7 @@ describe("a running match", () => {
   it("a new player joining mid-match takes over a CPU seat", async () => {
     const host = await guest();
     const lobbyId = await createLobby(host);
-    await startMatch(host, lobbyId);
+    await startFull(host, lobbyId);
     const late = await guest("LATE", "0042", "3");
     const joined = await joinLobby(late, lobbyId);
     expect(joined.isHost).toBe(false);
@@ -702,6 +786,7 @@ describe("a whole match over sockets", () => {
     host.on("move_rejected", ({ reason }) => rejections.push(reason));
 
     const over = next(host, "game_state_update", (s) => s.gameState === "GAME_OVER", 25000);
+    for (const seat of [1, 2, 3]) host.emit("add_cpu", { lobbyId, seat });
     host.emit("start_game", { lobbyId });
     const final = await over;
     expect(final.players.filter((p) => !p.isEliminated)).toHaveLength(1);
@@ -727,6 +812,16 @@ describe("muushig tables", () => {
     const seen = [...sock.muushig].reverse().find(match);
     return seen ? Promise.resolve(seen) : next(sock, "muushig_state", match, timeout);
   };
+  it("START fills empty seats with MEDIUM CPUs and keeps the levels the host chose", async () => {
+    const host = await guest();
+    const lobbyId = await createMuushig(host);
+    host.emit("add_cpu", { lobbyId, seat: 1, level: "HARD" });
+    await tableWhere(host, (t) => t.seats[1]?.level === "HARD");
+    const first = next(host, "muushig_state");
+    host.emit("start_game", { lobbyId });
+    expect((await first).players.map((p) => p.level)).toEqual([null, "HARD", "MEDIUM", "MEDIUM", "MEDIUM"]);
+  });
+
   /** Plays this socket's turns with the CPU's own choice, read off its redacted view. */
   const autoplay = (sock, lobbyId) => {
     let last = null;
@@ -783,7 +878,7 @@ describe("muushig tables", () => {
     await joinLobby(b, lobbyId);
     let t = next(host, "table_update", (x) => x.seats[4]?.kind === "cpu");
     host.emit("add_cpu", { lobbyId, seat: 4 });
-    expect((await t).seats[4]).toEqual({ kind: "cpu", name: "Bot Saturn" });
+    expect((await t).seats[4]).toEqual({ kind: "cpu", name: "Bot Saturn", level: "MEDIUM" });
 
     const first = [host, b].map((sock) => next(sock, "muushig_state"));
     host.emit("start_game", { lobbyId });

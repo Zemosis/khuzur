@@ -177,8 +177,12 @@ the player key on reconnect, which is what makes refresh-and-rejoin work.
 **Waiting tables** — a new lobby does not deal. It holds `seats` (4 or 5 slots:
 a human by player key, a CPU, or empty) and sends each member a `table_update`
 shaped for them (their seat, whether they are host, no player keys). The host
-adds/removes CPUs and presses START (`start_game`), which fills empty seats with
-CPUs and builds the `ThirteenGame` in seat order. A joiner takes an empty seat,
+adds CPUs at a level (`add_cpu { seat, level }`, EASY | MEDIUM | HARD, MEDIUM if
+missing), changes it (`set_cpu_level`) or removes them, and presses START
+(`start_game`). Thirteen starts with the filled seats only — 2 to 4 players, at
+least 2 required — closing the gaps so seat *i* is engine player *i*; Muushig
+fills empty seats with MEDIUM CPUs. A CPU taking over a dropped player plays at
+MEDIUM. A joiner takes an empty seat,
 else replaces a CPU; the table is full at 4 humans. If the host leaves, the next
 seated human becomes host.
 
@@ -237,7 +241,7 @@ the router state it was opened with.
 
 Client emits: `create_lobby { gameType }`, `join_lobby`, `leave_lobby`,
 `get_public_lobbies { gameType }`, `leave_public_lobbies`, `check_game_status`,
-`add_cpu`, `remove_cpu`, `start_game`, `leave_page`, `request_move` (Thirteen),
+`add_cpu`, `remove_cpu`, `set_cpu_level`, `start_game`, `leave_page`, `request_move` (Thirteen),
 `muushig_move` (Muushig), `request_rematch`, `send_chat`, `ping_check`,
 `get_stats`.
 
