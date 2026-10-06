@@ -206,6 +206,33 @@ describe.each(COPIES)("gameLogic (%s)", (_name, { logic: L, evaluator: E, consta
     });
   });
 
+
+  describe("tables of 2 and 3", () => {
+    it("moves the turn and sizes the dealer and match wins to 2 players", () => {
+      const s = L.createGameState([cards("3♦ 9♠"), cards("4♦ 5♦")], 0);
+      expect(s.players).toHaveLength(2);
+      expect(s.dealerIndex).toBe(1);
+      expect(s.matchWins).toEqual([0, 0]);
+      expect(play(s, "3♦").currentPlayerIndex).toBe(1);
+    });
+
+    it("a 2-player match ends with one match win recorded for 2 seats", () => {
+      const s = stateWith(L, { hands: ["3♦", "4♦"], scores: [0, 24], current: 0 });
+      const over = play(s, "3♦");
+      expect(over.gameState).toBe(S.GAME_OVER);
+      expect(over.matchWins).toEqual([1, 0]);
+    });
+
+    it("a 3-player round passes the deal on past the last seat, skipping the eliminated", () => {
+      const s = stateWith(L, { hands: ["3♦", "", "6♦"], current: 0, eliminated: [false, true, false], dealerIndex: 2 });
+      const ended = play(s, "3♦");
+      expect(ended.gameState).toBe(S.ROUND_END);
+      const next = L.startNextRound(ended, [cards("7♦"), [], cards("8♦")]);
+      expect(next.dealerIndex).toBe(0);
+      expect(next.currentPlayerIndex).toBe(0);
+      expect(next.players.map((p) => p.hand.length)).toEqual([1, 0, 1]);
+    });
+  });
   describe("endRound: scoring", () => {
     const hand = (n) => Array.from({ length: n }, (_, i) => ["3♦", "4♦", "5♦", "6♦", "7♦", "8♦", "9♦", "10♦", "J♦", "Q♦", "K♦", "A♦", "2♦"][i]).join(" ");
 

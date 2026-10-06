@@ -32,14 +32,12 @@ export const createGameState = (
   return {
     players,
     currentPlayerIndex: startingPlayer,
-    dealerIndex:
-      (startingPlayer - 1 + GAME_SETTINGS.NUM_PLAYERS) %
-      GAME_SETTINGS.NUM_PLAYERS,
+    dealerIndex: (startingPlayer - 1 + hands.length) % hands.length,
     currentPlay: null,
     lastPlayedBy: null,
     roundNumber: 1,
     matchNumber: matchMeta.matchNumber || 1,
-    matchWins: matchMeta.matchWins || [0, 0, 0, 0],
+    matchWins: matchMeta.matchWins || hands.map(() => 0),
     gameState: GAME_STATES.PLAYING,
     passCount: 0,
     moveHistory: [],
@@ -283,7 +281,7 @@ export const endRound = (gameState, winnerIndex) => {
   const activePlayers = updatedPlayers.filter((p) => !p.isEliminated);
   const gameOver = activePlayers.length === 1;
 
-  const updatedMatchWins = [...(gameState.matchWins || [0, 0, 0, 0])];
+  const updatedMatchWins = [...(gameState.matchWins || gameState.players.map(() => 0))];
   if (gameOver) {
     updatedMatchWins[activePlayers[0].id] += 1;
   }
@@ -316,7 +314,7 @@ export const endRound = (gameState, winnerIndex) => {
  * @returns {Object} Updated game state
  */
 export const startNextRound = (gameState, newHands) => {
-  const numPlayers = GAME_SETTINGS.NUM_PLAYERS;
+  const numPlayers = gameState.players.length;
 
   let newDealerIndex = (gameState.dealerIndex + 1) % numPlayers;
   for (let i = 0; i < numPlayers && gameState.players[newDealerIndex].isEliminated; i++) {

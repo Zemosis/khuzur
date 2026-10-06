@@ -27,6 +27,13 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
   const decideUnderPressure = (difficulty, hand, currentPlay) =>
     decide(difficulty, hand, currentPlay, { hands: [hand, "3♠ 4♠", "3♥ 4♥ 5♥ 6♥", "3♣ 4♣ 5♣ 6♣"] });
 
+  it("a CPU plays at its own level, not the table's", () => {
+    // EASY always leads its lowest single; MEDIUM leads its lowest pair first.
+    const s = stateWith(L, { hands: ["5♦ 5♣ 9♠ K♥", "3♠", "3♥", "3♣"], current: 0, aiDifficulty: "EASY" });
+    expect(A.makeAIDecision(s.players[0], null, s).cards).toEqual(cards("5♦"));
+    expect(A.makeAIDecision({ ...s.players[0], level: "MEDIUM" }, null, s).cards).toEqual(cards("5♦ 5♣"));
+  });
+
   it("HARD counts the cards played: with every 2 gone its ace is boss, so it spends a pair", () => {
     // Only a pair beats the table, and it's one HARD would rather keep. It
     // spends it when it holds a card nobody can beat to take the lead back.

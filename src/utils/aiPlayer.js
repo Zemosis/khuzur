@@ -15,7 +15,8 @@ import {
 // ============================================================
 
 export const makeAIDecision = (player, currentPlay, gameState) => {
-  const difficulty = gameState.aiDifficulty || "MEDIUM";
+  // Each CPU seat can have its own level; practice tables set one for all.
+  const difficulty = player.level || gameState.aiDifficulty || "MEDIUM";
 
   switch (difficulty) {
     case "EASY":
