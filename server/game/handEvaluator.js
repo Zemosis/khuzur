@@ -131,7 +131,7 @@ const validate5CardHand = (cards) => {
       rank: straightInfo.highRank,
       highCard: straightInfo.highCard,
       strength: POKER_COMBO_STRENGTH[COMBO_TYPES.ROYAL_FLUSH],
-      cards,
+      cards: straightInfo.cards,
     };
   }
 
@@ -142,7 +142,7 @@ const validate5CardHand = (cards) => {
       rank: straightInfo.highRank,
       highCard: straightInfo.highCard,
       strength: POKER_COMBO_STRENGTH[COMBO_TYPES.STRAIGHT_FLUSH],
-      cards,
+      cards: straightInfo.cards,
     };
   }
 
@@ -155,7 +155,7 @@ const validate5CardHand = (cards) => {
       pairRank: fullHouse.pairRank,
       highCard: fullHouse.highCard,
       strength: POKER_COMBO_STRENGTH[COMBO_TYPES.FULL_HOUSE],
-      cards,
+      cards: fullHouse.cards,
     };
   }
 
@@ -177,7 +177,7 @@ const validate5CardHand = (cards) => {
       rank: straightInfo.highRank,
       highCard: straightInfo.highCard,
       strength: POKER_COMBO_STRENGTH[COMBO_TYPES.STRAIGHT],
-      cards,
+      cards: straightInfo.cards,
     };
   }
 
@@ -216,6 +216,7 @@ const checkStraight = (cards) => {
     return {
       highRank: sorted[4].rankValue,
       highCard: sorted[4],
+      cards: sorted,
     };
   }
 
@@ -223,10 +224,12 @@ const checkStraight = (cards) => {
     run.every((rank) => cards.some((card) => card.rank === rank)),
   );
   if (!wrap) return null;
-  const top = cards.find((card) => card.rank === wrap[4]);
+  // Laid out in run order: A-2-3-4-5, not 3-4-5-A-2
+  const run = wrap.map((rank) => cards.find((card) => card.rank === rank));
   return {
-    highRank: top.rankValue,
-    highCard: top,
+    highRank: run[4].rankValue,
+    highCard: run[4],
+    cards: run,
   };
 };
 
@@ -248,11 +251,14 @@ const checkFullHouse = (cards) => {
 
     const tripleCards = grouped[tripleRank];
     const highCard = tripleCards[tripleCards.length - 1];
+    // Laid out triple first, then the pair: 8-8-8-4-4
+    const ordered = [...tripleCards, ...grouped[pairRank]];
 
     return {
       tripleRank: RANK_VALUES[tripleRank],
       pairRank: RANK_VALUES[pairRank],
       highCard,
+      cards: ordered,
     };
   }
 

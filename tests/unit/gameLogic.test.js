@@ -177,6 +177,19 @@ describe.each(COPIES)("gameLogic (%s)", (_name, { logic: L, evaluator: E, consta
       expect(s.moveHistory.at(-1)).toMatchObject({ type: "PLAY", playerIndex: 0 });
     });
 
+    it.each([
+      ["a straight, low to high", "9♠ 7♦ 8♣ 10♥ J♠", "7♦ 8♣ 9♠ 10♥ J♠"],
+      ["a flush, low to high", "K♥ 3♥ J♥ 7♥ 9♥", "3♥ 7♥ 9♥ J♥ K♥"],
+      ["a wraparound straight in run order", "5♦ 3♥ A♠ 4♣ 2♦", "A♠ 2♦ 3♥ 4♣ 5♦"],
+      ["the other wraparound in run order", "6♣ 2♠ 4♣ 3♥ 5♦", "2♠ 3♥ 4♣ 5♦ 6♣"],
+      ["a full house, triple first", "4♥ 8♦ 4♠ 8♣ 8♠", "8♦ 8♣ 8♠ 4♥ 4♠"],
+      ["a pair, by suit", "9♠ 9♦", "9♦ 9♠"],
+    ])("lays %s on the table, however it was picked", (_label, picked, shown) => {
+      // One card kept back, so the play doesn't end the round.
+      const s = play(stateWith(L, { hands: [`${picked} K♣`, "3♣", "3♠", "4♠"], current: 0 }), picked);
+      expect(ids(s.moveHistory.at(-1).cards)).toEqual(ids(cards(shown)));
+    });
+
     it("does not mutate the input state", () => {
       const s = stateWith(L, { hands, current: 0 });
       const before = JSON.stringify(s);

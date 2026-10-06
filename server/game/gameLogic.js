@@ -167,7 +167,8 @@ export const playCards = (gameState, selectedCards) => {
       {
         type: "PLAY",
         playerIndex: gameState.currentPlayerIndex,
-        cards: selectedCards,
+        // As the table shows it (see identifyCombination), not as clicked
+        cards: validation.combination.cards,
         combination: validation.combination,
       },
     ],
