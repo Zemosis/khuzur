@@ -1,4 +1,4 @@
-import { COMBO_TYPES, RANK_VALUES } from "./constants.js";
+import { COMBO_TYPES, RANK_VALUES, RANKS } from "./constants.js";
 import {
   groupByRank,
   groupBySuit,
@@ -535,27 +535,20 @@ const findAll5CardCombos = (hand) => {
   return combos;
 };
 
+// Every run of 5 ranks a straight can be, weakest first: the two that wrap
+// (A-2-3-4-5, 2-3-4-5-6), then 3-4-5-6-7 up to J-Q-K-A-2.
+const STRAIGHT_RUNS = [
+  ["A", "2", "3", "4", "5"],
+  ["2", "3", "4", "5", "6"],
+  ...RANKS.slice(0, RANKS.length - 4).map((_, i) => RANKS.slice(i, i + 5)),
+];
+
+/** Each straight the hand can make, weakest first, with the lowest card of each rank. */
 const findStraights = (hand) => {
-  const sorted = sortHand(hand);
-  const straights = [];
-
-  for (let i = 0; i <= sorted.length - 5; i++) {
-    const potential = sorted.slice(i, i + 5);
-    let isStraight = true;
-
-    for (let j = 0; j < 4; j++) {
-      if (potential[j + 1].rankValue !== potential[j].rankValue + 1) {
-        isStraight = false;
-        break;
-      }
-    }
-
-    if (isStraight) {
-      straights.push(potential);
-    }
-  }
-
-  return straights;
+  const groups = groupByRank(hand);
+  return STRAIGHT_RUNS.filter((run) => run.every((rank) => groups[rank])).map(
+    (run) => sortHand(run.map((rank) => sortHand(groups[rank])[0])),
+  );
 };
 
 const findFlushes = (hand) => {
@@ -566,6 +559,9 @@ const findFlushes = (hand) => {
     if (groups[suit].length >= 5) {
       const sorted = sortHand(groups[suit]);
       flushes.push(sorted.slice(0, 5));
+      // A flush of the same suit is beaten by a higher top card: also try
+      // the four lowest under the highest.
+      if (sorted.length > 5) flushes.push([...sorted.slice(0, 4), sorted.at(-1)]);
     }
   }
 

@@ -129,7 +129,7 @@ const validate5CardHand = (cards) => {
     return {
       type: COMBO_TYPES.ROYAL_FLUSH,
       rank: straightInfo.highRank,
-      highCard: cards[4],
+      highCard: straightInfo.highCard,
       strength: POKER_COMBO_STRENGTH[COMBO_TYPES.ROYAL_FLUSH],
       cards,
     };
@@ -140,7 +140,7 @@ const validate5CardHand = (cards) => {
     return {
       type: COMBO_TYPES.STRAIGHT_FLUSH,
       rank: straightInfo.highRank,
-      highCard: cards[4],
+      highCard: straightInfo.highCard,
       strength: POKER_COMBO_STRENGTH[COMBO_TYPES.STRAIGHT_FLUSH],
       cards,
     };
@@ -194,23 +194,39 @@ const checkFlush = (cards) => {
   return cards.every((card) => card.suit === firstSuit);
 };
 
+// Only A and 2 may wrap around to the bottom. These runs are topped by their
+// last card (the 5 or the 6), which makes them the two lowest straights.
+const WRAPAROUND_STRAIGHTS = [
+  ["A", "2", "3", "4", "5"],
+  ["2", "3", "4", "5", "6"],
+];
+
 /**
  * Checks if cards form a straight (sequence)
- * Handles special case: 3-4-5-6-7 wrapping (no A-2-3-4-5 in this game)
+ * Ranks run 3 up to 2; A-2-3-4-5 and 2-3-4-5-6 also count (see above)
  */
 const checkStraight = (cards) => {
   const sorted = sortHand(cards);
 
   // Check for consecutive ranks
-  for (let i = 0; i < sorted.length - 1; i++) {
-    if (sorted[i + 1].rankValue !== sorted[i].rankValue + 1) {
-      return null;
-    }
+  const consecutive = sorted.every(
+    (card, i) => i === 0 || card.rankValue === sorted[i - 1].rankValue + 1,
+  );
+  if (consecutive) {
+    return {
+      highRank: sorted[4].rankValue,
+      highCard: sorted[4],
+    };
   }
 
+  const wrap = WRAPAROUND_STRAIGHTS.find((run) =>
+    run.every((rank) => cards.some((card) => card.rank === rank)),
+  );
+  if (!wrap) return null;
+  const top = cards.find((card) => card.rank === wrap[4]);
   return {
-    highRank: sorted[4].rankValue,
-    highCard: sorted[4],
+    highRank: top.rankValue,
+    highCard: top,
   };
 };
 
@@ -297,6 +313,14 @@ const compare5CardHands = (combo1, combo2) => {
   // Compare by poker hand strength first
   if (combo1.strength !== combo2.strength) {
     return combo1.strength > combo2.strength;
+  }
+
+  // Flushes: the higher suit wins; on the same suit, the higher top card
+  if (
+    combo1.type === COMBO_TYPES.FLUSH &&
+    combo1.highCard.suitValue !== combo2.highCard.suitValue
+  ) {
+    return combo1.highCard.suitValue > combo2.highCard.suitValue;
   }
 
   // Same hand type: compare by rank

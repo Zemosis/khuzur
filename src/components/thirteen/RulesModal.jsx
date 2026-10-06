@@ -321,7 +321,7 @@ export default function RulesModal({ onClose }) {
                   name="1 · STRAIGHT"
                   spec="6♣ 7♦ 8♠ 9♥ 10♣"
                   beats="Five ranks in a row, any suits."
-                  extra="2 counts as the top card, so J-Q-K-A-2 is the highest straight. No wrapping: A-2-3-4-5 is not a straight."
+                  extra="2 counts as the top card, so J-Q-K-A-2 is the highest straight. Only A and 2 wrap around: A-2-3-4-5 and 2-3-4-5-6 are the two lowest straights. K-A-2-3-4 is not a straight."
                 />
                 <ComboRow name="2 · FLUSH" spec="3♥ 7♥ 9♥ J♥ K♥" beats="Any five cards of one suit." />
                 <ComboRow name="3 · FULL HOUSE" spec="Q♦ Q♣ Q♠ 4♥ 4♠" beats="A triple plus a pair." />
@@ -341,7 +341,11 @@ export default function RulesModal({ onClose }) {
                   <Hi>highest suit</Hi> wins.
                 </li>
                 <li>
-                  <Key>Straights and flushes</Key> — compare the <Hi>highest card</Hi>, then its suit.
+                  <Key>Straights</Key> — compare the <Hi>highest card</Hi>, then its suit. In A-2-3-4-5 and 2-3-4-5-6 the
+                  highest card is the 5 or the 6.
+                </li>
+                <li>
+                  <Key>Flushes</Key> — the <Hi>higher suit</Hi> wins, whatever the cards; on the same suit, the highest card.
                 </li>
                 <li>
                   <Key>Full houses</Key> — the <Hi>triple's rank</Hi> decides.
@@ -350,6 +354,7 @@ export default function RulesModal({ onClose }) {
               <div className="flex flex-col gap-4 mt-2">
                 <Versus win="K♣ K♠" lose="K♦ K♥" caption="the pair with the spade wins" />
                 <Versus win="7♦ 8♦ 9♣ 10♥ J♠" lose="6♠ 7♠ 8♥ 9♣ 10♠" caption="J high beats 10 high" />
+                <Versus win="3♣ 5♣ 7♣ 9♣ J♣" lose="4♦ 6♦ 8♦ 10♦ A♦" caption="clubs beat diamonds, whatever the cards" />
               </div>
             </Section>
 

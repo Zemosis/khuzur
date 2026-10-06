@@ -89,7 +89,9 @@ Weakest to strongest. Any hand of a stronger **type** beats any hand of a weaker
 (for example, any flush beats any straight).
 
 1. **Straight:** five ranks in a row, any suits. Since 2 is the top rank, J-Q-K-A-2 is
-   the highest straight. Straights don't wrap around: A-2-3-4-5 is not valid.
+   the highest straight. Only A and 2 may wrap around to the bottom: A-2-3-4-5 and
+   2-3-4-5-6 are straights, topped by their 5 and 6, so they are the two lowest.
+   K-A-2-3-4 and Q-K-A-2-3 are not valid.
 2. **Flush:** five cards of one suit.
 3. **Full house:** a triple plus a pair.
 4. **Straight flush:** a straight all in one suit.
@@ -102,7 +104,8 @@ When two plays are the same kind, this decides which one is higher:
 | Play | Compare |
 | --- | --- |
 | Singles, pairs, triples, fours | the rank; if equal, the highest suit in each |
-| Straights, flushes, straight flushes | the highest card's rank, then its suit |
+| Straights, straight flushes | the highest card's rank, then its suit (in A-2-3-4-5 and 2-3-4-5-6 the highest card is the 5 or the 6) |
+| Flushes | the suit first, whatever the cards (a ♣ flush beats any ♦ flush); same suit: the highest card |
 | Full houses | the rank of the triple (then of the pair) |
 
 ## 5. Scoring

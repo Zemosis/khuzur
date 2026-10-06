@@ -23,6 +23,9 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
     const s = stateWith(L, { hands: [hand, "3♠ 4♠ 5♠ 6♠", "3♥ 4♥ 5♥ 6♥", "3♣ 4♣ 5♣ 6♣"], current: 0, currentPlay, aiDifficulty: difficulty, ...extra });
     return { decision: A.makeAIDecision(s.players[0], currentPlay, s), state: s };
   };
+  /** With an opponent two cards from going out, every level plays whatever beats the table. */
+  const decideUnderPressure = (difficulty, hand, currentPlay) =>
+    decide(difficulty, hand, currentPlay, { hands: [hand, "3♠ 4♠", "3♥ 4♥ 5♥ 6♥", "3♣ 4♣ 5♣ 6♣"] });
 
   describe.each(DIFFICULTIES)("%s", (difficulty) => {
     it("leads with a legal play", () => {
@@ -47,6 +50,36 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
       [combo("5♠"), combo("5♦ 5♣"), combo("3♦ 4♣ 5♥ 6♦ 7♠")].forEach((table) => {
         expectLegal(decide(difficulty, hand, table).decision, cards(hand), table);
       });
+    });
+
+    // EASY always leads its lowest single, whatever else it holds.
+    it.skipIf(difficulty === "EASY")("goes out with a wraparound straight", () => {
+      const { decision } = decide(difficulty, "A♦ 2♣ 3♥ 4♠ 5♦", null);
+      expect(decision.action).toBe("play");
+      expect(ids(decision.cards).sort()).toEqual(ids(cards("A♦ 2♣ 3♥ 4♠ 5♦")).sort());
+    });
+
+    it("beats A-2-3-4-5 with 2-3-4-5-6", () => {
+      const table = combo("A♠ 2♥ 3♦ 4♦ 5♥");
+      const { decision } = decideUnderPressure(difficulty, "2♦ 3♣ 4♥ 5♠ 6♦", table);
+      expect(decision.action).toBe("play");
+      expectLegal(decision, cards("2♦ 3♣ 4♥ 5♠ 6♦"), table);
+    });
+
+    it("finds a straight around a pair", () => {
+      const table = combo("3♦ 4♦ 5♣ 6♦ 7♦");
+      const hand = "4♣ 5♦ 5♥ 6♣ 7♥ 8♠";
+      const { decision } = decideUnderPressure(difficulty, hand, table);
+      expect(decision.action).toBe("play");
+      expectLegal(decision, cards(hand), table);
+    });
+
+    it("beats a same-suit flush with a higher top card", () => {
+      const table = combo("4♥ 6♥ 8♥ J♥ Q♥");
+      const hand = "3♥ 5♥ 7♥ 9♥ 10♥ K♥";
+      const { decision } = decideUnderPressure(difficulty, hand, table);
+      expect(decision.action).toBe("play");
+      expectLegal(decision, cards(hand), table);
     });
 
     it("doesn't mutate the hand or the table", () => {

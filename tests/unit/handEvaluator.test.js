@@ -15,11 +15,15 @@ describe.each(COPIES)("handEvaluator (%s)", (_name, { evaluator: E, constants: C
       ["straight", "3♦ 4♣ 5♥ 6♠ 7♦", T.STRAIGHT],
       ["straight out of order", "7♦ 5♥ 3♦ 6♠ 4♣", T.STRAIGHT],
       ["highest straight J-Q-K-A-2", "J♦ Q♣ K♥ A♠ 2♦", T.STRAIGHT],
+      ["wraparound A-2-3-4-5", "A♦ 2♣ 3♥ 4♠ 5♦", T.STRAIGHT],
+      ["wraparound 2-3-4-5-6", "2♦ 3♣ 4♥ 5♠ 6♦", T.STRAIGHT],
       ["flush", "3♥ 7♥ 9♥ J♥ K♥", T.FLUSH],
       ["full house", "8♦ 8♣ 8♠ 4♥ 4♠", T.FULL_HOUSE],
       ["full house, pair above triple", "4♦ 4♣ 4♠ K♥ K♠", T.FULL_HOUSE],
       ["straight flush", "5♣ 6♣ 7♣ 8♣ 9♣", T.STRAIGHT_FLUSH],
       ["straight flush J-Q-K-A-2", "J♠ Q♠ K♠ A♠ 2♠", T.STRAIGHT_FLUSH],
+      ["straight flush A-2-3-4-5", "A♣ 2♣ 3♣ 4♣ 5♣", T.STRAIGHT_FLUSH],
+      ["straight flush 2-3-4-5-6", "2♥ 3♥ 4♥ 5♥ 6♥", T.STRAIGHT_FLUSH],
       ["royal flush", "10♥ J♥ Q♥ K♥ A♥", T.ROYAL_FLUSH],
     ])("%s", (_label, hand, type) => {
       const c = combo(hand);
@@ -42,6 +46,12 @@ describe.each(COPIES)("handEvaluator (%s)", (_name, { evaluator: E, constants: C
       expect(c.highCard.id).toBe("4♠");
     });
 
+    it("a wraparound straight's top card is the end of the run, not the 2", () => {
+      expect(combo("A♦ 2♠ 3♥ 4♣ 5♦").highCard.id).toBe("5♦");
+      expect(combo("A♦ 2♠ 3♥ 4♣ 5♦").rank).toBe(C.RANK_VALUES["5"]);
+      expect(combo("2♠ 3♥ 4♣ 5♦ 6♣").highCard.id).toBe("6♣");
+    });
+
     it("5-card hands carry a strength", () => {
       expect(combo("3♦ 4♣ 5♥ 6♠ 7♦").strength).toBe(C.POKER_COMBO_STRENGTH[T.STRAIGHT]);
       expect(combo("10♥ J♥ Q♥ K♥ A♥").strength).toBe(C.POKER_COMBO_STRENGTH[T.ROYAL_FLUSH]);
@@ -55,7 +65,7 @@ describe.each(COPIES)("handEvaluator (%s)", (_name, { evaluator: E, constants: C
       ["mixed triple", "Q♣ Q♥ K♠"],
       ["four that isn't a set", "5♦ 5♣ 5♥ 6♠"],
       ["4-card straight", "3♦ 4♣ 5♥ 6♠"],
-      ["A-2-3-4-5 wraparound", "A♦ 2♣ 3♥ 4♠ 5♦"],
+      ["K-A-2-3-4 wraparound (only A and 2 may wrap)", "K♦ A♣ 2♥ 3♠ 4♦"],
       ["Q-K-A-2-3 wraparound", "Q♦ K♣ A♥ 2♠ 3♦"],
       ["5 unrelated cards", "3♦ 5♣ 9♥ J♠ K♦"],
       ["two pair plus one", "3♦ 3♣ 9♥ 9♠ K♦"],
@@ -139,13 +149,21 @@ describe.each(COPIES)("handEvaluator (%s)", (_name, { evaluator: E, constants: C
       ["straight: same top rank, higher top suit", "3♦ 4♣ 5♥ 6♠ 7♠", "3♣ 4♦ 5♦ 6♦ 7♥", true],
       ["straight: same top rank, lower top suit", "3♣ 4♦ 5♦ 6♦ 7♥", "3♦ 4♣ 5♥ 6♠ 7♠", false],
       ["straight: J-Q-K-A-2 is the highest", "J♦ Q♣ K♥ A♠ 2♦", "10♠ J♠ Q♥ K♥ A♠", true],
+      ["straight: 2-3-4-5-6 beats A-2-3-4-5", "2♦ 3♣ 4♥ 5♠ 6♦", "A♠ 2♠ 3♥ 4♥ 5♠", true],
+      ["straight: 3-4-5-6-7 beats 2-3-4-5-6", "3♦ 4♣ 5♥ 6♠ 7♦", "2♠ 3♠ 4♠ 5♥ 6♠", true],
+      ["straight: 2-3-4-5-6 loses to 3-4-5-6-7", "2♠ 3♠ 4♠ 5♥ 6♠", "3♦ 4♣ 5♥ 6♠ 7♦", false],
+      ["straight: wraps tie-break on the top card's suit", "A♦ 2♦ 3♦ 4♣ 5♠", "A♠ 2♠ 3♣ 4♦ 5♥", true],
       ["flush: a 2-high flush beats a king-high one", "4♥ 8♥ 9♥ 10♥ 2♥", "3♣ 4♣ 5♣ 6♣ K♣", true],
-      ["flush: higher top rank wins", "3♣ 5♣ 7♣ 9♣ A♣", "4♥ 6♥ 8♥ 10♥ K♥", true],
+      ["flush: higher suit wins over a higher top card", "3♣ 5♣ 7♣ 9♣ J♣", "4♦ 6♦ 8♦ 10♦ A♦", true],
+      ["flush: lower suit loses whatever its top card", "4♦ 6♦ 8♦ 10♦ 2♦", "3♣ 5♣ 7♣ 9♣ J♣", false],
       ["flush: same top rank, higher suit", "3♠ 5♠ 7♠ 9♠ A♠", "4♥ 6♥ 8♥ 10♥ A♥", true],
+      ["flush: same suit, higher top card", "4♥ 6♥ 8♥ 10♥ K♥", "3♥ 5♥ 7♥ 9♥ Q♥", true],
+      ["flush: same suit, lower top card", "3♥ 5♥ 7♥ 9♥ Q♥", "4♥ 6♥ 8♥ 10♥ K♥", false],
       ["full house: higher triple", "9♦ 9♣ 9♠ 3♥ 3♠", "8♦ 8♣ 8♠ A♥ A♠", true],
       ["full house: lower triple", "8♦ 8♣ 8♠ A♥ A♠", "9♦ 9♣ 9♠ 3♥ 3♠", false],
       ["straight flush: higher top card", "4♥ 5♥ 6♥ 7♥ 8♥", "3♠ 4♠ 5♠ 6♠ 7♠", true],
       ["straight flush J-Q-K-A-2 still below royal", "J♠ Q♠ K♠ A♠ 2♠", "10♦ J♦ Q♦ K♦ A♦", false],
+      ["straight flush A-2-3-4-5 is the lowest", "A♠ 2♠ 3♠ 4♠ 5♠", "3♦ 4♦ 5♦ 6♦ 7♦", false],
       ["royal flush: spades over hearts", "10♠ J♠ Q♠ K♠ A♠", "10♥ J♥ Q♥ K♥ A♥", true],
     ])("%s", (_label, a, b, expected) => {
       expect(beats(a, b)).toBe(expected);
