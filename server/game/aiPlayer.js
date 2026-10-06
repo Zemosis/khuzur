@@ -311,7 +311,7 @@ const buildCardTracker = (gameState, playerHand) => {
   const playedCards = new Set();
 
   for (const move of gameState.moveHistory) {
-    if (move.action === "play" && move.cards) {
+    if (move.type === "PLAY") {
       for (const card of move.cards) {
         playedCards.add(card.id);
       }

@@ -27,6 +27,17 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
   const decideUnderPressure = (difficulty, hand, currentPlay) =>
     decide(difficulty, hand, currentPlay, { hands: [hand, "3♠ 4♠", "3♥ 4♥ 5♥ 6♥", "3♣ 4♣ 5♣ 6♣"] });
 
+  it("HARD counts the cards played: with every 2 gone its ace is boss, so it spends a pair", () => {
+    // Only a pair beats the table, and it's one HARD would rather keep. It
+    // spends it when it holds a card nobody can beat to take the lead back.
+    const table = combo("5♦ 5♣");
+    const hand = "7♣ 7♥ A♠ 9♦";
+    const twosGone = cards("2♦ 2♣ 2♥ 2♠").map((c, i) => ({ type: "PLAY", playerIndex: 1 + (i % 3), cards: [c] }));
+    expect(decide("HARD", hand, table, { moveHistory: twosGone }).decision).toEqual({ action: "play", cards: cards("7♣ 7♥") });
+    // With the 2s still out there, the ace isn't safe: it keeps the pair.
+    expect(decide("HARD", hand, table).decision.action).toBe("pass");
+  });
+
   describe.each(DIFFICULTIES)("%s", (difficulty) => {
     it("leads with a legal play", () => {
       const hand = "3♦ 5♣ 5♥ 8♠ 9♦ 10♣ J♥ Q♠ K♦ 2♥";
