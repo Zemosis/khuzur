@@ -6,7 +6,8 @@
 
 ## At a glance
 
-- **4 players**, one 52-card deck (no jokers), **13 cards** each.
+- **2 to 4 players**, one 52-card deck (no jokers), **13 cards** each. With fewer
+  than 4, the cards left over aren't dealt.
 - **Goal of a round:** be the first to get rid of every card in your hand.
 - **Goal of the match:** don't collect points. Cards left in your hand when someone
   else goes out are points against you. At **25 points** you are out of the match.
@@ -37,7 +38,9 @@ Example: 7♠ beats 7♥ (same rank, spades is the higher suit), and 8♦ beats 
 
 1. **Deal.** Everyone gets 13 cards.
 2. **First lead.** In the first round, whoever holds the **3♦** leads. They don't have
-   to play the 3♦ itself. In later rounds, **the previous round's winner** leads.
+   to play the 3♦ itself. With fewer than 4 players the 3♦ may not be dealt; then
+   whoever holds the lowest card dealt leads. In later rounds, **the previous
+   round's winner** leads.
 3. **Lead a trick.** The leader plays any combination. The leader **can't pass**.
 4. **Go around clockwise.** On your turn, either
    - **beat** the combination on the table (same kind, stronger), or

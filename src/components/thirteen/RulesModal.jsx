@@ -169,7 +169,7 @@ export default function RulesModal({ onClose }) {
             <h1 id="rules-title" className="font-pixel-display text-[12px] sm:text-[16px] leading-snug text-glow-gold tracking-wider">
               HOW TO PLAY THIRTEEN
             </h1>
-            <div className="font-pixel-body text-[18px] text-bone/60 leading-none mt-1">Shed every card before anyone else · 4 players</div>
+            <div className="font-pixel-body text-[18px] text-bone/60 leading-none mt-1">Shed every card before anyone else · 2 to 4 players</div>
           </div>
           <div className="hidden md:flex items-end">
             <Cards spec="3♦ 7♣ Q♥ 2♠" width={34} overlap={0.3} />
@@ -262,8 +262,9 @@ export default function RulesModal({ onClose }) {
               <ol className="flex flex-col gap-3">
                 {[
                   <>
-                    Everyone is dealt <Key>13 cards</Key>. In the first round, whoever holds the <Key>3♦</Key> leads. In later
-                    rounds, <Key>the last round's winner</Key> leads.
+                    Everyone is dealt <Key>13 cards</Key>. In the first round, whoever holds the <Key>3♦</Key> leads (with
+                    fewer than 4 players it may not be dealt: then the lowest card dealt leads). In later rounds,{" "}
+                    <Key>the last round's winner</Key> leads.
                   </>,
                   <>
                     The leader plays <Key>any combination</Key> — a single, a pair, a straight… This starts a <Key>trick</Key>.
