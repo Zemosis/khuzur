@@ -242,7 +242,7 @@ function TurnGlow({ seat, D }) {
   );
 }
 
-function Felt({ D, stack, trump, trumpTakenBy, trickNumber, tricksPerRound, phaseLabel, maxCardWidth, dealing, overlay, centerRef, dealerSeat, trumpRef, turnSeat }) {
+function Felt({ D, stack, trump, trumpTakenBy, trickNumber, tricksPerRound, phaseLabel, maxCardWidth, dealing, overlay, centerRef, dealerSeat, trumpRef, turnSeat, banner }) {
   const cw = Math.round(Math.max(48, Math.min(maxCardWidth, D * 0.2)));
   const ch = Math.round(cw * CARD_RATIO);
   const at = (fy) => ({
@@ -284,6 +284,7 @@ function Felt({ D, stack, trump, trumpTakenBy, trickNumber, tricksPerRound, phas
       {dealerSeat && <DealerMarker seat={dealerSeat} D={D} />}
 
       {overlay?.(cw, D)}
+      {banner}
 
       {phaseLabel !== false && (
         <div style={at(0.3)}>
@@ -316,6 +317,7 @@ function Felt({ D, stack, trump, trumpTakenBy, trickNumber, tricksPerRound, phas
  * centerRef: ref to the felt, where dealt cards fly from.
  * dealerSeat: seat name (bottom, bottomLeft, …) the DEALER marker faces.
  * turnSeat: seat name the rim glows toward: whose turn it is.
+ * banner: node centered on the felt, over everything (the YOUR TURN banner).
  * trumpRef: ref to the face-up trump card while it lies on the felt.
  */
 const RoundTable = ({ seats, layout = "full", maxCardWidth = 100, ...felt }) => {

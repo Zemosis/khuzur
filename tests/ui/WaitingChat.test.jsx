@@ -36,7 +36,7 @@ describe("waiting table chat", () => {
     expect(avatarOf("line 3")).toBe("2");
   });
 
-  it("a new message pops up over the sender's seat, and yours over your own", () => {
+  it("a new message pops up over the sender's seat, but never over yours", () => {
     const table = {
       name: "Hideout",
       code: "ABC123",
@@ -51,6 +51,7 @@ describe("waiting table chat", () => {
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
     rerender(<WaitingTable {...props} messages={[say(1, "ANN #0002"), say(2, "ANN #0002"), say(3, "ME #0001", true)]} />);
     expect(screen.getByRole("note", { name: "ANN says" })).toHaveTextContent("line 2");
-    expect(screen.getByRole("note", { name: "ME says" })).toHaveTextContent("line 3");
+    // Yours never pops up over your own seat.
+    expect(screen.queryByRole("note", { name: "ME says" })).not.toBeInTheDocument();
   });
 });

@@ -175,15 +175,16 @@ describe("GameThirteen online", () => {
     expect(pressed("RANK")).toBe("true");
   }, 20000);
 
-  it("your turn is hard to miss: a banner, a gold frame on your hand, your side of the felt glowing", async () => {
+  it("your turn is hard to miss: a banner and a steady YOUR TURN mark on your hand", async () => {
     const s = stateWith(logic, { hands: ["3♦ 7♥ 9♣ K♠", "4♣ 6♣", "8♦ 10♦", "5♠ J♣"], current: 0 });
     const { container } = open();
     await act(async () => {});
     serverSends("game_state_update", view(s));
     await yourTurn();
-    expect(screen.getByText("YOUR TURN")).toBeInTheDocument();
-    expect(container.querySelector('[data-your-turn="true"]')).not.toBeNull();
-    expect(container.querySelector('[data-turn-side="bottom"]')).not.toBeNull();
+    expect(screen.getAllByText("YOUR TURN")).toHaveLength(2); // the banner and the mark
+    expect(container.querySelector('[data-your-turn="true"] [data-your-turn-mark]')).not.toBeNull();
+    // The mark stands in for the felt's edge glow on your side.
+    expect(container.querySelector("[data-turn-side]")).toBeNull();
   }, 20000);
 
   it("someone else's turn: the felt glows on their side and the other seats dim", async () => {
@@ -199,7 +200,7 @@ describe("GameThirteen online", () => {
     expect(plateOf("top").style.opacity).toBe("0.6");
   }, 20000);
 
-  it("a chat message pops up over its sender's seat, and yours over your hand", async () => {
+  it("a chat message pops up over its sender's seat, but never yours", async () => {
     const s = stateWith(logic, { hands: ["3♦ 7♥ 9♣ K♠", "4♣ 6♣", "8♦ 10♦", "5♠ J♣"], current: 0 });
     open();
     await act(async () => {});
@@ -208,6 +209,7 @@ describe("GameThirteen online", () => {
     serverSends("receive_chat", { id: "c1", type: "CHAT", sender: "FRIEND #0002", text: "your go!", timestamp: "10:00" });
     expect(screen.getByRole("note", { name: "FRIEND says" })).toHaveTextContent("your go!");
     serverSends("receive_chat", { id: "c2", type: "CHAT", sender: "ME #0001", text: "thinking", timestamp: "10:00" });
-    expect(screen.getByRole("note", { name: "ME says" })).toHaveTextContent("thinking");
+    expect(screen.getByText("thinking")).toBeInTheDocument(); // in the chat panel
+    expect(screen.queryByRole("note", { name: "ME says" })).not.toBeInTheDocument();
   }, 20000);
 });

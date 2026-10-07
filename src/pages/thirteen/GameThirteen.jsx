@@ -9,8 +9,8 @@ import { useChatLimit } from "../../hooks/useChatLimit";
 import { useHandOrder } from "../../hooks/useHandOrder";
 import { useChatBubbles } from "../../hooks/useChatBubbles";
 import { useTurnTitle } from "../../hooks/useTurnTitle";
-import ChatBubble from "../../components/ChatBubble";
 import TurnBanner from "../../components/TurnBanner";
+import YourTurnMark from "../../components/YourTurnMark";
 import PlayerHand from "../../components/thirteen/PlayerHand";
 import OpponentSection from "../../components/thirteen/OpponentSection";
 import PlayArea from "../../components/thirteen/PlayArea";
@@ -728,8 +728,10 @@ const GameThirteen = () => {
         isDealing={isDealing}
         cardWidth={deckW}
         showRound={!compact}
-        turnSide={playing ? positionOf(gameState.currentPlayerIndex, viewIndex, playersList.length) : null}
+        // Your hand carries its own mark on your turn.
+        turnSide={playing && !myTurnNow ? positionOf(gameState.currentPlayerIndex, viewIndex, playersList.length) : null}
       />
+      <TurnBanner active={myTurnNow} />
       {isDealing && gameState && (
         <DealAnimation
           dealerIndex={gameState.dealerIndex}
@@ -750,7 +752,6 @@ const GameThirteen = () => {
       className="relative w-full h-full font-pixel-body text-parchment overflow-hidden flex flex-col"
       style={{ position: "fixed", inset: 0 }}
     >
-      <TurnBanner active={myTurnNow} />
       {/* TABLE BACKDROP */}
       <div
         className="absolute inset-0"
@@ -897,16 +898,9 @@ const GameThirteen = () => {
             </>
           )}
 
-          {/* My hand area: a gold frame while it's your turn, and your own
-              chat bubble above it. */}
-          <div
-            className="relative"
-            data-your-turn={myTurnNow ? "true" : undefined}
-            style={myTurnNow ? { animation: "pulse-glow 1.6s ease-in-out infinite", backgroundColor: "rgba(244,196,48,0.06)" } : undefined}
-          >
-          {bubbles.bubbleFor(null, true) && (
-            <ChatBubble name={(identity?.name || playerName || "You").split(" #")[0]} lines={bubbles.bubbleFor(null, true)} />
-          )}
+          {/* My hand area, marked while it's your turn. */}
+          <div className="relative" data-your-turn={myTurnNow ? "true" : undefined}>
+          {myTurnNow && <YourTurnMark />}
           <PlayerHand
             hand={bottomPlayer.hand}
             selectedCards={selectedCards}

@@ -1,5 +1,6 @@
-// TURN BANNER — "YOUR TURN" pops up in the middle of the screen for a moment
+// TURN BANNER — "YOUR TURN" pops up in the middle of the table for a moment
 // when your turn starts, so it can't be missed. It never blocks a click.
+// Goes inside the felt (a positioned box), which it centers on.
 
 import React, { useEffect, useState } from "react";
 
@@ -24,9 +25,9 @@ export default function TurnBanner({ active }) {
 
   if (!shown) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none" aria-live="assertive">
+    <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none" aria-live="assertive">
       <div
-        className="turn-banner font-pixel-display text-[28px] sm:text-[40px] px-8 py-4 tracking-widest"
+        className="turn-banner font-pixel-display text-[28px] sm:text-[40px] px-8 py-4 tracking-widest whitespace-nowrap"
         style={{
           backgroundColor: "#f4c430",
           color: "#1a1024",

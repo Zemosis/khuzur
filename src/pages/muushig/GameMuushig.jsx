@@ -17,8 +17,8 @@ import { useChatLimit } from "../../hooks/useChatLimit";
 import { useHandOrder } from "../../hooks/useHandOrder";
 import { useChatBubbles } from "../../hooks/useChatBubbles";
 import { useTurnTitle } from "../../hooks/useTurnTitle";
-import ChatBubble from "../../components/ChatBubble";
 import TurnBanner from "../../components/TurnBanner";
+import YourTurnMark from "../../components/YourTurnMark";
 import { socket, connectSocket } from "../../utils/socket";
 import { seatAvatar } from "../../utils/avatarConstants";
 import WaitingTable from "../../components/thirteen/WaitingTable";
@@ -873,7 +873,6 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
   const showResults = (phase === PHASES.ROUND_END || phase === PHASES.MATCH_OVER) && game.roundResults && !flying;
   return (
     <div className="relative w-full h-full font-pixel-body text-parchment overflow-hidden flex flex-col" style={{ position: "fixed", inset: 0 }}>
-      <TurnBanner active={myMove} />
       {/* TABLE BACKDROP */}
       <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, #123526 0%, #14102a 60%, #0a0712 100%)" }} />
       <div className="absolute inset-0 dither-shadow opacity-40 pointer-events-none" />
@@ -985,7 +984,9 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
             dealing={isDealing}
             centerRef={feltRef}
             dealerSeat={drawing || stage === "intro" ? null : posOf(game.dealer)}
-            turnSeat={turnSeat}
+            // Your hand carries its own mark on your move.
+            turnSeat={myMove ? null : turnSeat}
+            banner={<TurnBanner active={myMove} />}
             overlay={(cardWidth, diameter) =>
               drawing ? (
                 <DealDraw
@@ -1032,12 +1033,9 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
             ref={handAreaRef}
             className="relative"
             data-your-turn={myMove ? "true" : undefined}
-            style={{
-              ...(narrow ? { paddingLeft: pileW * 2 + 24 } : null),
-              ...(myMove ? { animation: "pulse-glow 1.6s ease-in-out infinite", backgroundColor: "rgba(244,196,48,0.06)" } : null),
-            }}
+            style={narrow ? { paddingLeft: pileW * 2 + 24 } : undefined}
           >
-            {bubbles.bubbleFor(null, true) && <ChatBubble name={nameOf(mySeat)} lines={bubbles.bubbleFor(null, true)} />}
+            {myMove && <YourTurnMark />}
             {!isDealing && (
               <div className="absolute left-2 bottom-2 z-10">
                 <SidePiles

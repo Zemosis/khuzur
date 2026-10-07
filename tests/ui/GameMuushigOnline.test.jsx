@@ -194,14 +194,15 @@ describe("GameMuushig online", () => {
     expect(order()).toEqual(sorted);
   }, 20_000);
 
-  it("your turn shows a banner, frames your hand and lights your side; chat pops up over the sender", async () => {
+  it("your turn shows a banner and a steady YOUR TURN mark on your hand; chat pops up over the sender", async () => {
     open();
     const s = playUntil(newMatch(0), (x) => x.phase === PHASES.DECIDE && x.turn === ME);
     serverSends("muushig_state", view(s));
     await button("GO IN");
-    expect(screen.getByText("YOUR TURN")).toBeInTheDocument();
-    expect(document.querySelector('[data-your-turn="true"]')).not.toBeNull();
-    expect(document.querySelector('[data-turn-side="bottom"]')).not.toBeNull();
+    expect(screen.getAllByText("YOUR TURN")).toHaveLength(2); // the banner and the mark
+    expect(document.querySelector('[data-your-turn="true"] [data-your-turn-mark]')).not.toBeNull();
+    // The mark stands in for the table rim's glow on your side.
+    expect(document.querySelector("[data-turn-side]")).toBeNull();
     serverSends("receive_chat", { id: "m1", type: "CHAT", sender: "ANN #0001", text: "go in!", timestamp: "10:00" });
     expect(screen.getByRole("note", { name: "ANN says" })).toHaveTextContent("go in!");
   }, 20_000);

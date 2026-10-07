@@ -42,10 +42,11 @@ describe("useChatBubbles", () => {
     expect(result.current.bubbleFor("ANN #0001")).toBeNull();
   });
 
-  it("your own messages show over your seat", () => {
+  it("your own messages never pop up, not even over a namesake's seat", () => {
     const { result, rerender } = setup();
     rerender({ messages: [chat(1, "ME #0003", "my turn?", true)] });
-    expect(result.current.bubbleFor("ME #0003", true)).toEqual(["my turn?"]);
+    expect(result.current.bubbleFor("ME #0003")).toBeNull();
+    expect(result.current.bubbleFor("ME #0009")).toBeNull();
   });
 
   it("chat already there when the table opens, and the move log, never pop up", () => {

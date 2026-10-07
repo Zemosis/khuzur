@@ -250,7 +250,8 @@ export default function WaitingTable({
       face={pos === "bottom" ? myFace : undefined}
       small={small}
       bubble={
-        at[pos].seat?.kind !== "human" ? null : at[pos].index === table.mySeat ? bubbles.bubbleFor(null, true) : bubbles.bubbleFor(at[pos].seat.name)
+        // Yours never pops up: you know what you said.
+        at[pos].seat?.kind !== "human" || at[pos].index === table.mySeat ? null : bubbles.bubbleFor(at[pos].seat.name)
       }
       // Seats along the top (and the phone strip) say it below, not off-screen.
       bubbleTail={small || pos.startsWith("top") ? "up" : "down"}

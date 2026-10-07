@@ -527,6 +527,12 @@ button:focus, input:focus { outline: none; }
   50% { opacity: 1; }
 }
 .turn-edge { animation: edge-glow 1.2s ease-in-out infinite; }
+@keyframes your-turn-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.your-turn-mark { animation: your-turn-in 250ms ease-out; }
+html[data-motion="reduced"] .your-turn-mark,
 html[data-motion="reduced"] .chat-bubble,
 html[data-motion="reduced"] .turn-arrow,
 html[data-motion="reduced"] .turn-edge { animation: none; }
