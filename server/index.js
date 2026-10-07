@@ -351,7 +351,9 @@ function beginSession(lobby) {
     isPrivate: lobby.isPrivate,
     hostUserId: host?.userId || null,
     hostDisplayName: host?.displayName || "?",
-    maxPlayers: lobby.maxPlayers,
+    // The seats actually dealt in: a Thirteen table can start with 2 or 3, and
+    // profiles read "2nd of N" and "dead last" from this.
+    maxPlayers: lobby.game?.state?.players?.length ?? lobby.maxPlayers,
     playerCount: lobby.roster.size,
     startedAt: lobby.game?.startedAt,
   }).catch((err) => {
