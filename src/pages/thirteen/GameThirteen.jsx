@@ -117,6 +117,8 @@ const GameThirteen = () => {
   const unread = useUnread(messages, panelOpen);
   const tableCenterRef = useRef(null);
   const lastHistoryLengthRef = useRef(0);
+  // Whether this page has taken in the state it opened on (see LOGS & SFX).
+  const caughtUpRef = useRef(false);
   const gameStateRef = useRef(gameState);
   const dealOrderRef = useRef(null);
 
@@ -504,11 +506,21 @@ const GameThirteen = () => {
   // --- LOGS & SFX ---
   // The log stores structured entries (who, what, which cards); GameChat
   // renders them as rows with card chips.
+  // The first state a page gets (a reload, or joining mid-match) holds the
+  // whole match so far. That catches up at once and silently, logging only
+  // the current round; replaying it used to rattle off every past move's
+  // sound in quick succession.
   useEffect(() => {
     if (!gameState) return;
     const history = gameState.moveHistory;
+    const catchingUp = !caughtUpRef.current;
+    caughtUpRef.current = true;
+    if (catchingUp) {
+      const roundStart = history.findLastIndex((m) => m.type === "NEW_ROUND");
+      lastHistoryLengthRef.current = Math.max(0, roundStart);
+    }
     if (history.length <= lastHistoryLengthRef.current) return;
-    const firstBatch = lastHistoryLengthRef.current === 0;
+    const firstBatch = catchingUp || lastHistoryLengthRef.current === 0;
     const newMoves = history.slice(lastHistoryLengthRef.current);
     lastHistoryLengthRef.current = history.length;
     const nameOf = (i) => (gameState.players[i]?.name || "").split(" #")[0];
@@ -525,8 +537,8 @@ const GameThirteen = () => {
 
     newMoves.forEach((move, index) => {
       setTimeout(() => {
-        if (move.type === "PLAY") safePlay("playSnap");
-        if (move.type === "NEW_ROUND") safePlay("playDeal");
+        if (!catchingUp && move.type === "PLAY") safePlay("playSnap");
+        if (!catchingUp && move.type === "NEW_ROUND") safePlay("playDeal");
 
         let fields = null;
         if (move.type === "PLAY") {
@@ -547,7 +559,7 @@ const GameThirteen = () => {
           fields = { kind: "round", round: move.roundNumber };
         }
         if (fields) setMessages((prev) => [...prev, entry(fields)]);
-      }, index * 100);
+      }, catchingUp ? 0 : index * 100);
     });
   }, [gameState?.moveHistory]);
 

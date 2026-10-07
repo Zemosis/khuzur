@@ -86,6 +86,9 @@ const DealAnimation = ({
     const budget = synced ? Math.max(0, endsAt - performance.now()) / 1000 : null;
     // Card flights run off the timeline, so they take its speed-up by hand.
     let speed = 1;
+    // A deal racing to catch up (rejoined mid-deal) is silent: its sounds
+    // would rattle off far faster than a real deal.
+    let quiet = false;
 
     let order = [...layers];
     // Explicit values everywhere: StrictMode runs this effect twice, and a
@@ -110,7 +113,7 @@ const DealAnimation = ({
       for (let pass = 0; pass < 2; pass++) {
         const left = order.slice(0, half);
         const right = order.slice(half);
-        tl.call(() => safeSound("playShuffle"), null, ">0.06");
+        tl.call(() => quiet || safeSound("playShuffle"), null, ">0.06");
         tl.to(left, { x: -spread, rotation: -9, y: (i) => stackY(i), duration: 0.2, ease: "power2.out" }, "<");
         tl.to(right, { x: spread, rotation: 9, y: (i) => stackY(i), duration: 0.2, ease: "power2.out" }, "<");
         const merged = [];
@@ -168,7 +171,7 @@ const DealAnimation = ({
           // The deck thins as it deals.
           const visible = Math.ceil(((total - i - 1) / total) * DECK_LAYERS);
           order.forEach((el, k) => gsap.set(el, { autoAlpha: k < visible ? 1 : 0 }));
-          if (i % 2 === 0) safeSound("playDeal");
+          if (i % 2 === 0 && !quiet) safeSound("playDeal");
 
           if (pos === "bottom") return land(seat);
 
@@ -206,6 +209,7 @@ const DealAnimation = ({
     };
     if (synced) {
       speed = Math.max(1, (tl.duration() + fly + 0.2) / Math.max(budget, 0.001));
+      quiet = speed > 1.5;
       tl.timeScale(speed);
     } else {
       tl.call(finish, null, `>${fly + 0.2}`);
@@ -235,6 +239,11 @@ const DealAnimation = ({
       },
       synced ? budget * 1000 : (tl.duration() + 0.5) * 1000,
     );
+    // A deal that's already over everywhere (a reload mid-round) doesn't play.
+    if (synced && budget < 0.25) {
+      skipToEnd();
+      finish();
+    }
 
     return () => {
       clearTimeout(deadline);

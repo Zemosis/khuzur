@@ -405,7 +405,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
       return "rank";
     }
   });
-  const loggedRef = useRef({ match: null, count: 0 });
+  const loggedRef = useRef({ match: null, count: 0, caughtUp: false });
   const feltRef = useRef(null);
   const drawPileRef = useRef(null);
   const deadPileRef = useRef(null);
@@ -545,7 +545,9 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
     return () => window.removeEventListener("keydown", onKey);
   }, [myDraw, drawMax]);
 
-  // --- Engine events → the move log, plus sounds ---
+  // --- Engine events → the move log, plus sounds. The first state a page
+  // gets (a reload, or joining mid-match) catches up silently, logging only
+  // the round so far: replaying it fired every past card's sound at once ---
   useEffect(() => {
     const logged = loggedRef.current;
     if (logged.match !== game.matchNumber) {
@@ -553,12 +555,15 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
       logged.match = game.matchNumber;
       logged.count = 0;
     }
+    const catchingUp = !logged.caughtUp;
+    logged.caughtUp = true;
+    if (catchingUp) logged.count = Math.max(0, game.events.findLastIndex((e) => e.type === "round"));
     const fresh = game.events.slice(logged.count);
     logged.count = game.events.length;
     if (!fresh.length) return;
     const entries = fresh
       .map((e) => {
-        if (e.type === "play") safePlay("playSnap");
+        if (e.type === "play" && !catchingUp) safePlay("playSnap");
         return [logEntry(e, game)].flat().filter(Boolean);
       })
       .flat()
