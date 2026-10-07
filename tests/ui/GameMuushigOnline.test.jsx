@@ -187,6 +187,28 @@ describe("GameMuushig online", () => {
     expect(screen.getByText("hello ME")).toBeInTheDocument();
   });
 
+  it("a chat flood the server turns away holds the chat box, at the waiting table and in the game", async () => {
+    open();
+    serverSends("table_update", table());
+    const user = userEvent.setup();
+    const openChat = async () => {
+      const panel = screen.queryByRole("button", { name: /chat/i });
+      if (panel) await user.click(panel);
+    };
+    await openChat();
+    serverSends("chat_rejected", { reason: "slow", retryInMs: 3000 });
+    expect(screen.getByRole("status")).toHaveTextContent(/Slow down/);
+    expect(screen.getByRole("button", { name: "gg" })).toBeDisabled();
+
+    // Mid-round at the game table.
+    const s = playUntil(newMatch(ME), (st) => st.phase === PHASES.PLAY);
+    serverSends("muushig_state", view(s));
+    await screen.findByText(/MUUSHIG/);
+    await openChat();
+    serverSends("chat_rejected", { reason: "repeat", retryInMs: 9000 });
+    expect(await screen.findByText("You just said that — try something new")).toBeInTheDocument();
+  });
+
   it("round results close by themselves; at match end only the host gets REMATCH", async () => {
     const s = playUntil(newMatch(0), (x) => x.phase === PHASES.ROUND_END);
     const { unmount } = open();

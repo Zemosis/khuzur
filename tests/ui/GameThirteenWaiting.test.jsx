@@ -117,6 +117,18 @@ describe("GameThirteen before the deal", () => {
     expect(screen.queryByRole("button", { name: "REMATCH" })).not.toBeInTheDocument();
   });
 
+  it("a chat flood the server turns away holds the chat box with a notice", async () => {
+    renderGame();
+    await act(async () => {});
+    serverSends("table_update", table);
+    // On a small screen the chat slides out from the header.
+    const panel = screen.queryByRole("button", { name: /chat/i });
+    if (panel) await userEvent.setup().click(panel);
+    serverSends("chat_rejected", { reason: "slow", retryInMs: 2000 });
+    expect(screen.getByRole("status")).toHaveTextContent(/Slow down/);
+    expect(screen.getByRole("button", { name: "gg" })).toBeDisabled();
+  });
+
   it("shows a rejected command on the waiting table", async () => {
     renderGame();
     await act(async () => {});

@@ -14,6 +14,7 @@ import { BOT_NAMES } from "./game/constants.js";
 import { createSession, finishSession, closeOrphanedSessions } from "./persistence.js";
 import { authRouter, socketIdentity } from "./auth.js";
 import { oauthRouter } from "./oauth.js";
+import { createChatGuard } from "./chatGuard.js";
 import { migrate, pool } from "./db/index.js";
 
 const PORT = process.env.PORT || 3001;
@@ -123,6 +124,10 @@ const makeLobbyId = (isPrivate) => {
 const shareCode = (id) => id.replace(/^PUB-/, "");
 
 const CPU_LEVELS = ["EASY", "MEDIUM", "HARD"];
+
+// Chat floods are turned away (see chatGuard.js); quiet players are forgotten.
+const chatGuard = createChatGuard();
+setInterval(() => chatGuard.prune(60_000), 60_000).unref();
 
 /** The first BOT_NAMES name not already used at this table ("Bot n" past the list). */
 function nextCpuName(seats) {
@@ -734,6 +739,11 @@ io.on("connection", (socket) => {
     if (!lobby || !lobby.members.has(socket.data.playerKey)) return;
     const text = String(message || "").slice(0, 300);
     if (!text.trim()) return;
+    const verdict = chatGuard.check(socket.data.playerKey, text);
+    if (!verdict.ok) {
+      socket.emit("chat_rejected", { reason: verdict.reason, retryInMs: verdict.retryInMs });
+      return;
+    }
     io.to(lobbyId).emit("receive_chat", {
       id: `msg-${randomUUID()}`,
       type: "CHAT",

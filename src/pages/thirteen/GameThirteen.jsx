@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { socket, connectSocket } from "../../utils/socket";
 import { useAuth } from "../../hooks/useAuth";
 import { useServerStats } from "../../hooks/useServerStats";
+import { useChatLimit } from "../../hooks/useChatLimit";
 import PlayerHand from "../../components/thirteen/PlayerHand";
 import OpponentSection from "../../components/thirteen/OpponentSection";
 import PlayArea from "../../components/thirteen/PlayArea";
@@ -161,6 +162,7 @@ const GameThirteen = () => {
   // only what was true when this page was opened.
   const amHost = gameState?.amHost ?? table?.isHost ?? !!isHost;
   const { connected, ping } = useServerStats({ enabled: !isSoloGame });
+  const chatLimit = useChatLimit();
 
   // --- HELPER: FIND MY INDEX ---
   const getMyPlayerIndex = useCallback(
@@ -575,6 +577,7 @@ const GameThirteen = () => {
         onRemoveCpu={handleRemoveCpu}
         onSetCpuLevel={handleSetCpuLevel}
         onStart={handleStart}
+        chatLimit={chatLimit}
         errorMessage={errorMessage}
         myFace={{ variant: identity.avatar, customAvatarData: identity.customAvatar }}
       />
@@ -938,6 +941,7 @@ const GameThirteen = () => {
             onSendMessage={handleSendMessage}
             avatarFor={avatarFor}
             colorFor={colorFor}
+            {...chatLimit}
           />
         </TableSidebar>
       </div>

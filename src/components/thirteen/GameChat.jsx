@@ -2,7 +2,8 @@
 //
 // Chat messages carry an unread count on the CHAT tab while you're reading
 // the log. The list scrolls inside its own box (never the page), and stays
-// pinned to the newest message.
+// pinned to the newest message. When the server holds a chat flood
+// (`blocked`, see hooks/useChatLimit), `notice` says why and nothing sends.
 
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { PixelAvatar } from "../PixelCard";
@@ -36,7 +37,7 @@ function Tab({ active, onClick, children, badge = 0 }) {
   );
 }
 
-const GameChat = ({ messages = [], onSendMessage, avatarFor, colorFor }) => {
+const GameChat = ({ messages = [], onSendMessage, avatarFor, colorFor, notice = null, blocked = false }) => {
   const [inputText, setInputText] = useState("");
   const [tab, setTab] = useState("chat");
   const [seenChat, setSeenChat] = useState(0);
@@ -59,15 +60,16 @@ const GameChat = ({ messages = [], onSendMessage, avatarFor, colorFor }) => {
   };
 
   const send = (text) => {
-    if (!text.trim()) return;
+    if (blocked || !text.trim()) return false;
     onSendMessage(text);
     if (tab !== "chat") switchTab("chat");
+    return true;
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    send(inputText);
-    setInputText("");
+    // Held: keep what was typed, to send once chat opens again.
+    if (send(inputText)) setInputText("");
   };
 
   return (
@@ -112,6 +114,15 @@ const GameChat = ({ messages = [], onSendMessage, avatarFor, colorFor }) => {
         )}
       </div>
 
+      {notice && (
+        <div
+          role="status"
+          className="px-3 py-1.5 font-pixel-body text-[18px] leading-none"
+          style={{ borderTop: "3px solid #1f1a3d", backgroundColor: "#2e0f1d", color: "#e85a7a" }}
+        >
+          {notice}
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="p-2 flex gap-1.5" style={{ borderTop: "3px solid #1f1a3d", backgroundColor: "#14102a" }}>
         <input
           type="text"
@@ -125,7 +136,7 @@ const GameChat = ({ messages = [], onSendMessage, avatarFor, colorFor }) => {
         />
         <button
           type="submit"
-          disabled={!inputText.trim()}
+          disabled={blocked || !inputText.trim()}
           className="pixel-btn font-pixel-display px-3"
           style={{ backgroundColor: "#5fd4d6", borderColor: "#2a8a8c", color: "#0a3a3a" }}
           aria-label="Send"
@@ -138,6 +149,7 @@ const GameChat = ({ messages = [], onSendMessage, avatarFor, colorFor }) => {
           <button
             key={q}
             onClick={() => send(q)}
+            disabled={blocked}
             className="pixel-btn pixel-choice font-pixel-body text-[18px] leading-none py-1.5"
             style={{ "--tone": "#463a78", backgroundColor: "#1f1a3d", borderColor: "#0a0712", color: "#ead8b1" }}
           >

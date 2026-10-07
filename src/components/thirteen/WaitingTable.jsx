@@ -221,6 +221,7 @@ export default function WaitingTable({
   errorMessage,
   myFace,
   fillsEmptySeats = false,
+  chatLimit, // { notice, blocked } for the chat box (hooks/useChatLimit)
   title = "THIRTEEN",
   titleClass = "text-glow-gold",
   titleColor,
@@ -329,7 +330,7 @@ export default function WaitingTable({
         )}
 
         <TableSidebar compact={compact} open={panelOpen} onClose={closePanel}>
-          <GameChat messages={messages} onSendMessage={onSendMessage} avatarFor={avatarFor} />
+          <GameChat messages={messages} onSendMessage={onSendMessage} avatarFor={avatarFor} {...chatLimit} />
         </TableSidebar>
       </div>
     </div>

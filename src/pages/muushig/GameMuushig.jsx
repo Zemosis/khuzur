@@ -13,6 +13,7 @@ import gsap from "gsap";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useServerStats } from "../../hooks/useServerStats";
+import { useChatLimit } from "../../hooks/useChatLimit";
 import { socket, connectSocket } from "../../utils/socket";
 import { seatAvatar } from "../../utils/avatarConstants";
 import WaitingTable from "../../components/thirteen/WaitingTable";
@@ -256,6 +257,7 @@ function OnlineMuushig({ lobbyId, playerName }) {
   const [messages, setMessages] = useState([]);
   const [rejection, setRejection] = useState(null);
   const [fatal, setFatal] = useState("");
+  const chatLimit = useChatLimit();
 
   useEffect(() => {
     const join = () => {
@@ -313,7 +315,7 @@ function OnlineMuushig({ lobbyId, playerName }) {
     return (
       <MuushigTable
         initial={first}
-        online={{ lobbyId, feed, feedVersion, rejection, onExit: exit, onSendChat: sendChat }}
+        online={{ lobbyId, feed, feedVersion, rejection, onExit: exit, onSendChat: sendChat, chatLimit }}
         messages={messages}
         setMessages={setMessages}
       />
@@ -333,6 +335,7 @@ function OnlineMuushig({ lobbyId, playerName }) {
         onRemoveCpu={(seat) => socket.emit("remove_cpu", { lobbyId, seat })}
         onSetCpuLevel={(seat, level) => socket.emit("set_cpu_level", { lobbyId, seat, level })}
         fillsEmptySeats
+        chatLimit={chatLimit}
         onStart={() => socket.emit("start_game", { lobbyId })}
         errorMessage={rejection?.text}
         myFace={{ variant: identity?.avatar ?? 1, customAvatarData: identity?.customAvatar }}
@@ -1083,7 +1086,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
             myIndex={mySeat}
             faceFor={faceFor}
           />
-          <GameChat messages={messages} onSendMessage={handleSendMessage} avatarFor={avatarFor} colorFor={colorFor} />
+          <GameChat messages={messages} onSendMessage={handleSendMessage} avatarFor={avatarFor} colorFor={colorFor} {...online?.chatLimit} />
         </TableSidebar>
       </div>
 

@@ -31,6 +31,24 @@ describe("GameChat", () => {
     expect(onSend).toHaveBeenCalledTimes(2);
   });
 
+  it("while chat is held, it says why and nothing can be sent; what you typed stays", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    const { rerender } = render(<GameChat onSendMessage={onSend} notice="Slow down — chat again in 2s" blocked />);
+    expect(screen.getByRole("status")).toHaveTextContent("Slow down — chat again in 2s");
+    const input = screen.getByRole("textbox", { name: "Chat message" });
+    await user.type(input, "hello{Enter}");
+    expect(onSend).not.toHaveBeenCalled();
+    expect(input).toHaveValue("hello");
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "gg" })).toBeDisabled();
+
+    rerender(<GameChat onSendMessage={onSend} />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(onSend).toHaveBeenCalledWith("hello");
+  });
+
   it("splits chat from the move log", async () => {
     const user = userEvent.setup();
     const messages = [

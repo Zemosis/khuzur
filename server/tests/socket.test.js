@@ -706,6 +706,23 @@ describe("a running match", () => {
     expect(msgs[0].id).toMatch(/^msg-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 
+  it("a chat flood is cut off for the sender only; the table never sees the extra messages", async () => {
+    const { socks, lobbyId } = await fourHumans();
+    const [spammer, reader] = socks;
+    const received = [];
+    reader.on("receive_chat", (m) => received.push(m.text));
+    const rejected = next(spammer, "chat_rejected");
+    for (let i = 0; i < 8; i++) spammer.emit("send_chat", { lobbyId, message: `spam ${i}` });
+    const r = await rejected;
+    expect(r).toMatchObject({ reason: "slow" });
+    expect(r.retryInMs).toBeGreaterThan(0);
+    // Someone else at the table can still talk.
+    const fromReader = next(socks[2], "receive_chat", (m) => m.text === "calm down");
+    reader.emit("send_chat", { lobbyId, message: "calm down" });
+    await fromReader;
+    expect(received.filter((t) => t.startsWith("spam"))).toEqual(["spam 0", "spam 1", "spam 2", "spam 3", "spam 4", "spam 5"]);
+  });
+
   it("only the host can ask for a rematch, and only after game over", async () => {
     const { socks, lobbyId } = await fourHumans();
     let r = next(socks[1], "move_rejected");

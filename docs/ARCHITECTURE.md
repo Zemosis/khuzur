@@ -247,7 +247,13 @@ Client emits: `create_lobby { gameType }`, `join_lobby`, `leave_lobby`,
 
 Server emits: `lobby_joined { gameType }`, `table_update`, `game_state_update`
 (Thirteen), `muushig_state` (Muushig), `move_rejected`,
-`public_lobbies_update`, `receive_chat`, `error_message`.
+`public_lobbies_update`, `receive_chat`, `chat_rejected`, `error_message`.
+
+Chat is flood-guarded per player (`server/chatGuard.js`): 6 messages back to
+back, then one a second, and the same text at most 3 times in a row within
+10 seconds. A message turned away goes to nobody; only its sender gets
+`chat_rejected { reason: "slow" | "repeat", retryInMs }`, which the chat box
+shows (`src/hooks/useChatLimit.js`).
 
 `gameType` defaults to `thirteen`. `public_lobbies_update` goes only to sockets
 watching that game's table list: asking for it (`get_public_lobbies`)
