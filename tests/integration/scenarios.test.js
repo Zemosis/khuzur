@@ -65,12 +65,12 @@ describe.each(COPIES)("rulebook scenarios (%s)", (_name, { logic: L, deck: D, co
   it("an elimination mid-match leaves a 3-player table that skips the empty seat", () => {
     let s = stateWith(L, {
       hands: ["9♠", "3♦ 4♦ 5♦ 6♦", "10♠ J♠", "Q♠"],
-      scores: [0, 22, 0, 0],
+      scores: [0, 27, 0, 0],
       current: 0,
     });
     s = play(s, "9♠");
     expect(s.gameState).toBe(S.ROUND_END);
-    expect(s.players[1]).toMatchObject({ score: 26, isEliminated: true });
+    expect(s.players[1]).toMatchObject({ score: 31, isEliminated: true });
 
     s = L.startNextRound(s, [cards("3♣ 7♣"), cards("A♠"), cards("4♣ 8♣"), cards("5♣ 9♣")]);
     expect(s.players[1].hand).toEqual([]);
@@ -109,13 +109,13 @@ describe.each(COPIES)("rulebook scenarios (%s)", (_name, { logic: L, deck: D, co
   it("a double-penalty round can knock out the last rival and end the match", () => {
     let s = stateWith(L, {
       hands: ["", "7♠", "", "3♦ 4♦ 5♦ 6♦ 7♦ 8♦ 9♦ 10♦ J♦ Q♦ K♦"],
-      scores: [30, 20, 28, 4],
+      scores: [30, 20, 31, 8],
       eliminated: [true, false, true, false],
       current: 1,
       matchWins: [0, 0, 0, 0],
     });
     s = play(s, "7♠");
-    expect(s.players[3].score).toBe(4 + 22);
+    expect(s.players[3].score).toBe(8 + 22);
     expect(s.gameState).toBe(S.GAME_OVER);
     expect(L.getWinner(s).id).toBe(1);
     expect(s.matchWins).toEqual([0, 1, 0, 0]);

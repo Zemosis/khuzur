@@ -26,7 +26,7 @@ describe("RulesModal", () => {
 
   it("states the scoring thresholds from GAME_SETTINGS", () => {
     render(<RulesModal onClose={() => {}} />);
-    expect(screen.getAllByText(/25/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/30/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/10/).length).toBeGreaterThan(0);
   });
 

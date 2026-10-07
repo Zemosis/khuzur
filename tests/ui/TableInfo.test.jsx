@@ -25,13 +25,13 @@ describe("ScoreBoard", () => {
 
   const rows = () => within(screen.getByRole("region", { name: "Scoreboard" })).getAllByRole("listitem");
 
-  it("ranks lowest score first and shows score out of 25", () => {
+  it("ranks lowest score first and shows score out of 30", () => {
     render(<ScoreBoard players={players} currentPlayerIndex={3} roundNumber={4} />);
     expect(screen.getByText("ROUND 4")).toBeInTheDocument();
     const r = rows();
     expect(r.map((li) => within(li).getByText(/^P\d$/).textContent)).toEqual(["P1", "P3", "P0", "P2"]);
     expect(r[0]).toHaveTextContent("#1");
-    expect(r[0]).toHaveTextContent("3/25");
+    expect(r[0]).toHaveTextContent("3/30");
     expect(r[0]).toHaveTextContent("2 cards");
   });
 

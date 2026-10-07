@@ -23,7 +23,7 @@ describe.each(COPIES)("constants (%s)", (_name, { constants: C }) => {
   });
 
   it("uses the rulebook's scoring thresholds", () => {
-    expect(C.GAME_SETTINGS.ELIMINATION_SCORE).toBe(25);
+    expect(C.GAME_SETTINGS.ELIMINATION_SCORE).toBe(30);
     expect(C.GAME_SETTINGS.PENALTY_THRESHOLD).toBe(10);
     expect(C.GAME_SETTINGS.NUM_PLAYERS).toBe(4);
     expect(C.GAME_SETTINGS.CARDS_PER_PLAYER).toBe(13);

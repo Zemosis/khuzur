@@ -10,7 +10,7 @@
   than 4, the cards left over aren't dealt.
 - **Goal of a round:** be the first to get rid of every card in your hand.
 - **Goal of the match:** don't collect points. Cards left in your hand when someone
-  else goes out are points against you. At **25 points** you are out of the match.
+  else goes out are points against you. At **30 points** you are out of the match.
 - **The last player still in wins the match.**
 
 ## Words used in this rulebook
@@ -116,7 +116,7 @@ When two plays are the same kind, this decides which one is higher:
 - When a player goes out, every other player scores **1 point per card left** in hand.
 - Holding **10 or more cards doubles** those points (11 cards = 22 points).
 - Points add up across rounds.
-- At **25 points or more**, a player is **eliminated** and sits out the rest of the match.
+- At **30 points or more**, a player is **eliminated** and sits out the rest of the match.
 - When one player remains, they **win the match** (a match win is recorded) and the host
   can start a rematch.
 

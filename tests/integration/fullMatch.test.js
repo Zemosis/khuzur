@@ -87,8 +87,8 @@ describe.each(COPIES)("full matches (%s)", (_name, { logic: L, deck: D, evaluato
     const standing = s.players.filter((p) => !p.isEliminated);
     expect(standing, `seed ${seed}: exactly one winner`).toHaveLength(1);
     expect(s.matchWins[standing[0].id]).toBe(1);
-    s.players.filter((p) => p.isEliminated).forEach((p) => expect(p.score).toBeGreaterThanOrEqual(25));
-    expect(standing[0].score).toBeLessThan(25);
+    s.players.filter((p) => p.isEliminated).forEach((p) => expect(p.score).toBeGreaterThanOrEqual(30));
+    expect(standing[0].score).toBeLessThan(30);
     return stats;
   };
 

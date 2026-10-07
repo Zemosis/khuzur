@@ -217,7 +217,7 @@ describe.each(COPIES)("gameLogic (%s)", (_name, { logic: L, evaluator: E, consta
     });
 
     it("a 2-player match ends with one match win recorded for 2 seats", () => {
-      const s = stateWith(L, { hands: ["3♦", "4♦"], scores: [0, 24], current: 0 });
+      const s = stateWith(L, { hands: ["3♦", "4♦"], scores: [0, 29], current: 0 });
       const over = play(s, "3♦");
       expect(over.gameState).toBe(S.GAME_OVER);
       expect(over.matchWins).toEqual([1, 0]);
@@ -242,15 +242,16 @@ describe.each(COPIES)("gameLogic (%s)", (_name, { logic: L, evaluator: E, consta
       expect(s.players.every((p) => p.hand.length === 0)).toBe(true);
     });
 
-    it("13 cards left scores 26 and eliminates at once", () => {
-      const s = L.endRound(stateWith(L, { hands: ["", hand(13), "", ""] }), 0);
-      expect(s.players[1]).toMatchObject({ score: 26, isEliminated: true });
+    it("13 cards left scores 26: just short of out from a clean slate, out from 4 points", () => {
+      const s = L.endRound(stateWith(L, { hands: ["", hand(13), hand(13), ""], scores: [0, 0, 4, 0] }), 0);
+      expect(s.players[1]).toMatchObject({ score: 26, isEliminated: false });
+      expect(s.players[2]).toMatchObject({ score: 30, isEliminated: true });
     });
 
-    it("24 points stays in, exactly 25 is eliminated", () => {
-      const s = L.endRound(stateWith(L, { hands: ["", hand(2), hand(3), ""], scores: [0, 22, 22, 0] }), 0);
-      expect(s.players[1]).toMatchObject({ score: 24, isEliminated: false });
-      expect(s.players[2]).toMatchObject({ score: 25, isEliminated: true });
+    it("29 points stays in, exactly 30 is eliminated", () => {
+      const s = L.endRound(stateWith(L, { hands: ["", hand(2), hand(3), ""], scores: [0, 27, 27, 0] }), 0);
+      expect(s.players[1]).toMatchObject({ score: 29, isEliminated: false });
+      expect(s.players[2]).toMatchObject({ score: 30, isEliminated: true });
       expect(s.gameState).toBe(S.ROUND_END);
     });
 
@@ -261,7 +262,7 @@ describe.each(COPIES)("gameLogic (%s)", (_name, { logic: L, evaluator: E, consta
 
     it("several players can be knocked out in one round, ending the match", () => {
       const s = L.endRound(
-        stateWith(L, { hands: ["", hand(5), hand(5), hand(5)], scores: [0, 20, 20, 20], matchWins: [2, 0, 1, 0] }),
+        stateWith(L, { hands: ["", hand(5), hand(5), hand(5)], scores: [0, 25, 25, 25], matchWins: [2, 0, 1, 0] }),
         0,
       );
       expect(s.players.map((p) => p.isEliminated)).toEqual([false, true, true, true]);

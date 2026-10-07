@@ -102,8 +102,8 @@ export const GAME_SETTINGS = {
   TOTAL_CARDS: 52,
 
   // Tournament Scoring
-  // Player eliminated at 25 points
-  ELIMINATION_SCORE: 25,
+  // Player eliminated at 30 points
+  ELIMINATION_SCORE: 30,
   // Double points if ≥10 cards remaining
   PENALTY_THRESHOLD: 10,
 

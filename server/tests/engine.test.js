@@ -123,7 +123,7 @@ describe("round transitions", () => {
 
   it("the final round reports once and fires onGameOver, with no next round", () => {
     const { game, calls } = newGame();
-    rig(game, { hands: ["3♦", "", "4♦ 5♦", ""], scores: [0, 30, 24, 30], eliminated: [false, true, false, true], current: 0 });
+    rig(game, { hands: ["3♦", "", "4♦ 5♦", ""], scores: [0, 30, 29, 30], eliminated: [false, true, false, true], current: 0 });
     game.handleMove(0, "play", ["3♦"]);
     expect(game.state.gameState).toBe(GAME_STATES.GAME_OVER);
     expect(calls.rounds).toHaveLength(1);
@@ -288,7 +288,7 @@ describe("seats and rematches", () => {
   it("rematch is refused mid-match and starts match 2 after game over", () => {
     const { game } = newGame();
     expect(game.rematch()).toEqual({ ok: false, error: "Match is still in progress" });
-    rig(game, { hands: ["3♦", "", "4♦", ""], scores: [0, 30, 24, 30], eliminated: [false, true, false, true], current: 0, matchWins: [1, 0, 0, 0] });
+    rig(game, { hands: ["3♦", "", "4♦", ""], scores: [0, 30, 29, 30], eliminated: [false, true, false, true], current: 0, matchWins: [1, 0, 0, 0] });
     game.handleMove(0, "play", ["3♦"]);
     expect(game.rematch()).toEqual({ ok: true });
     const s = game.state;
