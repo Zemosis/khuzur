@@ -97,6 +97,17 @@ describe("WaitingTable", () => {
     expect(p.onStart).toHaveBeenCalled();
   });
 
+  it("level buttons and chips stay on one line, with an icon for the arrow", () => {
+    render(<WaitingTable {...props()} />);
+    const levelControls = [
+      ...screen.getAllByRole("button", { name: /add \w+ cpu/i }),
+      screen.getByRole("button", { name: /change level/i }),
+    ];
+    levelControls.forEach((el) => expect(el).toHaveClass("whitespace-nowrap"));
+    // The pixel font has no ▸; it showed as a dot.
+    expect(screen.queryByText(/▸/)).not.toBeInTheDocument();
+  });
+
   it("the host taps a CPU's level to cycle it", async () => {
     const user = userEvent.setup();
     const p = props();

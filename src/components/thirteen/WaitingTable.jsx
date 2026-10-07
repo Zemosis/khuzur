@@ -50,10 +50,11 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
                 key={level}
                 onClick={() => onAddCpu(index, level)}
                 aria-label={`Add ${level} CPU to seat ${index + 1}`}
-                className="pixel-btn font-pixel-display text-[8px] px-1.5 py-1.5"
+                className={`pixel-btn font-pixel-display text-[8px] py-1.5 whitespace-nowrap ${small ? "px-1" : "px-1.5"}`}
                 style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: LEVEL_COLOR[level] }}
               >
-                + {level}
+                {/* A phone seat is too narrow for "+ MEDIUM" on one line. */}
+                {small ? level : `+ ${level}`}
               </button>
             ))}
           </div>
@@ -103,10 +104,11 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
           <button
             onClick={() => onSetCpuLevel(index, nextLevel(level))}
             aria-label={`${seat.name}: ${level}. Change level`}
-            className="pixel-btn font-pixel-display text-[8px] px-2 py-1"
+            className="pixel-btn font-pixel-display text-[8px] px-2 py-1 whitespace-nowrap flex items-center gap-1"
             style={{ backgroundColor: "#0a0712", borderColor: "#2a234d", color: LEVEL_COLOR[level] }}
           >
-            {level} ▸
+            {level}
+            <PixelIcon name="right" size={8} />
           </button>
         ) : (
           <span className="font-pixel-display text-[8px]" style={{ color: LEVEL_COLOR[level] }}>
