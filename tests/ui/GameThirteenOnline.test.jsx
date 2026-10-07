@@ -2,7 +2,7 @@
 // moves go out as request_move. States are real engine states.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import GameThirteen from "../../src/pages/thirteen/GameThirteen";
@@ -149,5 +149,29 @@ describe("GameThirteen online", () => {
     serverSends("game_state_update", watched);
     expect(await screen.findByText(/Waiting for ANN/, {}, { timeout: 8000 })).toBeInTheDocument();
     expect(seatsShown()).toEqual(["top"]);
+  }, 20000);
+
+  it("dragging a card puts the hand in your own order; RANK sorts it again", async () => {
+    const s = stateWith(logic, { hands: ["3♦ 7♥ 9♣ K♠", "4♣ 6♣", "8♦ 10♦", "5♠ J♣"], current: 0 });
+    const { container } = open();
+    await act(async () => {});
+    serverSends("game_state_update", view(s));
+    await yourTurn();
+    const order = () => [...container.querySelectorAll("[data-card-id]")].map((el) => el.dataset.cardId);
+    const pressed = (name) => screen.getByRole("button", { name }).getAttribute("aria-pressed");
+    expect(order()).toEqual(["3♦", "7♥", "9♣", "K♠"]);
+    expect(pressed("RANK")).toBe("true");
+
+    const card = cardEl(container, "3♦");
+    fireEvent.pointerDown(card, { clientX: 300, clientY: 500, button: 0, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 900, clientY: 500, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 900, clientY: 500, pointerId: 1 });
+    expect(order()).toEqual(["7♥", "9♣", "K♠", "3♦"]);
+    expect(pressed("RANK")).toBe("false");
+    expect(pressed("SUIT")).toBe("false");
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "RANK" }));
+    expect(order()).toEqual(["3♦", "7♥", "9♣", "K♠"]);
+    expect(pressed("RANK")).toBe("true");
   }, 20000);
 });

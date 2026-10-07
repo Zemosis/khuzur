@@ -89,6 +89,55 @@ describe("PlayerHand", () => {
     expect(container.querySelector('[aria-label="Your hand"]')).toHaveClass("select-none");
   });
 
+  // 13 cards in the 900px test hand sit 63px apart.
+  const STEP = 63;
+  const drag = (el, dx, dy = 0) => {
+    fireEvent.pointerDown(el, { clientX: 300, clientY: 500, button: 0, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 300 + dx, clientY: 500 + dy, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 300 + dx, clientY: 500 + dy, pointerId: 1 });
+  };
+
+  it("dragging a card along the hand moves it to where it's dropped", () => {
+    const onReorder = vi.fn();
+    const { container } = render(<Harness hand={HAND} onReorder={onReorder} />);
+    // By rank: 3♦ 3♠ 4♦ 5♣ 6♥ 7♥ 9♣ 10♦ J♥ Q♣ K♠ A♠ 2♦
+    drag(byLabel(container, "3♦"), STEP * 2 + 5);
+    expect(onReorder).toHaveBeenCalledWith(["3♠", "4♦", "3♦", "5♣", "6♥", "7♥", "9♣", "10♦", "J♥", "Q♣", "K♠", "A♠", "2♦"]);
+    onReorder.mockClear();
+    drag(byLabel(container, "2♦"), -STEP * 12);
+    expect(onReorder).toHaveBeenCalledWith(["2♦", "3♦", "3♠", "4♦", "5♣", "6♥", "7♥", "9♣", "10♦", "J♥", "Q♣", "K♠", "A♠"]);
+  });
+
+  it("a drag isn't a click: it doesn't select; a press that barely moves still does", async () => {
+    const { container } = render(<Harness hand={HAND} onReorder={() => {}} />);
+    const card = byLabel(container, "7♥");
+    drag(card, STEP * 2);
+    fireEvent.click(card);
+    expect(selected(container)).toEqual([]);
+    drag(card, 3, 2);
+    fireEvent.click(card);
+    expect(selected(container)).toEqual(["7♥"]);
+  });
+
+  it("dropping a card back where it was changes nothing", () => {
+    const onReorder = vi.fn();
+    const { container } = render(<Harness hand={HAND} onReorder={onReorder} />);
+    drag(byLabel(container, "7♥"), 20);
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+
+  it("nothing drags while the cards are being dealt", () => {
+    const onReorder = vi.fn();
+    const { container } = render(<Harness hand={HAND} onReorder={onReorder} isDealing />);
+    drag(byLabel(container, "7♥"), STEP * 3);
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+
+  it("shows your own order; cards new to the hand join at the right", () => {
+    const { container } = render(<Harness hand={HAND} sortMode="custom" order={["A♠", "3♦", "K♠", "2♦", "J♥", "10♦", "9♣", "7♥", "6♥", "5♣", "4♦", "3♠"]} />);
+    expect(labels(container)).toEqual(["A♠", "3♦", "K♠", "2♦", "J♥", "10♦", "9♣", "7♥", "6♥", "5♣", "4♦", "3♠", "Q♣"]);
+  });
+
   it("ignores clicks while inactive or dealing", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

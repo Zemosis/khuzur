@@ -14,6 +14,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useServerStats } from "../../hooks/useServerStats";
 import { useChatLimit } from "../../hooks/useChatLimit";
+import { useHandOrder } from "../../hooks/useHandOrder";
 import { socket, connectSocket } from "../../utils/socket";
 import { seatAvatar } from "../../utils/avatarConstants";
 import WaitingTable from "../../components/thirteen/WaitingTable";
@@ -401,13 +402,8 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
   const [showSettings, setShowSettings] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volumes, setVolumes] = useState({ master: 50, sfx: 50 });
-  const [sortMode, setSortMode] = useState(() => {
-    try {
-      return localStorage.getItem("khuzur_sort") === "suit" ? "suit" : "rank";
-    } catch {
-      return "rank";
-    }
-  });
+  // RANK / SUIT, or your own order (dragged) for the round.
+  const handOrder = useHandOrder(roundKeyOf(game));
   const loggedRef = useRef({ match: null, count: 0, caughtUp: false });
   const feltRef = useRef(null);
   const drawPileRef = useRef(null);
@@ -575,13 +571,8 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
   }, [game, setMessages]);
 
   const changeSortMode = (mode) => {
-    setSortMode(mode);
+    handOrder.pick(mode);
     safePlay("playClick");
-    try {
-      localStorage.setItem("khuzur_sort", mode);
-    } catch {
-      /* private window: the choice just won't persist */
-    }
   };
 
   // --- Your moves ---
@@ -1046,7 +1037,9 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
               handSize={5}
               cardWidth={handW}
               deckWidth={deckW}
-              sortMode={sortMode}
+              sortMode={handOrder.mode}
+              order={handOrder.order}
+              onReorder={handOrder.reorder}
               isPlayable={allowed ? (c) => allowed.has(c.id) : undefined}
               // An empty hand never means a win here: you folded, or the round's cards are all out.
               emptyMessage={me.status === "fold" ? "YOU FOLDED — SITTING OUT THIS ROUND" : "ALL CARDS PLAYED"}
@@ -1068,7 +1061,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
             message={message}
             warning={warning}
             buttons={buttons}
-            sortMode={sortMode}
+            sortMode={handOrder.mode}
             onSortModeChange={changeSortMode}
             dense={seats === "row"}
           >

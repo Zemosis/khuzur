@@ -6,6 +6,7 @@ import { socket, connectSocket } from "../../utils/socket";
 import { useAuth } from "../../hooks/useAuth";
 import { useServerStats } from "../../hooks/useServerStats";
 import { useChatLimit } from "../../hooks/useChatLimit";
+import { useHandOrder } from "../../hooks/useHandOrder";
 import PlayerHand from "../../components/thirteen/PlayerHand";
 import OpponentSection from "../../components/thirteen/OpponentSection";
 import PlayArea from "../../components/thirteen/PlayArea";
@@ -93,21 +94,11 @@ const GameThirteen = () => {
   const [showRules, setShowRules] = useState(false);
   const closeRules = useCallback(() => setShowRules(false), []);
   const [isMuted, setIsMuted] = useState(false);
-  const [sortMode, setSortMode] = useState(() => {
-    try {
-      return localStorage.getItem("khuzur_sort") === "suit" ? "suit" : "rank";
-    } catch {
-      return "rank";
-    }
-  });
+  // RANK / SUIT, or your own order (dragged) for the round.
+  const handOrder = useHandOrder(gameState ? `${gameState.matchNumber || 1}-${gameState.roundNumber}` : null);
   const changeSortMode = (mode) => {
-    setSortMode(mode);
+    handOrder.pick(mode);
     safePlay("playClick");
-    try {
-      localStorage.setItem("khuzur_sort", mode);
-    } catch {
-      /* private window: the choice just won't persist */
-    }
   };
 
   const [volumes, setVolumes] = useState({ master: 50, sfx: 50 });
@@ -898,7 +889,9 @@ const GameThirteen = () => {
             cardWidth={handW}
             deckWidth={deckW}
             dealOriginRef={tableCenterRef}
-            sortMode={sortMode}
+            sortMode={handOrder.mode}
+            order={handOrder.order}
+            onReorder={handOrder.reorder}
             isEliminated={bottomPlayer.isEliminated}
           />
           <GameControls
@@ -920,7 +913,7 @@ const GameThirteen = () => {
             canSelect={canSelect}
             onClear={() => setSelectedCards([])}
             onSelectAll={() => setSelectedCards([...bottomPlayer.hand])}
-            sortMode={sortMode}
+            sortMode={handOrder.mode}
             onSortModeChange={changeSortMode}
             dense={seats === "row"}
           />

@@ -9,6 +9,11 @@
 // flies in from the deck. When the deal ends the hand is shown unsorted for
 // a beat, then every card arcs to its sorted slot. Switching the sort mode
 // (rank / suit) replays the same arc.
+//
+// With `onReorder`, cards can be dragged along the hand (mouse or finger):
+// the card follows the pointer, the others make room, and dropping it calls
+// onReorder with the new left-to-right ids. `sortMode` "custom" then lays the
+// hand out in `order`; cards not in it (just drawn) join at the right.
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
@@ -22,6 +27,16 @@ const SORT_HOLD = 0.5;
 const SORT_STAGGER = 0.035;
 const SORT_SLIDE = 0.42;
 const REFLOW = 0.32;
+const DRAG_START = 6; // px a press must move before it's a drag, not a click
+const MAKE_ROOM = 0.15;
+
+/** `hand` in `order` (card ids); cards not in it go at the end, by rank. */
+function inOrder(hand, order) {
+  const byId = new Map(hand.map((c) => [c.id, c]));
+  const placed = order.map((id) => byId.get(id)).filter(Boolean);
+  const known = new Set(order);
+  return [...placed, ...sortHand(hand.filter((c) => !known.has(c.id)))];
+}
 
 /** Bottom-center of card i of n, relative to the hand's anchor point. */
 function handSlot(i, n, cardW, width, spread) {
@@ -56,6 +71,8 @@ const PlayerHand = ({
   // sideways, faceUp }. Those cards fly from originRef (a pile, or a card
   // lying sideways), `delay` seconds from now; face down unless faceUp.
   arrival,
+  order, // card ids, left to right, for sortMode "custom"
+  onReorder, // optional (ids) => void: makes the cards draggable
 }) => {
   const containerRef = useRef(null);
   const [width, setWidth] = useState(0);
@@ -65,15 +82,20 @@ const PlayerHand = ({
   const prevSortModeRef = useRef(sortMode);
   const sortTlRef = useRef(null);
   const lastSelectedIndex = useRef(-1);
+  // The hand as laid out last, for the drag handlers: { cards, slots }.
+  const layoutRef = useRef({ cards: [], slots: [] });
+  const dragRef = useRef(null);
+  const swallowClickRef = useRef(false);
 
   const cardH = Math.round(cardWidth * CARD_RATIO);
   // Room below the anchor for the outer cards: their arc dip plus the corner
   // that drops as they tilt (up to ~14 degrees).
   const base = Math.round(cardWidth * 0.1 + (cardWidth / 2) * Math.sin((14 * Math.PI) / 180)) + 8;
-  const displayHand = useMemo(
-    () => (isDealing ? hand : sortMode === "suit" ? sortHandBySuit(hand) : sortHand(hand)),
-    [hand, isDealing, sortMode],
-  );
+  const displayHand = useMemo(() => {
+    if (isDealing) return hand;
+    if (sortMode === "custom" && order) return inOrder(hand, order);
+    return sortMode === "suit" ? sortHandBySuit(hand) : sortHand(hand);
+  }, [hand, isDealing, sortMode, order]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -98,9 +120,12 @@ const PlayerHand = ({
 
     const n = isDealing ? Math.max(handSize, displayHand.length) : displayHand.length;
     const slots = displayHand.map((_, i) => handSlot(i, n, cardWidth, w, spread));
+    layoutRef.current = { cards: displayHand, slots };
     const reduce = reducedMotion();
     const dealEnded = wasDealing && !isDealing;
-    const startSort = (dealEnded || (resorted && !isDealing)) && displayHand.length > 1 && !reduce;
+    // A card you dragged into place just slides; RANK / SUIT arcs everything.
+    const resortedByButton = resorted && sortMode !== "custom";
+    const startSort = (dealEnded || (resortedByButton && !isDealing)) && displayHand.length > 1 && !reduce;
 
     if (startSort || !isDealing) {
       sortTlRef.current?.kill();
@@ -202,7 +227,82 @@ const PlayerHand = ({
 
   const canSelect = isActive && !isDealing;
 
+  // --- Dragging a card along the hand ---
+  const startDrag = (card, e) => {
+    swallowClickRef.current = false;
+    if (!onReorder || isDealing || e.button !== 0) return;
+    const from = layoutRef.current.cards.findIndex((c) => c.id === card.id);
+    if (from === -1) return;
+    dragRef.current = { id: card.id, from, to: from, x0: e.clientX, y0: e.clientY, moving: false };
+  };
+
+  useEffect(() => {
+    const slotOf = (id) => elsRef.current.get(id)?.slot;
+    // Every card back to its slot in the current layout.
+    const settle = () => {
+      const { cards, slots } = layoutRef.current;
+      cards.forEach((c, i) => {
+        const el = slotOf(c.id);
+        if (!el) return;
+        gsap.to(el, { ...slots[i], scale: 1, duration: REFLOW, ease: "power3.out", overwrite: "auto" });
+        gsap.set(el, { zIndex: i });
+      });
+    };
+    const move = (e) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = e.clientX - d.x0;
+      if (!d.moving) {
+        if (Math.abs(dx) < DRAG_START && Math.abs(e.clientY - d.y0) < DRAG_START) return;
+        d.moving = true;
+        sortTlRef.current?.kill();
+      }
+      const { cards, slots } = layoutRef.current;
+      const x = slots[d.from].x + dx;
+      d.to = slots.reduce((best, s, i) => (Math.abs(s.x - x) < Math.abs(slots[best].x - x) ? i : best), 0);
+      // The card follows the pointer, lifted; the others make room for it.
+      gsap.set(slotOf(d.id), { x, y: slots[d.to].y - cardH * 0.12, rotation: 0, scale: 1.04, zIndex: 300 });
+      cards
+        .filter((c) => c.id !== d.id)
+        .forEach((c, k) => {
+          const i = k < d.to ? k : k + 1;
+          const el = slotOf(c.id);
+          if (!el) return;
+          gsap.to(el, { x: slots[i].x, y: slots[i].y, rotation: slots[i].rotation, duration: MAKE_ROOM, ease: "power2.out", overwrite: "auto" });
+          gsap.set(el, { zIndex: i });
+        });
+    };
+    const end = () => {
+      const d = dragRef.current;
+      dragRef.current = null;
+      if (!d?.moving) return;
+      swallowClickRef.current = true;
+      const ids = layoutRef.current.cards.map((c) => c.id).filter((id) => id !== d.id);
+      ids.splice(d.to, 0, d.id);
+      if (d.to === d.from) settle();
+      else onReorder(ids);
+    };
+    const cancel = () => {
+      const d = dragRef.current;
+      dragRef.current = null;
+      if (d?.moving) settle();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", cancel);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", cancel);
+    };
+  }, [onReorder, cardH]);
+
   const toggleCardSelection = (card, e) => {
+    // The click that ends a drag isn't a pick.
+    if (swallowClickRef.current) {
+      swallowClickRef.current = false;
+      return;
+    }
     // Clicks count while the hand sorts itself too: the turn is already open,
     // and the card clicked is the one selected wherever it's headed.
     if (!canSelect || isPlayable?.(card) === false) return;
@@ -249,6 +349,7 @@ const PlayerHand = ({
             // Shift-click picks a range of cards; without this the browser
             // also stretches a text selection across the page.
             onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+            onPointerDown={(e) => startDrag(card, e)}
             style={{
               position: "absolute",
               left: "50%",
@@ -257,6 +358,8 @@ const PlayerHand = ({
               height: cardH,
               marginLeft: -cardWidth / 2,
               transformOrigin: "50% 100%",
+              // Sideways drags reorder the hand; a vertical swipe still scrolls.
+              touchAction: onReorder ? "pan-y" : undefined,
             }}
           >
             <div ref={(el) => setEls(card.id, "flip", el)} className="relative w-full h-full">

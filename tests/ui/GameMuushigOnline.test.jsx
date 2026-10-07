@@ -3,7 +3,7 @@
 // are real engine states put through the server's own redaction.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act, within } from "@testing-library/react";
+import { render, screen, act, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import GameMuushig from "../../src/pages/muushig/GameMuushig";
@@ -175,6 +175,23 @@ describe("GameMuushig online", () => {
     expect(emitted("muushig_move")).toEqual([{ lobbyId: LOBBY, move: { type: "decide", play: true } }]);
     // Every other seat is on the table by name.
     for (const name of ["ANN", "BOB", "Bot Saturn", "Bot Venus"]) expect(screen.getAllByText(name).length).toBeGreaterThan(0);
+  }, 20_000);
+
+  it("your cards can be dragged into your own order; RANK sorts them again", async () => {
+    open();
+    const s = playUntil(newMatch(0), (x) => x.phase === PHASES.DECIDE && x.turn === ME);
+    serverSends("muushig_state", view(s));
+    await button("GO IN");
+    const order = () => [...document.querySelectorAll('[aria-label="Your hand"] [data-card-id]')].map((el) => el.dataset.cardId);
+    const sorted = order();
+    const first = document.querySelector(`[aria-label="Your hand"] [data-card-id="${CSS.escape(sorted[0])}"] .pixel-card`);
+    fireEvent.pointerDown(first, { clientX: 100, clientY: 500, button: 0, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 1500, clientY: 500, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 1500, clientY: 500, pointerId: 1 });
+    expect(order()).toEqual([...sorted.slice(1), sorted[0]]);
+    expect(screen.getByRole("button", { name: "RANK" })).toHaveAttribute("aria-pressed", "false");
+    await userEvent.setup().click(screen.getByRole("button", { name: "RANK" }));
+    expect(order()).toEqual(sorted);
   }, 20_000);
 
   it("chat goes to the server and comes back from it", async () => {
