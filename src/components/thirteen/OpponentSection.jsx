@@ -18,6 +18,8 @@ import React, { useRef, useState } from "react";
 import gsap from "gsap";
 import { PixelAvatar, PixelCard } from "../PixelCard";
 import Callout from "../Callout";
+import ChatBubble from "../ChatBubble";
+import PixelIcon from "../PixelIcon";
 import { reducedMotion } from "../../utils/motion";
 
 const CARD_W = 44;
@@ -34,11 +36,11 @@ const TURN = { top: 180, left: 90, right: 270 };
 
 const CHIP_PLACE = { left: "absolute -top-3 left-2", right: "absolute -top-3 right-2", bottom: "absolute -bottom-3" };
 
-function StatusChip({ label, bg, fg = "#1a1024", blink, side = "right", hidden = false, innerRef }) {
+function StatusChip({ label, bg, fg = "#1a1024", blink, side = "right", hidden = false, innerRef, big = false }) {
   const chip = (
     <span
       ref={innerRef}
-      className={`${side === "bottom" ? "" : CHIP_PLACE[side]} font-pixel-display text-[10px] leading-none px-1.5 py-1 whitespace-nowrap ${blink ? "blink" : ""}`}
+      className={`${side === "bottom" ? "" : CHIP_PLACE[side]} font-pixel-display leading-none whitespace-nowrap ${big ? "text-[12px] px-2 py-1.5" : "text-[10px] px-1.5 py-1"} ${blink ? "blink" : ""}`}
       style={{ backgroundColor: bg, color: fg, boxShadow: "0 0 0 2px #0a0712", visibility: hidden ? "hidden" : "visible" }}
     >
       {label}
@@ -119,7 +121,23 @@ const SIDE_PLATE_W = 124;
 // name the seat for the deal animation (`dealSeat`, default: the position),
 // and announce a decision over the avatar (`callout`: { id, label, bg, fg };
 // each new id plays once, and the chip stays hidden until it lands).
-const OpponentSection = ({ player, isActive = false, hasPassed = false, position = "top", face, chip, tag, detail, dealSeat, callout, layout = "full" }) => {
+// The player on turn gets a big TURN tag and a bobbing arrow; the others can
+// be `dimmed` meanwhile. `bubble` (lines) shows what they just said.
+const OpponentSection = ({
+  player,
+  isActive = false,
+  hasPassed = false,
+  position = "top",
+  face,
+  chip,
+  tag,
+  detail,
+  dealSeat,
+  callout,
+  layout = "full",
+  dimmed = false,
+  bubble = null,
+}) => {
   const { name, hand, isEliminated } = player;
   const count = hand.length;
   const vertical = position !== "top";
@@ -172,17 +190,26 @@ const OpponentSection = ({ player, isActive = false, hasPassed = false, position
             : "0 0 0 4px #0a0712, inset 0 4px 0 rgba(255,255,255,0.04)",
           animation: isActive ? "pulse-glow 1.6s ease-in-out infinite" : "none",
           // A fold dims the seat once its callout has landed.
-          opacity: isEliminated && !announcing ? 0.55 : 1,
+          opacity: isEliminated && !announcing ? 0.55 : dimmed ? 0.6 : 1,
           transition: "opacity 300ms ease-out",
         }}
       >
         {announcing && <Callout key={callout.id} {...callout} targetRef={chipRef} onDone={() => land(callout.id)} />}
+        {bubble && (
+          // Above the seat it clears the TURN tag and arrow.
+          <ChatBubble name={name.split(" #")[0]} lines={bubble} tail={position === "top" || strip ? "up" : "down"} gap={position === "top" || strip ? 14 : 40} />
+        )}
+        {isActive && (
+          <span data-testid="turn-arrow" className="turn-arrow absolute left-1/2 -top-8 z-30 pointer-events-none" style={{ color: "#f4c430", filter: "drop-shadow(2px 2px 0 #0a0712)" }}>
+            <PixelIcon name="down" size={18} />
+          </span>
+        )}
         {chip !== undefined ? (
-          chip && <StatusChip {...chip} side={chipSide} innerRef={chipRef} hidden={announcing} />
+          chip && <StatusChip {...chip} big={chip.label === "TURN"} side={chipSide} innerRef={chipRef} hidden={announcing} />
         ) : isEliminated ? (
           <StatusChip label="OUT" bg="#7a1530" fg="#ead8b1" side={chipSide} />
         ) : isActive ? (
-          <StatusChip label="TURN" bg="#f4c430" blink side={chipSide} />
+          <StatusChip label="TURN" bg="#f4c430" blink big side={chipSide} />
         ) : hasPassed ? (
           <StatusChip label="PASS" bg="#463a78" fg="#ead8b1" side={chipSide} />
         ) : null}

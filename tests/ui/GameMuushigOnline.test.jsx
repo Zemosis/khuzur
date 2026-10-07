@@ -194,6 +194,29 @@ describe("GameMuushig online", () => {
     expect(order()).toEqual(sorted);
   }, 20_000);
 
+  it("your turn shows a banner, frames your hand and lights your side; chat pops up over the sender", async () => {
+    open();
+    const s = playUntil(newMatch(0), (x) => x.phase === PHASES.DECIDE && x.turn === ME);
+    serverSends("muushig_state", view(s));
+    await button("GO IN");
+    expect(screen.getByText("YOUR TURN")).toBeInTheDocument();
+    expect(document.querySelector('[data-your-turn="true"]')).not.toBeNull();
+    expect(document.querySelector('[data-turn-side="bottom"]')).not.toBeNull();
+    serverSends("receive_chat", { id: "m1", type: "CHAT", sender: "ANN #0001", text: "go in!", timestamp: "10:00" });
+    expect(screen.getByRole("note", { name: "ANN says" })).toHaveTextContent("go in!");
+  }, 20_000);
+
+  it("someone else's turn lights their side of the table", async () => {
+    open();
+    const s = playUntil(newMatch(0), (x) => x.phase === PHASES.DECIDE && x.turn === 3);
+    serverSends("muushig_state", view(s));
+    await screen.findAllByText(/Bot Saturn/, {}, { timeout: 10_000 });
+    // Seat 3 sits one to your left: bottom-left.
+    expect(await screen.findByTestId("turn-arrow", {}, { timeout: 10_000 })).toBeInTheDocument();
+    expect(document.querySelector('[data-turn-side="bottomLeft"]')).not.toBeNull();
+    expect(document.querySelector('[data-your-turn="true"]')).toBeNull();
+  }, 20_000);
+
   it("chat goes to the server and comes back from it", async () => {
     open();
     serverSends("table_update", table());
@@ -201,7 +224,8 @@ describe("GameMuushig online", () => {
     await user.type(screen.getByPlaceholderText(/say something/i), "hi all{Enter}");
     expect(emitted("send_chat")).toEqual([{ lobbyId: LOBBY, message: "hi all" }]);
     serverSends("receive_chat", { id: "m1", type: "CHAT", sender: "ANN #0001", text: "hello ME", timestamp: "10:00" });
-    expect(screen.getByText("hello ME")).toBeInTheDocument();
+    // In the chat panel, and in a bubble over ANN's seat.
+    expect(screen.getAllByText("hello ME")).toHaveLength(2);
   });
 
   it("a chat flood the server turns away holds the chat box, at the waiting table and in the game", async () => {

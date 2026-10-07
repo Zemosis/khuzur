@@ -53,7 +53,8 @@ const GameControls = ({
           </div>
         ) : (
           <div className="font-pixel-body text-[20px] leading-none text-bone/80">
-            {message}
+            {/* Your turn reads in gold so it can't be missed. */}
+            <span style={isPlayerTurn ? { color: "#f4c430", textShadow: "0 0 8px rgba(244,196,48,0.6)" } : undefined}>{message}</span>
             {selectedCount > 0 && (
               <>
                 <span className="text-bone/40"> · </span>

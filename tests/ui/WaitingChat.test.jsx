@@ -35,4 +35,22 @@ describe("waiting table chat", () => {
     // Someone no longer seated falls back to the default face.
     expect(avatarOf("line 3")).toBe("2");
   });
+
+  it("a new message pops up over the sender's seat, and yours over your own", () => {
+    const table = {
+      name: "Hideout",
+      code: "ABC123",
+      isPrivate: false,
+      isHost: true,
+      mySeat: 0,
+      seats: [human("ME #0001", "1"), human("ANN #0002", "4"), null, null],
+    };
+    const props = { table, myFace: { variant: "3", customAvatarData: null }, onSendMessage: () => {}, onExit: () => {} };
+    const { rerender } = render(<WaitingTable {...props} messages={[say(1, "ANN #0002")]} />);
+    // What was said before you arrived doesn't pop up.
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    rerender(<WaitingTable {...props} messages={[say(1, "ANN #0002"), say(2, "ANN #0002"), say(3, "ME #0001", true)]} />);
+    expect(screen.getByRole("note", { name: "ANN says" })).toHaveTextContent("line 2");
+    expect(screen.getByRole("note", { name: "ME says" })).toHaveTextContent("line 3");
+  });
 });

@@ -57,6 +57,24 @@ function PlayGroup({ cards, cardWidth }) {
   );
 }
 
+// A glowing gold bar along the felt's edge on the side of the player on turn.
+const EDGE = {
+  top: { top: -8, left: "12%", right: "12%", height: 8 },
+  bottom: { bottom: -8, left: "12%", right: "12%", height: 8 },
+  left: { left: -8, top: "12%", bottom: "12%", width: 8 },
+  right: { right: -8, top: "12%", bottom: "12%", width: 8 },
+};
+function TurnEdge({ side }) {
+  return (
+    <div
+      data-turn-side={side}
+      aria-hidden
+      className="turn-edge absolute z-10 pointer-events-none"
+      style={{ ...EDGE[side], backgroundColor: "#f4c430", boxShadow: "0 0 0 2px #0a0712, 0 0 24px 6px rgba(244,196,48,0.75)" }}
+    />
+  );
+}
+
 const PlayArea = ({
   pile = [],
   trickOpen = false,
@@ -66,6 +84,7 @@ const PlayArea = ({
   isDealing = false,
   cardWidth = 80,
   showRound = true, // the compact header shows the round instead
+  turnSide = null, // bottom | left | top | right: the felt edge facing the player on turn glows
 }) => {
   const topRef = useRef(null);
   const prevTopKeyRef = useRef(null);
@@ -100,6 +119,7 @@ const PlayArea = ({
               "0 0 0 4px #0a0712, inset 0 0 0 2px #7a1530, inset 0 0 60px rgba(0,0,0,0.5), 0 0 32px rgba(232,90,122,0.15)",
           }}
         >
+          {turnSide && <TurnEdge side={turnSide} />}
           {showRound && (
             <div
               className="absolute -top-3 -left-3 font-pixel-display text-[10px] px-3 py-1.5"

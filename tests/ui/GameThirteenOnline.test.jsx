@@ -174,4 +174,40 @@ describe("GameThirteen online", () => {
     expect(order()).toEqual(["3♦", "7♥", "9♣", "K♠"]);
     expect(pressed("RANK")).toBe("true");
   }, 20000);
+
+  it("your turn is hard to miss: a banner, a gold frame on your hand, your side of the felt glowing", async () => {
+    const s = stateWith(logic, { hands: ["3♦ 7♥ 9♣ K♠", "4♣ 6♣", "8♦ 10♦", "5♠ J♣"], current: 0 });
+    const { container } = open();
+    await act(async () => {});
+    serverSends("game_state_update", view(s));
+    await yourTurn();
+    expect(screen.getByText("YOUR TURN")).toBeInTheDocument();
+    expect(container.querySelector('[data-your-turn="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-turn-side="bottom"]')).not.toBeNull();
+  }, 20000);
+
+  it("someone else's turn: the felt glows on their side and the other seats dim", async () => {
+    const s = stateWith(logic, { hands: ["3♦ 7♥ 9♣ K♠", "4♣ 6♣", "8♦ 10♦", "5♠ J♣"], current: 1 });
+    const { container } = open();
+    await act(async () => {});
+    serverSends("game_state_update", view(s));
+    await screen.findByText(/Waiting for Bot Saturn/, {}, { timeout: 8000 });
+    expect(container.querySelector('[data-turn-side="left"]')).not.toBeNull();
+    expect(container.querySelector('[data-your-turn="true"]')).toBeNull();
+    const plateOf = (pos) => container.querySelector(`[data-plate="${pos}"]`);
+    expect(plateOf("left").style.opacity).toBe("1");
+    expect(plateOf("top").style.opacity).toBe("0.6");
+  }, 20000);
+
+  it("a chat message pops up over its sender's seat, and yours over your hand", async () => {
+    const s = stateWith(logic, { hands: ["3♦ 7♥ 9♣ K♠", "4♣ 6♣", "8♦ 10♦", "5♠ J♣"], current: 0 });
+    open();
+    await act(async () => {});
+    serverSends("game_state_update", view(s));
+    await yourTurn();
+    serverSends("receive_chat", { id: "c1", type: "CHAT", sender: "FRIEND #0002", text: "your go!", timestamp: "10:00" });
+    expect(screen.getByRole("note", { name: "FRIEND says" })).toHaveTextContent("your go!");
+    serverSends("receive_chat", { id: "c2", type: "CHAT", sender: "ME #0001", text: "thinking", timestamp: "10:00" });
+    expect(screen.getByRole("note", { name: "ME says" })).toHaveTextContent("thinking");
+  }, 20000);
 });

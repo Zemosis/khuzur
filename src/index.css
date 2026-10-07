@@ -502,3 +502,32 @@ button:focus, input:focus { outline: none; }
   background-size: 8px 8px;
   background-position: 0 0, 0 4px, 4px -4px, -4px 0;
 }
+
+/* Chat bubbles pop in over a seat; the YOUR TURN banner drops in and out;
+   the arrow over the player on turn bobs. */
+@keyframes bubble-pop {
+  from { opacity: 0; transform: translateX(-50%) scale(0.7); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+.chat-bubble { animation: bubble-pop 160ms ease-out; }
+@keyframes turn-banner {
+  0% { opacity: 0; transform: scale(1.6); }
+  12% { opacity: 1; transform: scale(1); }
+  85% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+.turn-banner { animation: turn-banner 1.5s ease-out forwards; }
+@keyframes bob {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -6px); }
+}
+.turn-arrow { animation: bob 0.8s ease-in-out infinite; }
+@keyframes edge-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.turn-edge { animation: edge-glow 1.2s ease-in-out infinite; }
+html[data-motion="reduced"] .chat-bubble,
+html[data-motion="reduced"] .turn-arrow,
+html[data-motion="reduced"] .turn-edge { animation: none; }
+html[data-motion="reduced"] .turn-banner { animation: none; }

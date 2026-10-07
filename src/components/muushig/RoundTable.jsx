@@ -219,7 +219,30 @@ function DealerMarker({ seat, D }) {
   );
 }
 
-function Felt({ D, stack, trump, trumpTakenBy, trickNumber, tricksPerRound, phaseLabel, maxCardWidth, dealing, overlay, centerRef, dealerSeat, trumpRef }) {
+// A gold glow on the rim, toward the seat whose turn it is.
+function TurnGlow({ seat, D }) {
+  const [fx, fy] = DEALER_SPOT[seat] || DEALER_SPOT.bottom;
+  const len = Math.hypot(fx, fy) || 1;
+  const r = D * 0.5;
+  const size = Math.round(D * 0.34);
+  return (
+    <div
+      data-turn-side={seat}
+      aria-hidden
+      className="turn-edge absolute left-1/2 top-1/2 pointer-events-none"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        transform: `translate(-50%, -50%) translate(${Math.round((fx / len) * r)}px, ${Math.round((fy / len) * r)}px)`,
+        background: "radial-gradient(circle, rgba(244,196,48,0.75) 0%, rgba(244,196,48,0.25) 45%, rgba(244,196,48,0) 70%)",
+        transition: "transform 400ms ease-in-out",
+      }}
+    />
+  );
+}
+
+function Felt({ D, stack, trump, trumpTakenBy, trickNumber, tricksPerRound, phaseLabel, maxCardWidth, dealing, overlay, centerRef, dealerSeat, trumpRef, turnSeat }) {
   const cw = Math.round(Math.max(48, Math.min(maxCardWidth, D * 0.2)));
   const ch = Math.round(cw * CARD_RATIO);
   const at = (fy) => ({
@@ -257,6 +280,7 @@ function Felt({ D, stack, trump, trumpTakenBy, trickNumber, tricksPerRound, phas
         </>
       )}
 
+      {turnSeat && <TurnGlow seat={turnSeat} D={D} />}
       {dealerSeat && <DealerMarker seat={dealerSeat} D={D} />}
 
       {overlay?.(cw, D)}
@@ -291,6 +315,7 @@ function Felt({ D, stack, trump, trumpTakenBy, trickNumber, tricksPerRound, phas
  *   the deal, the dealer banner, the deal animation).
  * centerRef: ref to the felt, where dealt cards fly from.
  * dealerSeat: seat name (bottom, bottomLeft, …) the DEALER marker faces.
+ * turnSeat: seat name the rim glows toward: whose turn it is.
  * trumpRef: ref to the face-up trump card while it lies on the felt.
  */
 const RoundTable = ({ seats, layout = "full", maxCardWidth = 100, ...felt }) => {

@@ -79,4 +79,11 @@ describe("GameControls", () => {
     expect(screen.getByText("Must play a stronger combination")).toBeInTheDocument();
     expect(screen.queryByText("Your turn")).not.toBeInTheDocument();
   });
+
+  it("on your turn the status line turns gold", () => {
+    const { rerender } = render(<GameControls message="Your turn!" isPlayerTurn />);
+    expect(screen.getByText("Your turn!")).toHaveStyle({ color: "#f4c430" });
+    rerender(<GameControls message="Waiting for ANN..." />);
+    expect(screen.getByText("Waiting for ANN...")).not.toHaveStyle({ color: "#f4c430" });
+  });
 });

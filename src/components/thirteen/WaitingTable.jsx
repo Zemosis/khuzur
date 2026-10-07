@@ -17,6 +17,8 @@ import { seatAvatar } from "../../utils/avatarConstants";
 import { positionOf } from "../../utils/seatPosition";
 import { useTableMetrics } from "../../hooks/useTableMetrics";
 import { useUnread } from "../../hooks/useUnread";
+import { useChatBubbles } from "../../hooks/useChatBubbles";
+import ChatBubble from "../ChatBubble";
 import { TableHeader, TableSidebar } from "../TableChrome";
 
 const SIDE_SEAT_W = 224;
@@ -31,7 +33,7 @@ function seatFace(seat, index) {
   return seat.kind === "cpu" ? { variant: (index % 5) + 1, customAvatarData: null } : seatAvatar(seat, index);
 }
 
-function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, face, small = false }) {
+function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, face, small = false, bubble = null, bubbleTail = "down" }) {
   const base = `relative flex flex-col items-center justify-center gap-2 py-3 text-center ${small ? "flex-1 min-w-0 px-1.5" : "px-3"}`;
   const size = small ? { maxWidth: 132, minHeight: 112 } : { width: 184, minHeight: 124 };
 
@@ -77,6 +79,7 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
         opacity: !isCpu && !seat.connected ? 0.55 : 1,
       }}
     >
+      {bubble && <ChatBubble name={shortName(seat.name)} lines={bubble} tail={bubbleTail} />}
       {seat.isHost && (
         <span
           className="absolute -top-3 left-2 font-pixel-display text-[9px] px-1.5 py-1 flex items-center gap-1"
@@ -230,6 +233,7 @@ export default function WaitingTable({
   const [panelOpen, setPanelOpen] = useState(false);
   const closePanel = useCallback(() => setPanelOpen(false), []);
   const unread = useUnread(messages, panelOpen);
+  const bubbles = useChatBubbles(messages);
   const five = table.seats.length === 5;
   const at = {};
   table.seats.forEach((seat, i) => {
@@ -245,6 +249,11 @@ export default function WaitingTable({
       onSetCpuLevel={onSetCpuLevel}
       face={pos === "bottom" ? myFace : undefined}
       small={small}
+      bubble={
+        at[pos].seat?.kind !== "human" ? null : at[pos].index === table.mySeat ? bubbles.bubbleFor(null, true) : bubbles.bubbleFor(at[pos].seat.name)
+      }
+      // Seats along the top (and the phone strip) say it below, not off-screen.
+      bubbleTail={small || pos.startsWith("top") ? "up" : "down"}
     />
   );
   const seatedCount = table.seats.filter(Boolean).length;

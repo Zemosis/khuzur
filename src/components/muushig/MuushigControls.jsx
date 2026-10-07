@@ -19,9 +19,10 @@ const TONES = {
 /**
  * buttons: [{ label, onClick, disabled, tone, primary }]
  * warning: shown in rose instead of the message (e.g. a rejected move)
+ * highlight: your turn — the message reads in gold
  * children: extra controls shown before the buttons (the draw's depth picker)
  */
-const MuushigControls = ({ message = "", warning = null, buttons = [], sortMode = "rank", onSortModeChange, dense = false, children }) => {
+const MuushigControls = ({ message = "", warning = null, highlight = false, buttons = [], sortMode = "rank", onSortModeChange, dense = false, children }) => {
   const primary = buttons.find((b) => b.primary && !b.disabled);
 
   useEffect(() => {
@@ -42,7 +43,14 @@ const MuushigControls = ({ message = "", warning = null, buttons = [], sortMode 
         style={{ backgroundColor: "#0a0712", border: "3px solid #1f1a3d", minHeight: dense ? 40 : 46 }}
       >
         {/* A live region: screen readers hear each new instruction ("Your lead…"). */}
-        <div role="status" className="font-pixel-body text-[20px] leading-none" style={{ color: warning ? "#e85a7a" : "rgba(200,184,144,0.85)" }}>
+        <div
+          role="status"
+          className="font-pixel-body text-[20px] leading-none"
+          style={{
+            color: warning ? "#e85a7a" : highlight ? "#f4c430" : "rgba(200,184,144,0.85)",
+            textShadow: highlight && !warning ? "0 0 8px rgba(244,196,48,0.6)" : undefined,
+          }}
+        >
           {warning || message}
         </div>
       </div>

@@ -7,6 +7,10 @@ import { useAuth } from "../../hooks/useAuth";
 import { useServerStats } from "../../hooks/useServerStats";
 import { useChatLimit } from "../../hooks/useChatLimit";
 import { useHandOrder } from "../../hooks/useHandOrder";
+import { useChatBubbles } from "../../hooks/useChatBubbles";
+import { useTurnTitle } from "../../hooks/useTurnTitle";
+import ChatBubble from "../../components/ChatBubble";
+import TurnBanner from "../../components/TurnBanner";
 import PlayerHand from "../../components/thirteen/PlayerHand";
 import OpponentSection from "../../components/thirteen/OpponentSection";
 import PlayArea from "../../components/thirteen/PlayArea";
@@ -170,6 +174,17 @@ const GameThirteen = () => {
     },
     [isSoloGame, playerName],
   );
+
+  // Your turn, made hard to miss (also from another tab), and chat bubbles
+  // over the seats.
+  const bubbles = useChatBubbles(messages);
+  const myTurnNow =
+    !!gameState &&
+    !isDealing &&
+    gameState.gameState === GAME_STATES.PLAYING &&
+    gameState.currentPlayerIndex === getMyPlayerIndex(gameState) &&
+    !gameState.players[gameState.currentPlayerIndex]?.isEliminated;
+  useTurnTitle(myTurnNow);
 
   // --- GAME SETUP ---
   // Solo runs entirely locally. Multiplayer is server-authoritative: the
@@ -683,12 +698,16 @@ const GameThirteen = () => {
       : null;
 
   // A spot nobody sits at (2 or 3 players) keeps its place in the layout.
+  const playing = !isDealing && gameState.gameState === GAME_STATES.PLAYING;
   const opponent = (player, position) =>
     !player ? (
       <div aria-hidden="true" />
     ) : (
       <OpponentSection
         player={player}
+        // While it's someone's turn, everyone else's seat dims a little.
+        dimmed={playing && gameState.currentPlayerIndex !== player.id}
+        bubble={bubbles.bubbleFor(player.name)}
         isActive={!isDealing && gameState.currentPlayerIndex === player.id}
         hasPassed={player.hasPassed}
         position={position}
@@ -709,6 +728,7 @@ const GameThirteen = () => {
         isDealing={isDealing}
         cardWidth={deckW}
         showRound={!compact}
+        turnSide={playing ? positionOf(gameState.currentPlayerIndex, viewIndex, playersList.length) : null}
       />
       {isDealing && gameState && (
         <DealAnimation
@@ -730,6 +750,7 @@ const GameThirteen = () => {
       className="relative w-full h-full font-pixel-body text-parchment overflow-hidden flex flex-col"
       style={{ position: "fixed", inset: 0 }}
     >
+      <TurnBanner active={myTurnNow} />
       {/* TABLE BACKDROP */}
       <div
         className="absolute inset-0"
@@ -876,7 +897,16 @@ const GameThirteen = () => {
             </>
           )}
 
-          {/* My hand area */}
+          {/* My hand area: a gold frame while it's your turn, and your own
+              chat bubble above it. */}
+          <div
+            className="relative"
+            data-your-turn={myTurnNow ? "true" : undefined}
+            style={myTurnNow ? { animation: "pulse-glow 1.6s ease-in-out infinite", backgroundColor: "rgba(244,196,48,0.06)" } : undefined}
+          >
+          {bubbles.bubbleFor(null, true) && (
+            <ChatBubble name={(identity?.name || playerName || "You").split(" #")[0]} lines={bubbles.bubbleFor(null, true)} />
+          )}
           <PlayerHand
             hand={bottomPlayer.hand}
             selectedCards={selectedCards}
@@ -894,6 +924,7 @@ const GameThirteen = () => {
             onReorder={handOrder.reorder}
             isEliminated={bottomPlayer.isEliminated}
           />
+          </div>
           <GameControls
             onPlay={handlePlay}
             onPass={handlePass}
