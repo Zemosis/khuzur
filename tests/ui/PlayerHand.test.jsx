@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { useState } from "react";
-import { render } from "@testing-library/react";
+import { render, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import PlayerHand from "../../src/components/thirteen/PlayerHand";
 import { cards } from "../helpers/cards.js";
@@ -79,6 +79,14 @@ describe("PlayerHand", () => {
     } finally {
       setReducedMotion(true);
     }
+  });
+
+  it("shift-click picks cards without highlighting text like a copy selection", () => {
+    const { container } = render(<Harness hand={HAND} />);
+    // fireEvent returns false when the browser's own action was prevented.
+    expect(fireEvent.mouseDown(byLabel(container, "7♥"), { shiftKey: true })).toBe(false);
+    expect(fireEvent.mouseDown(byLabel(container, "7♥"))).toBe(true);
+    expect(container.querySelector('[aria-label="Your hand"]')).toHaveClass("select-none");
   });
 
   it("ignores clicks while inactive or dealing", async () => {

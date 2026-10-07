@@ -232,7 +232,7 @@ const PlayerHand = ({
   return (
     <div
       ref={containerRef}
-      className="relative"
+      className="relative select-none"
       style={{ height: cardH + base + Math.round(cardH * 0.08), overflow: "visible" }}
       aria-label="Your hand"
     >
@@ -246,6 +246,9 @@ const PlayerHand = ({
             key={card.id}
             ref={(el) => setEls(card.id, "slot", el)}
             data-card-id={card.id}
+            // Shift-click picks a range of cards; without this the browser
+            // also stretches a text selection across the page.
+            onMouseDown={(e) => e.shiftKey && e.preventDefault()}
             style={{
               position: "absolute",
               left: "50%",
