@@ -49,6 +49,8 @@ const short = (name = "") => name.split(" #")[0];
 const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const running = (phase) => phase === PHASES.BETTING || phase === PHASES.RUNOUT;
 const EXTRA_BTN = "pixel-btn font-pixel-display text-[11px] px-4 py-3 whitespace-nowrap";
+// Seat plates by layout: a phone's strip fits five across 390px.
+const SEAT_W = { full: 132, row: 96, strip: 68 };
 
 export default function GamePoker() {
   const { lobbyId, playerName, aiDifficulty = "MEDIUM" } = useLocation().state || {};
@@ -282,7 +284,7 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
           best={best}
           winner={winners.has(seat)}
           cardWidth={layout === "full" ? 40 : 30}
-          small={layout !== "full"}
+          width={SEAT_W[layout]}
           isHost={isHost}
           onAddCpu={isHost ? () => actions.addCpu(seat) : undefined}
           onRemoveCpu={isHost ? () => actions.removeCpu(seat) : undefined}
@@ -322,7 +324,7 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
 
       <div className="relative flex-1 grid min-h-0" style={{ gridTemplateColumns: compact ? "minmax(0, 1fr)" : "minmax(0, 1fr) 300px" }}>
         <div className={`relative flex flex-col min-h-0 ${narrow ? "px-2 pt-4 pb-2" : "px-4 py-2"}`}>
-          <OvalTable layout={layout} seats={others} bets={bets} board={view.board} pots={potsOf(view)} banner={banner} cardWidth={deckW}>
+          <OvalTable layout={layout} seats={others} bets={bets} board={view.board} pots={potsOf(view)} banner={banner} cardWidth={layout === "strip" ? Math.min(deckW, 40) : deckW}>
             <TurnBanner active={myTurn} />
           </OvalTable>
 

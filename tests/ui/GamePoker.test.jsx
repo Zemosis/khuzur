@@ -34,7 +34,7 @@ const serverSends = (ev, data) => act(() => handlers[ev]?.forEach((fn) => fn(dat
 const emitted = (ev) => fakeSocket.emit.mock.calls.filter(([e]) => e === ev).map(([, d]) => d);
 
 // You (seat 0, "ME #0003") on the button against ANN (2): you act first heads-up.
-const named = (s) => ({ ...s, seats: s.seats.map((p, i) => p && { ...p, name: ["ME #0003", null, "ANN #0001"][i] }) });
+const named = (s) => ({ ...s, seats: s.seats.map((p, i) => p && { ...p, name: ["ME #0003", "BOB #0002", "ANN #0001", "Bot Saturn", "Bot Venus", "Bot Mars"][i] }) });
 const hand = (opts = {}) => named(dealt(tableWith([1000, null, 1000, null, null, null]), { button: 0, holes: { 0: "A♠ A♦", 2: "K♠ K♦" }, board: "2♣ 7♦ 9♥ J♠ 3♣", ...opts }));
 const view = (s, extra = {}) => ({ ...viewFor(s, 0), turnMsLeft: s.turn === 0 ? 20000 : null, started: true, amHost: true, ...extra });
 
@@ -124,6 +124,27 @@ describe("poker table online", () => {
     expect(screen.getByText("Raise to at least 20")).toBeInTheDocument();
     serverSends("table_left", { reason: "away" });
     expect(screen.getByText("POKER LOBBY")).toBeInTheDocument();
+  });
+});
+
+describe("poker on a phone", () => {
+  const size = { w: window.innerWidth, h: window.innerHeight };
+  beforeEach(() => Object.assign(window, { innerWidth: 390, innerHeight: 844 }));
+  afterEach(() => Object.assign(window, { innerWidth: size.w, innerHeight: size.h }));
+
+  it("the five other seats and the five board cards fit across a 390px screen", async () => {
+    open();
+    await act(async () => {});
+    const five = named(dealt(tableWith([1000, 1000, 1000, 1000, 1000, 1000]), { button: 0, board: "2♣ 7♦ 9♥ J♠ 3♣" }));
+    let s = five;
+    for (const seat of [3, 4, 5, 0, 1]) s = play(s, seat, { type: "call" });
+    s = play(s, 2, { type: "check" }); // the flop is out
+    serverSends("poker_state", view({ ...s, mySeat: 0 }));
+    const plates = [...document.querySelectorAll("[data-seat-plate]")].map((el) => parseInt(el.style.width, 10));
+    expect(plates).toHaveLength(5);
+    expect(plates.reduce((a, w) => a + w, 0) + 4 * 6).toBeLessThanOrEqual(390 - 16);
+    const board = [...screen.getByLabelText("Board").children].map((el) => parseInt(el.style.width, 10));
+    expect(board.reduce((a, w) => a + w, 0) + 4 * 6).toBeLessThanOrEqual(300);
   });
 });
 

@@ -22,13 +22,16 @@ function Tag({ label, bg, fg = "#1a1024" }) {
  * player: an engine seat (null: empty). face: PixelAvatar props.
  * clockMs / clockKey: the turn clock's time left, restarted when the key changes.
  * best: card ids to light up (the winning hand at a showdown).
+ * width: the plate's width; small plates (a phone's strip of five) shrink the face.
  */
-export default function PokerSeat({ player, face, tags = [], isTurn = false, clockMs = null, clockKey, best = [], winner = false, cardWidth = 40, small = false, isHost = false, onAddCpu, onRemoveCpu }) {
+export default function PokerSeat({ player, face, tags = [], isTurn = false, clockMs = null, clockKey, best = [], winner = false, cardWidth = 40, width = 132, isHost = false, onAddCpu, onRemoveCpu }) {
+  const small = width < 120;
   if (!player) {
     return (
       <div
         className="flex flex-col items-center justify-center gap-2 font-pixel-display text-[9px] text-bone/50"
-        style={{ width: small ? 96 : 132, minHeight: small ? 64 : 84, border: "3px dashed #2a234d" }}
+        data-seat-plate
+        style={{ width, minHeight: small ? 64 : 84, border: "3px dashed #2a234d" }}
       >
         EMPTY
         {isHost && onAddCpu && (
@@ -56,9 +59,10 @@ export default function PokerSeat({ player, face, tags = [], isTurn = false, clo
         ))}
       </div>
       <div
-        className="relative flex items-center gap-2 px-2 py-1.5"
+        data-seat-plate
+        className={`relative flex items-center py-1.5 ${width < 90 ? "gap-1 px-1" : "gap-2 px-2"}`}
         style={{
-          width: small ? 96 : 132,
+          width,
           backgroundColor: "#14102a",
           border: `3px solid ${isTurn ? "#f4c430" : winner ? "#9bd14f" : "#1f1a3d"}`,
           boxShadow: "0 0 0 3px #0a0712",
@@ -66,7 +70,7 @@ export default function PokerSeat({ player, face, tags = [], isTurn = false, clo
           transition: "opacity 300ms ease-out",
         }}
       >
-        <PixelAvatar variant={face?.variant} customAvatarData={face?.customAvatarData} size={small ? 26 : 34} eliminated={player.folded} />
+        <PixelAvatar variant={face?.variant} customAvatarData={face?.customAvatarData} size={width < 90 ? 20 : small ? 26 : 34} eliminated={player.folded} />
         <div className="min-w-0 flex-1">
           <div className="font-pixel-display text-[9px] text-parchment truncate">{short(player.name)}</div>
           <div className="font-pixel-body text-[18px] leading-none mt-1 text-glow-gold tabular-nums">{player.stack}</div>
