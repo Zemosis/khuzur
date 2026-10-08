@@ -212,7 +212,9 @@ Practice games aren't recorded.
 
 ## Out of scope
 
-**Credits project (next):** credit balances, the weekly +1000 (never reset),
+**Credits project (next):** credit balances (1000 to start; once every 24 hours from the last
+claim, a player whose balance plus on-table stack is below 1000 can CLAIM back
+up to 1000 — never above, so everything over 1000 is winnings),
 signed-in-only credit tables with LOW 5/10 (200–1000), MID 25/50 (1000–5000)
 and HIGH 100/200 (4000–20000) tiers and no CPUs, an all-time leaderboard
 (top 100 for everyone; others see their rank ±5) counting balance plus
