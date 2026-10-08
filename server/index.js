@@ -10,6 +10,8 @@ import { Server } from "socket.io";
 import { randomInt, randomUUID } from "node:crypto";
 import { ThirteenGame, redactState, DEFAULT_DELAYS } from "./game/engine.js";
 import { MuushigGame, muushigView, DEFAULT_MUUSHIG_DELAYS } from "./game/muushigGame.js";
+import { PokerTable, DEFAULT_POKER_DELAYS } from "./game/poker/table.js";
+import { viewFor } from "./game/poker/engine.js";
 import { BOT_NAMES } from "./game/constants.js";
 import { createSession, finishSession, closeOrphanedSessions } from "./persistence.js";
 import { authRouter, socketIdentity } from "./auth.js";
@@ -40,6 +42,18 @@ const GAME_DELAYS = {
 const MUUSHIG_DELAYS = process.env.MUUSHIG_DELAY_MS
   ? Object.fromEntries(Object.keys(DEFAULT_MUUSHIG_DELAYS).map((k) => [k, envMs("MUUSHIG_DELAY_MS", 0)]))
   : DEFAULT_MUUSHIG_DELAYS;
+// Poker: the test suite sets every pause to POKER_DELAY_MS, and the turn
+// clock and the sit-out kick on their own.
+const POKER_DELAYS = {
+  ...(process.env.POKER_DELAY_MS
+    ? Object.fromEntries(["thinkMin", "thinkMax", "runout", "handGap", "firstHand"].map((k) => [k, envMs("POKER_DELAY_MS", 0)]))
+    : {}),
+  turn: envMs("POKER_TURN_MS", DEFAULT_POKER_DELAYS.turn),
+  sitOutKick: envMs("POKER_KICK_MS", DEFAULT_POKER_DELAYS.sitOutKick),
+};
+
+/** A poker table as one seat sees it, with its turn clock and whether START was pressed. */
+const pokerView = (state, seat, table) => ({ ...viewFor(state, seat), turnMsLeft: table?.turnMsLeft() ?? null, started: !!table?.started });
 
 /**
  * Each game the hall serves: seats at a table, its engine, what each player is
@@ -58,6 +72,13 @@ const GAMES = {
     view: muushigView,
     create: (seats, hooks) => new MuushigGame({ seats, delays: MUUSHIG_DELAYS, ...hooks }),
   },
+  // A poker table is made with its lobby (createPokerTable) and seats people
+  // itself: there is no waiting table, and no match end or rematch.
+  poker: {
+    seats: 6,
+    stateEvent: "poker_state",
+    view: pokerView,
+  },
 };
 const gameTypeOf = (type) => (Object.hasOwn(GAMES, type) ? type : "thirteen");
 
@@ -75,7 +96,7 @@ const io = new Server(server, {
 
 /**
  * lobbies: Map<lobbyId, {
- *   id, gameType ("thirteen" | "muushig"), name, isPrivate, maxPlayers,
+ *   id, gameType ("thirteen" | "muushig" | "poker"), name, isPrivate, maxPlayers,
  *   hostKey, createdAt, startedAt,
  *   members: Map<playerKey, {
  *     key, userId, name, tag, displayName,
@@ -86,7 +107,7 @@ const io = new Server(server, {
  *   roster: Map<playerKey, seat ledger>,   // never pruned — see below
  *   rounds: Array<round summary>,
  *   sessionPromise, recorded,
- *   game: ThirteenGame | MuushigGame | null
+ *   game: ThirteenGame | MuushigGame | PokerTable | null
  * }>
  *
  * `members` is the LIVE connection map and loses a player the moment they quit.
@@ -200,9 +221,10 @@ function publicLobbyList(gameType) {
         gameType: l.gameType,
         name: l.name,
         host: host?.displayName || "?",
-        current: l.members.size,
+        // Poker seats CPUs at the table itself, and has a game from the start.
+        current: l.gameType === "poker" ? l.game.state.seats.filter(Boolean).length : l.members.size,
         max: l.maxPlayers,
-        inProgress: !!l.game,
+        inProgress: l.gameType === "poker" ? l.game.started : !!l.game,
       };
     });
 }
@@ -258,7 +280,7 @@ function broadcastState(lobby, game = lobby.game) {
   for (const member of lobby.members.values()) {
     if (!member.connected || !member.socketId) continue;
     io.to(member.socketId).emit(stateEvent, {
-      ...view(game.state, member.seatIndex ?? -1),
+      ...view(game.state, member.seatIndex ?? -1, game),
       amHost: lobby.hostKey === member.key,
       dealMsLeft: game.dealMsLeft(),
     });
@@ -270,7 +292,7 @@ function sendStateTo(lobby, socket) {
   const { view, stateEvent } = GAMES[lobby.gameType];
   const member = lobby.members.get(socket.data.playerKey);
   socket.emit(stateEvent, {
-    ...view(lobby.game.state, member?.seatIndex ?? -1),
+    ...view(lobby.game.state, member?.seatIndex ?? -1, lobby.game),
     amHost: !!member && lobby.hostKey === member.key,
     dealMsLeft: lobby.game.dealMsLeft(),
   });
@@ -400,6 +422,55 @@ function startGame(lobby) {
   broadcastLobbyList(lobby.gameType);
 }
 
+/** The poker table for a new lobby. Its seats are its own; see sitAtPoker. */
+function createPokerTable(lobby) {
+  return new PokerTable({
+    delays: POKER_DELAYS,
+    onState: (table) => broadcastState(lobby, table),
+    onHandEnd: (hand) => recordHand(lobby, hand),
+    // Sat out too long: off the table and back to the lobby.
+    onKick: (seat) => {
+      const member = [...lobby.members.values()].find((m) => m.seatIndex === seat);
+      if (!member) return lobby.game.standUp(seat);
+      if (member.connected && member.socketId) io.to(member.socketId).emit("table_left", { reason: "away" });
+      removeMember(lobby, member);
+    },
+  });
+}
+
+/** Seats a member at a poker table, in the first empty seat. False when it's full. */
+function sitAtPoker(lobby, member) {
+  const seat = lobby.game.firstFreeSeat();
+  if (seat === -1) return false;
+  // Set first: the table broadcasts as they sit, and their view needs the seat.
+  member.seatIndex = seat;
+  const result = lobby.game.sit({ name: member.displayName, type: "HUMAN", avatar: member.avatar, key: member.key }, seat);
+  if (!result.ok) member.seatIndex = null;
+  return result.ok;
+}
+
+/** A poker hand is over: keep it for the record, and add it to each player's tally. */
+function recordHand(lobby, hand) {
+  if (!lobby.sessionPromise) return;
+  lobby.rounds.push({
+    ...hand,
+    // Player keys stay in the roster, not in every round row.
+    seatResults: hand.seatResults.map(({ player_key: _key, ...result }) => result),
+  });
+  for (const r of hand.seatResults) {
+    const entry = r.player_key && lobby.roster.get(r.player_key);
+    if (!entry) continue;
+    const t = (entry.poker ||= { hands_played: 0, hands_won: 0, net: 0, biggest_pot: 0, vpip_hands: 0, showdowns: 0, showdowns_won: 0 });
+    t.hands_played += 1;
+    t.net += r.net;
+    t.biggest_pot = Math.max(t.biggest_pot, r.won);
+    if (r.won > 0) t.hands_won += 1;
+    if (r.vpip) t.vpip_hands += 1;
+    if (r.showdown) t.showdowns += 1;
+    if (r.showdown && r.won > 0) t.showdowns_won += 1;
+  }
+}
+
 function removeMember(lobby, member, { convertSeat = true } = {}) {
   if (member.disconnectTimer) clearTimeout(member.disconnectTimer);
   lobby.members.delete(member.key);
@@ -409,8 +480,11 @@ function removeMember(lobby, member, { convertSeat = true } = {}) {
     lobby.seats[member.seatIndex] = null;
   }
 
+  // Poker: the seat just empties (the hand in play folds).
+  if (lobby.gameType === "poker" && member.seatIndex != null) lobby.game.standUp(member.seatIndex);
+
   // Mid-game: a CPU inherits the seat and hand so the match can continue.
-  const cpuTookOver = !!(convertSeat && lobby.game && member.seatIndex != null);
+  const cpuTookOver = !!(convertSeat && lobby.game && lobby.gameType !== "poker" && member.seatIndex != null);
   if (cpuTookOver) {
     lobby.game.replaceSeat(member.seatIndex, {
       type: "AI",
@@ -438,7 +512,8 @@ function removeMember(lobby, member, { convertSeat = true } = {}) {
 
 function destroyLobby(lobby) {
   // Everyone left before the match ended — record it rather than losing it.
-  closeSession(lobby, { completed: false, endedReason: "all_left" });
+  // A poker table has no end of its own: everyone leaving is how it finishes.
+  closeSession(lobby, lobby.gameType === "poker" ? { completed: true, endedReason: "completed" } : { completed: false, endedReason: "all_left" });
   if (lobby.game) lobby.game.destroy();
   for (const m of lobby.members.values()) {
     if (m.disconnectTimer) clearTimeout(m.disconnectTimer);
@@ -532,7 +607,10 @@ io.on("connection", (socket) => {
       game: null,
       seats: Array(seatCount).fill(null),
     };
-    takeSeat(lobby, addMember(lobby, socket));
+    if (type === "poker") {
+      lobby.game = createPokerTable(lobby);
+      sitAtPoker(lobby, addMember(lobby, socket));
+    } else takeSeat(lobby, addMember(lobby, socket));
     lobbies.set(lobbyId, lobby);
     enterRoom(socket, lobbyId);
     console.log(`${type} lobby created: ${lobbyId} by ${socket.data.displayName}`);
@@ -561,7 +639,7 @@ io.on("connection", (socket) => {
       member.socketId = socket.id;
       member.connected = true;
       enterRoom(socket, lobbyId);
-      if (lobby.game && member.seatIndex != null) {
+      if (lobby.game && lobby.gameType !== "poker" && member.seatIndex != null) {
         lobby.game.replaceSeat(member.seatIndex, {
           type: "HUMAN",
           name: member.displayName,
@@ -581,7 +659,8 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (lobby.members.size >= lobby.maxPlayers) {
+    const full = lobby.gameType === "poker" ? lobby.game.firstFreeSeat() === -1 : lobby.members.size >= lobby.maxPlayers;
+    if (full) {
       socket.emit("error_message", "Lobby is full");
       return;
     }
@@ -589,10 +668,14 @@ io.on("connection", (socket) => {
     member = addMember(lobby, socket);
     enterRoom(socket, lobbyId);
     console.log(`${socket.data.displayName} joined ${lobbyId}`);
-    if (!lobby.game) takeSeat(lobby, member);
+    if (lobby.gameType === "poker") {
+      // Dealt in from the next hand; counted in the record from now.
+      sitAtPoker(lobby, member);
+      if (lobby.sessionPromise) rosterEnter(lobby, member);
+    } else if (!lobby.game) takeSeat(lobby, member);
 
     // Game already running: take over the first free CPU seat.
-    if (lobby.game) {
+    if (lobby.game && lobby.gameType !== "poker") {
       const takenSeats = new Set(
         [...lobby.members.values()].map((m) => m.seatIndex).filter((i) => i != null),
       );
@@ -629,7 +712,7 @@ io.on("connection", (socket) => {
     else sendTableTo(lobby, socket);
   });
 
-  /** The lobby, if this socket is its host and it is still waiting. */
+  /** The lobby, if this socket is its host and it is still waiting (a poker table: any time). */
   const hostCommand = (lobbyId) => {
     const lobby = lobbies.get(lobbyId);
     const member = lobby?.members.get(socket.data.playerKey);
@@ -638,16 +721,26 @@ io.on("connection", (socket) => {
       socket.emit("move_rejected", { reason: "Only the host can do that" });
       return null;
     }
-    if (lobby.game) {
+    if (lobby.game && lobby.gameType !== "poker") {
       socket.emit("move_rejected", { reason: "The game has already started" });
       return null;
     }
     return lobby;
   };
 
+  const reject = (reason) => socket.emit("move_rejected", { reason });
+
   socket.on("start_game", ({ lobbyId } = {}) => {
     const lobby = hostCommand(lobbyId);
     if (!lobby) return;
+    if (lobby.gameType === "poker") {
+      const result = lobby.game.start();
+      if (!result.ok) return reject(result.error);
+      beginSession(lobby);
+      broadcastState(lobby); // shows the table started, even before 2 can play
+      broadcastLobbyList(lobby.gameType);
+      return;
+    }
     if (lobby.gameType === "thirteen" && lobby.seats.filter(Boolean).length < 2) {
       socket.emit("move_rejected", { reason: "Add a player or a CPU to start" });
       return;
@@ -660,6 +753,14 @@ io.on("connection", (socket) => {
   socket.on("add_cpu", ({ lobbyId, seat, level = "MEDIUM" } = {}) => {
     const lobby = hostCommand(lobbyId);
     if (!lobby) return;
+    if (lobby.gameType === "poker") {
+      if (!CPU_LEVELS.includes(level)) return reject("Pick EASY, MEDIUM or HARD");
+      const named = lobby.game.state.seats.map((p) => (p?.type === "AI" ? { kind: "cpu", name: p.name } : null));
+      const result = lobby.game.sit({ name: nextCpuName(named), type: "AI", level }, seat);
+      if (!result.ok) return reject(result.error);
+      broadcastLobbyList(lobby.gameType);
+      return;
+    }
     if (!isSeat(lobby, seat) || lobby.seats[seat] !== null) {
       socket.emit("move_rejected", { reason: "That seat isn't empty" });
       return;
@@ -675,6 +776,12 @@ io.on("connection", (socket) => {
   socket.on("remove_cpu", ({ lobbyId, seat } = {}) => {
     const lobby = hostCommand(lobbyId);
     if (!lobby) return;
+    if (lobby.gameType === "poker") {
+      if (lobby.game.state.seats[seat]?.type !== "AI") return reject("There's no CPU in that seat");
+      lobby.game.standUp(seat);
+      broadcastLobbyList(lobby.gameType);
+      return;
+    }
     if (!isSeat(lobby, seat) || lobby.seats[seat]?.kind !== "cpu") {
       socket.emit("move_rejected", { reason: "There's no CPU in that seat" });
       return;
@@ -686,6 +793,7 @@ io.on("connection", (socket) => {
   socket.on("set_cpu_level", ({ lobbyId, seat, level } = {}) => {
     const lobby = hostCommand(lobbyId);
     if (!lobby) return;
+    if (lobby.gameType === "poker") return reject("Remove the CPU and add one at the new level");
     if (!isSeat(lobby, seat) || lobby.seats[seat]?.kind !== "cpu") {
       socket.emit("move_rejected", { reason: "There's no CPU in that seat" });
       return;
@@ -718,10 +826,48 @@ io.on("connection", (socket) => {
     if (!result.ok) socket.emit("move_rejected", { reason: result.error });
   });
 
+  /** This socket's seat at a poker table: { lobby, seat }, or null. */
+  const pokerSeat = (lobbyId) => {
+    const lobby = lobbies.get(lobbyId);
+    const member = lobby?.members.get(socket.data.playerKey);
+    return lobby?.gameType === "poker" && member?.seatIndex != null ? { lobby, seat: member.seatIndex } : null;
+  };
+  const answer = (result) => !result.ok && reject(result.error);
+
+  // A poker move: { type: fold | check | call | raise | allin, amount? }. The seat is the socket's.
+  socket.on("poker_move", ({ lobbyId, move } = {}) => {
+    const at = pokerSeat(lobbyId);
+    if (!at) return;
+    const safe = move && typeof move === "object" ? { type: move.type, amount: move.amount } : null;
+    answer(at.lobby.game.move(at.seat, safe));
+  });
+
+  socket.on("poker_rebuy", ({ lobbyId } = {}) => {
+    const at = pokerSeat(lobbyId);
+    if (at) answer(at.lobby.game.rebuy(at.seat));
+  });
+
+  socket.on("poker_sit_in", ({ lobbyId } = {}) => {
+    const at = pokerSeat(lobbyId);
+    if (at) answer(at.lobby.game.sitIn(at.seat));
+  });
+
+  // The host ends a poker table: everyone goes back to the lobby.
+  socket.on("close_table", ({ lobbyId } = {}) => {
+    const lobby = hostCommand(lobbyId);
+    if (!lobby || lobby.gameType !== "poker") return;
+    for (const m of lobby.members.values()) {
+      if (m.connected && m.socketId) io.to(m.socketId).emit("table_left", { reason: "closed" });
+      io.sockets.sockets.get(m.socketId)?.leave(lobby.id);
+    }
+    destroyLobby(lobby);
+    broadcastLobbyList(lobby.gameType);
+  });
+
   socket.on("request_rematch", ({ lobbyId } = {}) => {
     const lobby = lobbies.get(lobbyId);
     const member = lobby?.members.get(socket.data.playerKey);
-    if (!lobby?.game || !member) return;
+    if (!lobby?.game || lobby.gameType === "poker" || !member) return;
     if (lobby.hostKey !== member.key) {
       socket.emit("move_rejected", { reason: "Only the host can start a rematch" });
       return;

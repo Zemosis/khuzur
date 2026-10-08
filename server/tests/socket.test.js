@@ -153,7 +153,7 @@ describe("connection", () => {
   it("get_stats counts open public lobbies per game", async () => {
     const a = await guest();
     const before = await ack(a, "get_stats");
-    expect(before.lobbies).toEqual({ thirteen: before.tables, muushig: 0 });
+    expect(before.lobbies).toEqual({ thirteen: before.tables, muushig: 0, poker: 0 });
 
     const host = await guest("HOST");
     await createLobby(host, { lobbyName: "Counted" });
