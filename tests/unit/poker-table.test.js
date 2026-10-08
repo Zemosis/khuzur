@@ -97,6 +97,36 @@ describe("poker table", () => {
     expect(table.state.seats[0].sittingOut).toBe(false);
   });
 
+  it("someone sitting down doesn't give the player on turn more time", () => {
+    make();
+    human();
+    cpu();
+    table.start();
+    vi.advanceTimersByTime(D.firstHand);
+    while (!(table.state.phase === PHASES.BETTING && table.state.turn === 0)) vi.advanceTimersByTime(100);
+    const hand = table.state.handNumber;
+    const left = table.turnMsLeft();
+    vi.advanceTimersByTime(left - 1000);
+    human("LATE");
+    expect(table.turnMsLeft()).toBe(1000);
+    vi.advanceTimersByTime(1000);
+    expect(table.state.handNumber !== hand || table.state.turn !== 0).toBe(true);
+  });
+
+  it("pressing I'M BACK over and over can't stop the clock or the CPUs", () => {
+    make();
+    human();
+    cpu();
+    table.start();
+    vi.advanceTimersByTime(D.firstHand);
+    const start = table.state.handNumber;
+    for (let i = 0; i < 400; i++) {
+      table.sitIn(0);
+      vi.advanceTimersByTime(500);
+    }
+    expect(table.state.handNumber).toBeGreaterThan(start);
+  });
+
   it("refuses moves for CPU seats and out of turn", () => {
     make();
     human();

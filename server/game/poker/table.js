@@ -54,6 +54,7 @@ export class PokerTable {
     this.destroyed = false;
     this.turnEndsAt = null;
     this.timer = null; // the one pending step: a CPU move, the clock, a runout card, the next hand
+    this.timerFor = null; // which moment of the table that step was armed for (see stepKey)
     this.kickTimers = new Map(); // seat -> timer
     this.timeouts = Array(this.state.seats.length).fill(0);
   }
@@ -132,12 +133,25 @@ export class PokerTable {
     this.onState?.(this);
   }
 
-  /** Arms the one next step for the state as it is now, and the sit-out kicks. */
+  /**
+   * The moment the pending step belongs to. Seating, rebuys and I'M BACK
+   * leave it alone, so they never restart a turn clock, a CPU's thinking or
+   * the pause between hands.
+   */
+  stepKey() {
+    const s = this.state;
+    return `${this.started}|${s.handNumber}|${s.phase}|${s.turn}|${s.events.length}|${canStartHand(s)}`;
+  }
+
+  /** Arms the one next step for the state as it is now (unless it's already armed), and the sit-out kicks. */
   reschedule() {
     if (this.destroyed) return;
+    this.armKicks();
+    const key = this.stepKey();
+    if (this.timer && key === this.timerFor) return;
     this.clearTimer();
     this.turnEndsAt = null;
-    this.armKicks();
+    this.timerFor = key;
     if (!this.started) return;
     const s = this.state;
     const d = this.delays;
