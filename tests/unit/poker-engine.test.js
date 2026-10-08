@@ -108,7 +108,8 @@ describe("betting", () => {
     let s = three();
     s = play(s, [0, "raise", 40], [1, "fold"], [2, "fold"]);
     expect(s.phase).toBe(PHASES.HAND_OVER);
-    expect(s.result.won[0]).toBe(55);
+    expect(s.result.won[0]).toBe(25); // the blinds; the unmatched 30 of the raise comes back
+    expect(s.events).toContainEqual({ type: "return", seat: 0, amount: 30 });
     expect(s.result.hands).toEqual({});
     expect(s.seats[0].stack).toBe(1015);
     expect(s.events.filter((e) => e.type === "show")).toEqual([]);
@@ -172,6 +173,40 @@ describe("all-in and showdown", () => {
   });
 });
 
+describe("uncalled chips", () => {
+  it("chips nobody could match go back to the bettor, not counted as a win", () => {
+    let s = dealt(tableWith([300, null, 1000, null, null, null]), {
+      button: 0,
+      holes: { 0: "A♠ A♦", 2: "K♠ K♦" },
+      board: "2♣ 7♦ 9♥ J♠ 3♣",
+    });
+    s = play(s, [0, "call"], [2, "allin"], [0, "call"]);
+    while (s.phase === PHASES.RUNOUT) s = advance(s);
+    expect(s.result.won).toEqual([600, 0, 0, 0, 0, 0]);
+    expect(s.seats[2].stack).toBe(700);
+    expect(s.events).toContainEqual({ type: "return", seat: 2, amount: 700 });
+    expect(s.result.pots).toEqual([{ amount: 600, winners: [0] }]);
+    const sum = handSummary(s);
+    expect(sum.seatResults.find((r) => r.seat_index === 2)).toMatchObject({ won: 0, net: -300 });
+    expect(sum.seatResults.find((r) => r.seat_index === 0)).toMatchObject({ won: 600, net: 300 });
+  });
+
+  it("a big blind all-in for less than the small blind only wins what it matched", () => {
+    let s = dealt(tableWith([1000, null, 3, null, null, null]), { button: 0 });
+    s = play(s, [0, "fold"]);
+    expect(s.result.won[2]).toBe(6);
+    expect(s.seats[0].stack).toBe(997);
+  });
+
+  it("someone leaving after betting more than everyone left takes the extra home", () => {
+    let s = dealt(tableWith([1000, null, 50, null, null, null]), { button: 0 });
+    s = play(s, [0, "allin"], [2, "call"]);
+    s = standUp(s, 0);
+    expect(s.result.won[2]).toBe(100);
+    expect(s.seats[0].stack).toBe(950);
+  });
+});
+
 describe("players coming and going", () => {
   it("someone sitting down mid-hand waits for the next one", () => {
     let s = three();
@@ -196,7 +231,8 @@ describe("players coming and going", () => {
     let s = dealt(tableWith([1000, null, 1000, null, null, null]), { button: 0 });
     s = standUp(s, 2);
     expect(s.phase).toBe(PHASES.HAND_OVER);
-    expect(s.result.won[0]).toBe(15);
+    expect(s.result.won[0]).toBe(10); // the leaver's unmatched 5 of the big blind goes home with them
+    expect(s.seats[2].stack).toBe(995);
   });
 
   it("a busted player rebuys back into the next hand; with chips they can't", () => {

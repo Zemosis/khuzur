@@ -380,7 +380,23 @@ function showOrder(s) {
   return [first, ...Array.from({ length: MAX_SEATS - 1 }, (_, k) => (first + 1 + k) % MAX_SEATS).filter((i) => live.includes(i))];
 }
 
+/**
+ * Chips the top bettor put in that nobody matched go back to them: they can't
+ * win them from anyone. Logged as a "return", never counted as a win.
+ */
+function returnUncalled(s) {
+  const committed = s.seats.map((p) => p?.committed || 0);
+  const top = committed.indexOf(Math.max(...committed));
+  const matched = Math.max(0, ...committed.filter((_, i) => i !== top));
+  const extra = committed[top] - matched;
+  if (extra <= 0) return s;
+  const p = s.seats[top];
+  s = patchSeat(s, top, { stack: p.stack + extra, committed: p.committed - extra });
+  return log(s, { type: "return", seat: top, amount: extra });
+}
+
 function showdown(s) {
+  s = returnUncalled(s);
   const live = liveSeats(s);
   const hands = new Map(live.map((i) => [i, evaluate([...s.seats[i].hole, ...s.board])]));
   const scores = s.seats.map((_, i) => (hands.has(i) ? hands.get(i).score : null));
@@ -400,6 +416,7 @@ function showdown(s) {
 }
 
 function winUncontested(s, seat) {
+  s = returnUncalled(s);
   const total = potSize(s);
   const won = s.seats.map((_, i) => (i === seat ? total : 0));
   return payOut({ ...s, turn: null }, won, [{ amount: total, winners: [seat] }], {});

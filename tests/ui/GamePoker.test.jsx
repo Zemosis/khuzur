@@ -91,12 +91,13 @@ describe("poker table online", () => {
     s = play(s, 0, { type: "raise", amount: 40 });
     s = play(s, 2, { type: "fold" });
     serverSends("poker_state", view(s));
-    expect(screen.getAllByText(/ME wins 50/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/ME wins 20/).length).toBeGreaterThan(0); // the blinds; 30 of the raise comes back
     // jsdom's window is a compact layout: the sidebar is a drawer to open first.
     await userEvent.click(screen.getByRole("button", { name: /^Scoreboard and chat/ }));
     await userEvent.click(screen.getByRole("tab", { name: "LOG" }));
     expect(screen.getByText("ME raises to 40")).toBeInTheDocument();
     expect(screen.getByText("ANN folds")).toBeInTheDocument();
+    expect(screen.getByText("ME takes back 30 nobody called")).toBeInTheDocument();
   });
 
   it("the host gets START and CLOSE TABLE; REBUY shows when you're out of chips", async () => {

@@ -26,6 +26,8 @@ export function eventLine(e, seats) {
       return `${STREET[e.street]}: ${cardsText(e.cards)}`;
     case "show":
       return `${who} shows ${cardsText(e.cards)}`;
+    case "return":
+      return `${who} takes back ${e.amount} nobody called`;
     case "award":
       return e.name ? `${who} wins ${e.amount} with ${e.name.charAt(0).toLowerCase()}${e.name.slice(1)}` : `${who} wins ${e.amount}`;
     default:
