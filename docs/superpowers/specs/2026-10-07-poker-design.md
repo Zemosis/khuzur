@@ -91,13 +91,13 @@ Online tables run byte-identical copies in `server/game/poker/`;
 
 ## Server
 
-**`PokerGame`** (`server/game/pokerGame.js`), shaped like `MuushigGame`: owns
+**`PokerTable`** (`src/utils/poker/table.js`, copied to `server/game/poker/` like the rules, and also run by practice): owns
 the full state and the deck, takes moves from a seat, plays CPU seats after a
 short "thinking" delay (1–2.5s), runs the 20s turn clock, and reports through
 `onState` / `onHandEnd`. Unlike the other games it also owns its seating:
-`sit(key, name)`, `standUp(key)`, `rebuy(key)`, `sitIn(key)`, `addCpu(seat,
-level)`, `removeCpu(seat)` — applied at once if no hand is running, otherwise
-queued for the hand's end (a leaver's hand folds immediately).
+`sit(player, seat)`, `standUp(seat)`, `rebuy(seat)`, `sitIn(seat)` (a CPU
+sits with `type: "AI"`) — applied at once: a newcomer mid-hand is seated as
+"next hand", and a leaver's hand folds immediately.
 
 **Moves** arrive as `poker_move { type: fold | check | call | raise | allin,
 amount? }`; the seat is the socket's. Payloads are type-checked, the engine
@@ -110,16 +110,18 @@ Your own cards are always visible. The view carries `mySeat`, the clock's end
 time (`turnEndsAt`, server-decided like the deal clock), and `legalActions`
 for your seat.
 
-**Lobbies.** `GAMES.poker` in `server/index.js`: 6 seats, `PokerGame`,
+**Lobbies.** `GAMES.poker` in `server/index.js`: 6 seats, `PokerTable`,
 `pokerView`, state event `poker_state`. Poker skips the waiting-table step and
-the rematch loop — the lobby is created with its `PokerGame` and START just
+the rematch loop — the lobby is created with its `PokerTable` and START just
 begins dealing — so `join_lobby`, `leave_lobby`, disconnect expiry and
 `add_cpu` / `remove_cpu` call the game's seating methods for a poker lobby
 instead of the shared seat logic. A table is full at 6 seated; a joiner never
 replaces a CPU. The host's only powers after START are adding and removing
-CPUs (between hands) and closing the table (`close_table`: hands in progress
+CPUs (a new CPU is dealt in next hand; a removed one folds) and closing the table (`close_table`: hands in progress
 fold back, everyone returns to the lobby). Host passes to the next seated
-human; a table with no humans closes.
+human; a table with no humans closes. A player stood up for sitting out, or
+at a table the host closes, gets `table_left { reason }` and returns to the
+lobby.
 
 **Disconnects.** The usual 60s grace keeps the seat; the turn clock acts for
 an absent player meanwhile. When the grace runs out the player is stood up.
@@ -131,8 +133,8 @@ an absent player meanwhile. When the grace runs out the player is stood up.
 - `src/pages/poker/LobbyPoker.jsx` — the shared `GameLobby` with Poker's
   title and accent, and practice levels.
 - `src/pages/poker/GamePoker.jsx` — practice (the engine and CPUs in the
-  browser, 5 CPUs at the chosen level) or online (plays `poker_state` through
-  a queue, as Muushig does, so each street and chip movement animates).
+  browser, 5 CPUs at the chosen level) or online (applies each `poker_state` as
+  it arrives; the server paces CPU moves and run-outs).
 - `src/components/poker/`:
   - `OvalTable` — the felt: a wide stepped-pixel oval, green with a wooden
     rim; the board's 5 card spots in the middle, the pot (and side-pot tags)
@@ -146,8 +148,10 @@ an absent player meanwhile. When the grace runs out the player is stood up.
   - `BetControls` — FOLD, CHECK / CALL n, and a raise row: ½ POT, POT, ALL-IN,
     a slider and the exact amount, RAISE disabled below the minimum. Keys: F,
     C, R, Enter. On a phone the raise row is a drawer above FOLD and CALL.
-  - `Showdown` — cards flip, the winning 5 light up, the hand's name pops over
-    the winner, the pot slides to them.
+  - Showdown — cards flip, the winning 5 light up, the winner's seat gets a
+    WIN tag and the result line on the felt names them, the chips and the
+    hand ("ANN wins 240 · FLUSH"); bets move with a short transition, but the
+    pot doesn't fly to the winner yet.
 - Your hand: your 2 cards large at the bottom with the `YourTurnMark`, and
   your best hand named under them as the board comes out.
 - Sidebar (`TableChrome`): a scoreboard of stacks and each player's net since
@@ -187,8 +191,8 @@ Practice games aren't recorded.
 - The turn clock and CPU timers are cleared when a hand ends, a seat stands
   up, or the table closes; a reconnect gets the current state including its
   own cards and `turnEndsAt`.
-- Seating changes during a hand are queued and applied between hands, in
-  arrival order.
+- Seating changes during a hand apply at once: a newcomer waits for the next
+  hand, a leaver folds, and their seat empties when the hand ends.
 - The button skips empty seats and seats not dealt in.
 - A server restart ends every table (as for the other games); with free chips
   nothing is lost.
@@ -201,8 +205,8 @@ Practice games aren't recorded.
   blinds); `legalActions`; each CPU level choosing only legal actions; seeded
   simulations of thousands of hands asserting chips are conserved and every
   hand terminates; the copy check.
-- **Server**: `PokerGame` with fake timers — turn clock, sit-out after two
-  timeouts, stand-up after 5 minutes, seating queued mid-hand, rebuy, pause
+- **Table**: `PokerTable` with fake timers — turn clock, sit-out after two
+  timeouts, stand-up after 5 minutes, seating mid-hand, rebuy, pause
   below 2 players; `pokerView` hides what it must; real-socket games joining
   mid-hand, leaving, reconnecting; recording (on Postgres when
   `TEST_DATABASE_URL` is set), including that poker stays out of

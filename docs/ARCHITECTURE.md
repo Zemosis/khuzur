@@ -13,9 +13,11 @@ The shape of the thing:
 
 * A **main menu** as the hub — profile in the top right, settings, live server
   stats, and a horizontally scrollable rack of game modes.
-* **Multiple game modes**, currently Thirteen (Tiến lên, 4 players) and Muushig
-  (5 players). Rules in [thirteen-rulebook.md](thirteen-rulebook.md) and
-  [muushig-rulebook.md](muushig-rulebook.md).
+* **Multiple game modes**, currently Thirteen (Tiến lên, 4 players), Muushig
+  (5 players) and Poker (no-limit Hold'em, up to 6). Rules in
+  [thirteen-rulebook.md](thirteen-rulebook.md),
+  [muushig-rulebook.md](muushig-rulebook.md) and
+  [poker-rulebook.md](poker-rulebook.md).
 * **Real multiplayer** with strict anti-cheat. Hidden hands stay hidden, and
   the server is the only authority on what is a legal move.
 * **Persistent identity and progression** — profiles, coins, exp, levels, match
@@ -40,6 +42,7 @@ Honest status, as of the first deploy (2026-10-01).
 | Database schema, views | Built; applied automatically on server start |
 | **Thirteen** | **Playable.** Server-authoritative, reconnect handling, match recording |
 | **Muushig** | **Playable online and in practice.** Online: server-authoritative, up to 5 humans with CPUs in the empty seats, reconnect handling, match recording. Practice: 4 CPUs (Easy/Medium/Hard) in the browser |
+| **Poker** | **Playable online and in practice.** Free chips, 2–6 players, CPUs at free tables, joining between hands, recorded with its own stats |
 | Shop / economy | Not started; `coins` accrues in the DB |
 | Deployment | **Live** at https://khuzur.onrender.com — Render (site + game server) and Supabase (Postgres). See §9 |
 
@@ -56,7 +59,16 @@ practice it owns the game; online it plays the server's states through a queue,
 one at a time once the last has finished animating, so every move shows the
 same way it does in practice (§5).
 
-Both games are covered by a Vitest suite (`npm test`, config in `vitest.config.js`)
+**Poker runs in both places too.** The rules are `src/utils/poker/`
+(`hands`, `pots`, `engine`, `ai`) plus `table.js`, whose `PokerTable` runs a
+table over time: CPU turns, the turn clock, all-in run-outs, sitting out and
+the pause between hands. Practice runs `PokerTable` in the browser (no turn
+clock); online tables run byte-identical copies in `server/game/poker/`
+(`tests/unit/rules-copies.test.js` checks both games' copies). A poker lobby
+owns its table from creation: there is no waiting table and no rematch, and
+`src/pages/poker/GamePoker.jsx` applies each state as it arrives.
+
+All three games are covered by a Vitest suite (`npm test`, config in `vitest.config.js`)
 in three projects: `unit` (rules, CPU logic and seeded whole-match simulations,
 run against both the client and server copies of the logic), `server` (engine
 with fake timers, real-socket end-to-end against a spawned server, and
@@ -94,9 +106,9 @@ the free plan — see §9.
 
 ```
 src/
-  pages/          MainMenu, AvatarPaint, thirteen/, muushig/
+  pages/          MainMenu, AvatarPaint, thirteen/, muushig/, poker/
   components/     PixelCard (design primitives), TableChrome (every table's
-                  header and sidebar), auth/, thirteen/, muushig/
+                  header and sidebar), auth/, thirteen/, muushig/, poker/
   hooks/          useAuth (session + profile), useServerStats,
                   useTableMetrics (card sizes and small-screen layouts)
   lib/            api (HTTP client + session token), guestIdentity,
@@ -104,11 +116,13 @@ src/
   utils/          socket, SoundManager, avatarConstants,
                   + a client-side copy of the Thirteen rules (display only)
                   + muushig/ (the Muushig engine and CPU players)
+                  + poker/ (the Poker engine, CPU players and PokerTable)
 server/
   index.js        Socket.IO entry, auth middleware, lobby management
   game/           engine.js (ThirteenGame, redactState) + Thirteen rules modules
                   muushigGame.js (MuushigGame, muushigView), muushigStats.js
                   muushig/ (copies of src/utils/muushig — see §2)
+                  poker/ (copies of src/utils/poker — see §2)
   auth.js         sign-up/login, JWTs, profile routes (/api/auth/*)
   oauth.js        Google / Discord sign-in (/api/auth/oauth/*)
   persistence.js  match recording
@@ -233,6 +247,17 @@ come back as `move_rejected`. The page checks a move against its view first
 server deals the next round itself after the results screen; only the host
 can rematch.
 
+**Poker online** — the view is `viewFor(state, seat)` plus `turnMsLeft` and
+`started`: other hands are `{ hidden: true }` until shown, the deck is never
+sent, and no seat carries its `key` (the player key). Moves arrive as
+`poker_move { type, amount? }`. A newcomer sits in the first empty seat and is
+dealt in from the next hand; leaving stands the seat up (a hand in play
+folds) and no CPU takes it. The turn clock (`POKER_TURN_MS`) checks or folds
+for an absent player; two timeouts sit them out, and five minutes out
+(`POKER_KICK_MS`) sends `table_left { reason: "away" }` and removes them. The
+host can add or remove CPUs at any time and `close_table`, which sends everyone
+`table_left { reason: "closed" }`.
+
 **Host** — each player's state update carries `amHost`, so a player
 promoted when the host leaves gets the REMATCH button; the client trusts it over
 the router state it was opened with.
@@ -242,12 +267,14 @@ the router state it was opened with.
 Client emits: `create_lobby { gameType }`, `join_lobby`, `leave_lobby`,
 `get_public_lobbies { gameType }`, `leave_public_lobbies`, `check_game_status`,
 `add_cpu`, `remove_cpu`, `set_cpu_level`, `start_game`, `leave_page`, `request_move` (Thirteen),
-`muushig_move` (Muushig), `request_rematch`, `send_chat`, `ping_check`,
+`muushig_move` (Muushig), `poker_move`, `poker_rebuy`, `poker_sit_in`,
+`close_table` (Poker), `request_rematch`, `send_chat`, `ping_check`,
 `get_stats`.
 
 Server emits: `lobby_joined { gameType }`, `table_update`, `game_state_update`
-(Thirteen), `muushig_state` (Muushig), `move_rejected`,
-`public_lobbies_update`, `receive_chat`, `chat_rejected`, `error_message`.
+(Thirteen), `muushig_state` (Muushig), `poker_state` and `table_left` (Poker),
+`move_rejected`, `public_lobbies_update`, `receive_chat`, `chat_rejected`,
+`error_message`.
 
 Chat is flood-guarded per player (`server/chatGuard.js`): 6 messages back to
 back, then one a second, and the same text at most 3 times in a row within
@@ -380,6 +407,14 @@ report sends (`rounds_played`, `rounds_won`, `eaten`, `gone_in`, `folded`,
 and `folded`, `winner_seat` is the seat that swept all 5 piles (or null).
 Rewards are Thirteen's table; 5th place gets 4th's.
 
+**Poker** is recorded per table: one session from START until everyone leaves
+(`ended_reason = 'completed'`), a `game_rounds` row per hand, and per player
+`final_score` = net chips and `stats` = the hand tally (`hands_played`,
+`hands_won`, `net`, `biggest_pot`, `vpip_hands`, `showdowns`,
+`showdowns_won`), built up hand by hand in the roster (`recordHand`). There
+are no places, coins, exp or rating. `008_poker_stats.sql` keeps poker out of
+`player_match_history` and adds `player_poker_stats`.
+
 ### Deriving stats
 
 Nothing about a player's record is stored as a counter. These views compute it
@@ -394,6 +429,7 @@ all from the match rows, so they can never disagree with history:
 | `player_streaks` | Longest win/loss streak, and current streak (negative = losing) |
 | `round_seat_results` | Round-level detail, flattened |
 | `leaderboards` | Ranking board; a thin projection of `player_stats` |
+| `player_poker_stats` | Poker per player: tables, hands, chips won or lost, biggest pot, VPIP, showdowns |
 | `head_to_head(a, b)` | Function, not a view — the full pair cross-product is not something to materialise |
 
 Two deliberate choices: `avg_position` **excludes** matches the player walked
