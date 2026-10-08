@@ -537,3 +537,11 @@ html[data-motion="reduced"] .chat-bubble,
 html[data-motion="reduced"] .turn-arrow,
 html[data-motion="reduced"] .turn-edge { animation: none; }
 html[data-motion="reduced"] .turn-banner { animation: none; }
+
+/* Poker: the turn clock drains from full to empty over the time left. */
+@keyframes poker-clock {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+.poker-clock { transform-origin: left; animation: poker-clock linear forwards; }
+html[data-motion="reduced"] .poker-clock { animation: none; }
