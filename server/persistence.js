@@ -122,13 +122,14 @@ function rankSeats(state) {
  *
  * @param {Object} rec
  * @param {String}  rec.sessionId
- * @param {String}  rec.gameType    - 'thirteen' (default) | 'muushig'
+ * @param {String}  rec.gameType    - 'thirteen' (default) | 'muushig' | 'poker'
  * @param {Boolean} rec.completed   - true if the match played to game over
  * @param {String}  rec.endedReason - 'completed' | 'abandoned' | 'all_left'
  * @param {Date}    rec.finishedAt
  * @param {Array}   rec.roster - every seat ever occupied: { playerKey, userId,
  *                  name, tag, seatIndex, joinedAt, leftAt, leftEarly,
- *                  cpuTookOver, disconnectCount }
+ *                  cpuTookOver, disconnectCount, poker? }  (poker: the
+ *                  player's tally of hands, see recordHand in index.js)
  * @param {Array}   rec.rounds - per-round summaries from the engine
  * @param {Object}  rec.state - final game state
  */
@@ -137,8 +138,10 @@ export async function finishSession(rec) {
 
   const { state, roster, completed } = rec;
   const muushig = rec.gameType === "muushig";
+  // A poker table has no places: each player's result is the chips they won or lost.
+  const poker = rec.gameType === "poker";
   const finishedAt = rec.finishedAt || new Date();
-  const positionBySeat = completed && state ? (muushig ? muushigPlaces(state) : rankSeats(state)) : {};
+  const positionBySeat = completed && state && !poker ? (muushig ? muushigPlaces(state) : rankSeats(state)) : {};
   const rounds = rec.rounds || [];
 
   /** How many of each hand type a seat played this match (the profile's hand tally). */
@@ -206,7 +209,7 @@ export async function finishSession(rec) {
         rec.sessionId,
         completed ? "finished" : "abandoned",
         rec.endedReason || (completed ? "completed" : "abandoned"),
-        state?.roundNumber ?? null,
+        state?.roundNumber ?? state?.handNumber ?? null,
         roster.length,
         finishedAt,
       ],
@@ -255,7 +258,7 @@ export async function finishSession(rec) {
       const profile = seat.userId ? profiles.get(seat.userId) : null;
       const before = profile?.rating ?? (seat.userId ? DEFAULT_RATING : null);
       const delta = ratingDeltas.get(seat.playerKey);
-      const roundStats = roundStatsFor(seat.seatIndex);
+      const roundStats = poker ? { roundsWon: seat.poker?.hands_won ?? 0, stats: seat.poker ?? null } : roundStatsFor(seat.seatIndex);
 
       return {
         player_key: seat.playerKey,
@@ -263,7 +266,7 @@ export async function finishSession(rec) {
         guest_name: seat.userId ? null : seat.name,
         guest_tag: seat.userId ? null : seat.tag,
         seat_index: seat.seatIndex,
-        final_score: state?.players?.[seat.seatIndex]?.score ?? null,
+        final_score: poker ? (seat.poker?.net ?? 0) : (state?.players?.[seat.seatIndex]?.score ?? null),
         final_position: position,
         is_winner: position === 1,
         coins_earned: reward?.coins ?? 0,
@@ -279,6 +282,7 @@ export async function finishSession(rec) {
         stats: roundStats.stats ? JSON.stringify(roundStats.stats) : null,
       };
     });
+    // Poker chips are free: no coins, exp or games played until credits.
 
     for (const row of rows) {
       const cols = Object.keys(row);
@@ -291,7 +295,7 @@ export async function finishSession(rec) {
       );
     }
 
-    if (!completed) return rows;
+    if (!completed || poker) return rows;
 
     // Progression for signed-in players.
     for (const row of rows) {

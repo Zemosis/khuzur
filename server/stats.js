@@ -1,5 +1,7 @@
 // PLAYER STATS — everything the profile's Stats panel shows, for each game
-// filter (overall, Thirteen, Muushig) in one response so switching is instant.
+// filter (overall, Thirteen, Muushig, Poker) in one response so switching is
+// instant. Poker has no places, so it has its own figures (pokerStatsFor) and
+// stays out of the others, overall included.
 // Every figure is computed from the recorded matches (player_match_history),
 // online and solo alike, so it can never disagree with history. Rating is
 // deliberately left out for now.
@@ -112,10 +114,32 @@ async function statsFor(playerId, gameType) {
   return view;
 }
 
-/** { overall, thirteen, muushig } for one signed-in player. */
+/** Poker figures, from player_poker_stats: zeros for someone who hasn't played. */
+async function pokerStatsFor(playerId) {
+  const {
+    rows: [r = {}],
+  } = await pool.query("select * from player_poker_stats where player_id = $1", [playerId]);
+  const hands = int(r.hands_played);
+  const pct = (n) => (hands ? Math.round((int(n) / hands) * 1000) / 10 : null);
+  return {
+    sessions: int(r.sessions),
+    hands,
+    handsWon: int(r.hands_won),
+    winRate: pct(r.hands_won),
+    net: int(r.net),
+    biggestPot: int(r.biggest_pot),
+    vpip: pct(r.vpip_hands),
+    showdowns: int(r.showdowns),
+    showdownsWon: int(r.showdowns_won),
+    time: { totalSeconds: int(r.total_seconds), lastPlayedAt: r.last_played_at ?? null },
+  };
+}
+
+/** { overall, thirteen, muushig, poker } for one signed-in player. */
 export async function playerStats(playerId) {
-  const entries = await Promise.all(
-    Object.entries(VIEWS).map(async ([name, gameType]) => [name, await statsFor(playerId, gameType)]),
-  );
-  return Object.fromEntries(entries);
+  const [entries, poker] = await Promise.all([
+    Promise.all(Object.entries(VIEWS).map(async ([name, gameType]) => [name, await statsFor(playerId, gameType)])),
+    pokerStatsFor(playerId),
+  ]);
+  return { ...Object.fromEntries(entries), poker };
 }
