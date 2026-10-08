@@ -5,10 +5,12 @@ import React, { useEffect, useRef, useState } from "react";
 import PixelIcon from "./PixelIcon";
 import RulesModal from "./thirteen/RulesModal";
 import MuushigRules from "./muushig/MuushigRules";
+import PokerRules from "./poker/PokerRules";
 
 const GAMES = [
   { id: "thirteen", label: "Thirteen", color: "#f4c430", Rules: RulesModal },
   { id: "muushig", label: "Muushig", color: "#e85a7a", Rules: MuushigRules },
+  { id: "poker", label: "Poker", color: "#9bd14f", Rules: PokerRules },
 ];
 
 export default function RulebookPicker() {

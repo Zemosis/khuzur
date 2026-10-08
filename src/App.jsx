@@ -9,6 +9,8 @@ const GameThirteen = lazy(() => import("./pages/thirteen/GameThirteen"));
 const LobbySelection = lazy(() => import("./pages/thirteen/LobbySelection"));
 const GameMuushig = lazy(() => import("./pages/muushig/GameMuushig"));
 const LobbyMuushig = lazy(() => import("./pages/muushig/LobbyMuushig"));
+const GamePoker = lazy(() => import("./pages/poker/GamePoker"));
+const LobbyPoker = lazy(() => import("./pages/poker/LobbyPoker"));
 const AvatarPaint = lazy(() => import("./pages/AvatarPaint"));
 const Profile = lazy(() => import("./pages/Profile"));
 const JoinTable = lazy(() => import("./pages/JoinTable"));
@@ -27,6 +29,8 @@ function App() {
               <Route path="/game-13" element={<GameThirteen />} />
               <Route path="/lobby-muushig" element={<LobbyMuushig />} />
               <Route path="/game-muushig" element={<GameMuushig />} />
+              <Route path="/lobby-poker" element={<LobbyPoker />} />
+              <Route path="/game-poker" element={<GamePoker />} />
               <Route path="/avatar-paint" element={<AvatarPaint />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/join/:code" element={<JoinTable />} />

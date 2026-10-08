@@ -23,7 +23,7 @@ import { connectSocket } from "../utils/socket";
 const ACCENT = "#f4c430";
 const EXP_PER_LEVEL = 100;
 const PRESETS = ["1", "2", "3", "4", "5"];
-const GAME_NAMES = { thirteen: "Thirteen", muushig: "Muushig" };
+const GAME_NAMES = { thirteen: "Thirteen", muushig: "Muushig", poker: "Poker" };
 
 const num = (v) => (v == null ? null : Number(v));
 
@@ -195,6 +195,7 @@ const FILTERS = [
   ["overall", "Overall"],
   ["thirteen", "Thirteen"],
   ["muushig", "Muushig"],
+  ["poker", "Poker"],
 ];
 // Seats at the table, so how many places a match can end in.
 const PLACES = { thirteen: 4, muushig: 5 };
@@ -309,11 +310,52 @@ function MuushigFacts({ extras }) {
   );
 }
 
+// Poker has no places or wins: hands, chips won or lost, and how you play.
+function PokerSheet({ v }) {
+  const net = v.net > 0 ? `+${v.net}` : String(v.net);
+  return (
+    <>
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <StatTile label="Hands" value={v.hands} note={`at ${v.sessions} ${v.sessions === 1 ? "table" : "tables"}`} />
+        <StatTile label="Hands won" value={v.handsWon} note={v.winRate == null ? "-" : `${v.winRate}% of hands`} />
+        <StatTile label="Chips" value={net} note="won or lost, all tables" />
+        <StatTile label="Biggest pot" value={v.biggestPot} note="won in one hand" />
+      </div>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Section title="Poker">
+          <Facts
+            rows={[
+              ["Played the hand (VPIP)", v.vpip == null ? "-" : `${v.vpip}%`],
+              ["Showdowns won", `${v.showdownsWon} / ${v.showdowns}`],
+            ]}
+          />
+        </Section>
+        <Section title="Time">
+          <Facts
+            rows={[
+              ["Time played", formatDuration(v.time.totalSeconds)],
+              ["Last played", v.time.lastPlayedAt ? new Date(v.time.lastPlayedAt).toLocaleDateString() : "-"],
+            ]}
+          />
+        </Section>
+      </div>
+    </>
+  );
+}
+
 // Everything shows from the first visit: a player with no matches sees zeros
 // rather than an empty screen. Rating is hidden for now.
 function StatsSheet({ data }) {
   const [filter, setFilter] = useState("overall");
   const [recentView, setRecentView] = useState("list");
+  if (filter === "poker") {
+    return (
+      <div className="flex-1 flex flex-col gap-6 p-4 overflow-y-auto min-h-0">
+        <Toggle label="Game" options={FILTERS} value={filter} onChange={setFilter} />
+        <PokerSheet v={data.poker} />
+      </div>
+    );
+  }
   const v = data[filter];
   const deadPct = v.games ? Math.round((v.deadLast / v.games) * 100) : 0;
   const streak = v.streak.current;

@@ -35,10 +35,24 @@ const view = (over = {}) => ({
   recent: [],
   ...over,
 });
+const pokerView = (over = {}) => ({
+  sessions: 0,
+  hands: 0,
+  handsWon: 0,
+  winRate: null,
+  net: 0,
+  biggestPot: 0,
+  vpip: null,
+  showdowns: 0,
+  showdownsWon: 0,
+  time: { totalSeconds: 0, lastPlayedAt: null },
+  ...over,
+});
 const empty = {
   overall: view(),
   thirteen: view({ extras: {}, hands: {} }),
   muushig: view({ extras: {} }),
+  poker: pokerView(),
 };
 const match = (game, place, of, won, daysAgo) => ({
   id: `${game}-${daysAgo}`,
@@ -150,6 +164,24 @@ describe("Profile stats", () => {
     expect(within(muushig).getByText("Piles eaten").nextSibling).toHaveTextContent("14");
     expect(within(muushig).getByText("Went in / folded").nextSibling).toHaveTextContent("9 / 3");
     expect(within(muushig).getByText("Sweeps").nextSibling).toHaveTextContent("1");
+  });
+
+  it("the Poker tab shows hands and chips, not places", async () => {
+    const user = userEvent.setup();
+    await renderProfile({
+      ...empty,
+      poker: pokerView({ sessions: 3, hands: 120, handsWon: 30, winRate: 25, net: -340, biggestPot: 900, vpip: 28.5, showdowns: 20, showdownsWon: 11 }),
+    });
+    await user.click(within(screen.getByRole("group", { name: "Game" })).getByRole("button", { name: "Poker" }));
+    expect(tile("Hands")).toHaveTextContent("120");
+    expect(tile("Hands")).toHaveTextContent("at 3 tables");
+    expect(tile("Hands won")).toHaveTextContent("25% of hands");
+    expect(tile("Chips")).toHaveTextContent("-340");
+    expect(tile("Biggest pot")).toHaveTextContent("900");
+    const poker = section("Poker");
+    expect(within(poker).getByText("Played the hand (VPIP)").nextSibling).toHaveTextContent("28.5%");
+    expect(within(poker).getByText("Showdowns won").nextSibling).toHaveTextContent("11 / 20");
+    expect(screen.queryByText("Dead last")).not.toBeInTheDocument();
   });
 
   it("lists recent matches, or graphs their placings", async () => {

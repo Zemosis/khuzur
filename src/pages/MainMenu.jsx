@@ -199,6 +199,26 @@ const MainMenu = () => {
           onClick={() => navigate("/lobby-muushig")}
         />
         <GameTile
+          id="poker"
+          title="POKER"
+          tag="2-6 PLAYERS"
+          desc="No-limit Texas Hold'em. Two cards of your own, five on the table: bet, bluff and take the pot."
+          accent="moss"
+          cards={[
+            { rank: "A", suit: "♠" },
+            { rank: "A", suit: "♥" },
+            { rank: "K", suit: "♦" },
+            { rank: "K", suit: "♣" },
+            { rank: "Q", suit: "♠" },
+          ]}
+          difficulty={2}
+          lobbies={stats.lobbies?.poker}
+          hovered={hovered === "poker"}
+          onMouseEnter={() => setHovered("poker")}
+          onMouseLeave={() => setHovered(null)}
+          onClick={() => navigate("/lobby-poker")}
+        />
+        <GameTile
           id="locked"
           title="???"
           tag="COMING"
@@ -281,6 +301,13 @@ function GameTile({
       text: "#e85a7a",
       tagBg: "#e85a7a",
       tagText: "#3a0e1a",
+    },
+    moss: {
+      border: "#6a9a30",
+      bg: "#13240f",
+      text: "#9bd14f",
+      tagBg: "#9bd14f",
+      tagText: "#1a3a0e",
     },
     dusk: {
       border: "#2a234d",
@@ -430,7 +457,7 @@ function GameTile({
               </div>
             ) : (
               <PixelButton
-                color={accent === "gold" ? "gold" : "rose"}
+                color={{ gold: "gold", moss: "poison" }[accent] || "rose"}
                 size="md"
               >
                 PLAY
