@@ -26,7 +26,7 @@ import { TableHeader, TableSidebar, ConnectionSignal } from "../../components/Ta
 import { PixelCard } from "../../components/PixelCard";
 import OvalTable from "../../components/poker/OvalTable";
 import PokerSeat from "../../components/poker/PokerSeat";
-import { seatTags } from "../../components/poker/seatInfo";
+import { LEVEL_COLOR, actingOrder, ordinal, seatTags } from "../../components/poker/seatInfo";
 import BetControls from "../../components/poker/BetControls";
 import PokerScoreBoard from "../../components/poker/PokerScoreBoard";
 import PokerRules from "../../components/poker/PokerRules";
@@ -44,7 +44,6 @@ const CPUS = [
   { name: "Bot Mercury", variant: 1 },
 ];
 const AVATAR_COLOR = { 1: "#f4c430", 2: "#5fd4d6", 3: "#e85a7a", 4: "#9bd14f", 5: "#c5a8ff", custom: "#ead8b1" };
-const LEVEL_COLOR = { EASY: "#9bd14f", MEDIUM: "#f4c430", HARD: "#e85a7a" };
 const short = (name = "") => name.split(" #")[0];
 const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const running = (phase) => phase === PHASES.BETTING || phase === PHASES.RUNOUT;
@@ -150,7 +149,7 @@ function OnlinePoker({ lobbyId, playerName }) {
     rebuy: () => emit("poker_rebuy"),
     sitIn: () => emit("poker_sit_in"),
     start: () => emit("start_game"),
-    addCpu: (seat) => emit("add_cpu", { seat, level: "MEDIUM" }),
+    addCpu: (seat, level) => emit("add_cpu", { seat, level }),
     removeCpu: (seat) => emit("remove_cpu", { seat }),
     close: () => emit("close_table"),
     exit: () => {
@@ -245,7 +244,9 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
   const over = view.phase === PHASES.HAND_OVER;
   const winners = new Set(over ? view.result.won.flatMap((w, seat) => (w > 0 ? [seat] : [])) : []);
   const best = over ? [...winners].flatMap((seat) => view.result.hands[seat]?.best ?? []) : [];
-  const tagsFor = (seat) => seatTags(view.seats[seat], { isButton: view.button === seat && (inPlay || over), blind: inPlay ? blindOf[seat] : null, phase: view.phase });
+  const tagsFor = (seat) => seatTags(view.seats[seat], { phase: view.phase });
+  // Everyone still to act this round after the player on turn: 2ND, 3RD…
+  const placeOf = Object.fromEntries(actingOrder(view).map((seat, i) => [seat, i ? ordinal(i + 1) : null]));
 
   const banner = over
     ? [...winners].map((seat) => `${short(view.seats[seat]?.name)} wins ${view.result.won[seat]}${view.result.hands[seat] ? ` · ${view.result.hands[seat].label}` : ""}`).join("  ·  ")
@@ -279,6 +280,7 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
           face={p ? faceFor(seat) : null}
           tags={p ? tagsFor(seat) : []}
           isTurn={view.turn === seat}
+          place={placeOf[seat] ?? null}
           clockMs={view.turn === seat ? (view.turnMsLeft ?? null) : null}
           clockKey={`${view.received}-${view.turn}`}
           best={best}
@@ -286,14 +288,19 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
           cardWidth={layout === "full" ? 40 : 30}
           width={SEAT_W[layout]}
           isHost={isHost}
-          onAddCpu={isHost ? () => actions.addCpu(seat) : undefined}
+          onAddCpu={isHost ? (level) => actions.addCpu(seat, level) : undefined}
           onRemoveCpu={isHost ? () => actions.removeCpu(seat) : undefined}
         />
       </div>
     );
   };
   const others = Object.fromEntries([1, 2, 3, 4, 5].map((rel) => [rel, seatNode((me + rel) % MAX_SEATS)]));
-  const bets = Object.fromEntries(view.seats.map((p, seat) => [(seat - me + MAX_SEATS) % MAX_SEATS, inPlay && p ? p.bet : 0]));
+  const relOf = (seat) => (seat - me + MAX_SEATS) % MAX_SEATS;
+  // This street's bets; before the flop the blinds' chips say SB / BB.
+  const bets = Object.fromEntries(
+    view.seats.map((p, seat) => [relOf(seat), { amount: inPlay && p ? p.bet : 0, label: view.street === "PREFLOP" ? (blindOf[seat] ?? null) : null }]),
+  );
+  const dealer = (inPlay || over) && view.button != null ? { rel: relOf(view.button), seat: view.button } : null;
   const myHand = mine?.inHand && !mine.folded && mine.hole.every((c) => c.id) ? evaluate([...mine.hole, ...view.board]).name : null;
 
   return (
@@ -324,7 +331,7 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
 
       <div className="relative flex-1 grid min-h-0" style={{ gridTemplateColumns: compact ? "minmax(0, 1fr)" : "minmax(0, 1fr) 300px" }}>
         <div className={`relative flex flex-col min-h-0 ${narrow ? "px-2 pt-4 pb-2" : "px-4 py-2"}`}>
-          <OvalTable layout={layout} seats={others} bets={bets} board={view.board} pots={potsOf(view)} banner={banner} cardWidth={layout === "strip" ? Math.min(deckW, 40) : deckW}>
+          <OvalTable layout={layout} seats={others} bets={bets} dealer={dealer} board={view.board} pots={potsOf(view)} banner={banner} cardWidth={layout === "strip" ? Math.min(deckW, 40) : deckW}>
             <TurnBanner active={myTurn} />
           </OvalTable>
 
@@ -342,6 +349,11 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
                 </div>
                 <div className="flex flex-col gap-1.5 min-w-0">
                   <div className="flex gap-1 flex-wrap">
+                    {placeOf[view.mySeat] && (
+                      <span className="font-pixel-display text-[9px] leading-none px-1.5 py-1" style={{ backgroundColor: "#1f1a3d", color: "#f4c430", boxShadow: "0 0 0 2px #0a0712" }}>
+                        {placeOf[view.mySeat]}
+                      </span>
+                    )}
                     {tagsFor(view.mySeat).map((t) => (
                       <span key={t.label} className="font-pixel-display text-[9px] leading-none px-1.5 py-1" style={{ backgroundColor: t.bg, color: t.fg || "#1a1024", boxShadow: "0 0 0 2px #0a0712" }}>
                         {t.label}

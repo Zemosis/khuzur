@@ -1,12 +1,14 @@
 // POKER SEAT — one player around the oval: face, name and stack, their two
-// cards (backs, or faces once shown), and tags for the button, the blinds,
-// all-in, folded and sitting out. The seat on turn gets the gold TURN tag,
-// the bobbing arrow and the turn clock draining under the plate. An empty
-// seat is a dashed spot, with +CPU for the host.
+// cards (backs, or faces once shown), and tags for all-in, folded, sitting
+// out and a CPU's level. The seat on turn gets the gold TURN tag, the bobbing
+// arrow and the turn clock draining under the plate; the others still to act
+// this round show their place in line (2ND, 3RD…). An empty seat is a dashed
+// spot, with + CPU for the host, which asks for the CPU's level.
 
-import React from "react";
+import React, { useState } from "react";
 import { PixelAvatar, PixelCard } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
+import { LEVEL_COLOR } from "./seatInfo";
 
 const short = (name = "") => name.split(" #")[0];
 
@@ -23,25 +25,12 @@ function Tag({ label, bg, fg = "#1a1024" }) {
  * clockMs / clockKey: the turn clock's time left, restarted when the key changes.
  * best: card ids to light up (the winning hand at a showdown).
  * width: the plate's width; small plates (a phone's strip of five) shrink the face.
+ * place: this seat's place in line to act ("2ND"), or null.
+ * onAddCpu(level): the host adds a CPU here at EASY | MEDIUM | HARD.
  */
-export default function PokerSeat({ player, face, tags = [], isTurn = false, clockMs = null, clockKey, best = [], winner = false, cardWidth = 40, width = 132, isHost = false, onAddCpu, onRemoveCpu }) {
+export default function PokerSeat({ player, face, tags = [], isTurn = false, place = null, clockMs = null, clockKey, best = [], winner = false, cardWidth = 40, width = 132, isHost = false, onAddCpu, onRemoveCpu }) {
   const small = width < 120;
-  if (!player) {
-    return (
-      <div
-        className="flex flex-col items-center justify-center gap-2 font-pixel-display text-[9px] text-bone/50"
-        data-seat-plate
-        style={{ width, minHeight: small ? 64 : 84, border: "3px dashed #2a234d" }}
-      >
-        EMPTY
-        {isHost && onAddCpu && (
-          <button className="pixel-btn font-pixel-display text-[9px] px-2 py-1.5" style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }} onClick={onAddCpu}>
-            + CPU
-          </button>
-        )}
-      </div>
-    );
-  }
+  if (!player) return <EmptySeat width={width} small={small} onAddCpu={isHost ? onAddCpu : null} />;
 
   const dim = player.folded || player.sittingOut || player.leaving;
   return (
@@ -53,6 +42,7 @@ export default function PokerSeat({ player, face, tags = [], isTurn = false, clo
       )}
       <div className="flex gap-1 mb-1 flex-wrap justify-center min-h-[18px]">
         {isTurn && <Tag label="TURN" bg="#f4c430" />}
+        {place && <Tag label={place} bg="#1f1a3d" fg="#f4c430" />}
         {winner && <Tag label="WIN" bg="#9bd14f" fg="#1a3a0e" />}
         {tags.map((t) => (
           <Tag key={t.label} {...t} />
@@ -101,6 +91,54 @@ export default function PokerSeat({ player, face, tags = [], isTurn = false, clo
               />
             ),
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A dashed spot; for the host, + CPU opens a pick of the CPU's level. */
+function EmptySeat({ width, small, onAddCpu }) {
+  const [picking, setPicking] = useState(false);
+  return (
+    <div
+      className="relative flex flex-col items-center justify-center gap-2 font-pixel-display text-[9px] text-bone/50"
+      data-seat-plate
+      style={{ width, minHeight: small ? 64 : 84, border: "3px dashed #2a234d" }}
+    >
+      EMPTY
+      {onAddCpu && (
+        <button
+          className="pixel-btn font-pixel-display text-[9px] px-2 py-1.5"
+          style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}
+          onClick={() => setPicking((p) => !p)}
+          aria-haspopup="menu"
+          aria-expanded={picking}
+        >
+          + CPU
+        </button>
+      )}
+      {picking && (
+        <div
+          role="menu"
+          aria-label="CPU level"
+          className="absolute left-1/2 top-full z-40 mt-2 flex flex-col gap-1 p-1.5"
+          style={{ transform: "translateX(-50%)", backgroundColor: "#1f1a3d", border: "3px solid #0a0712", boxShadow: "4px 4px 0 #0a0712" }}
+        >
+          {["EASY", "MEDIUM", "HARD"].map((level) => (
+            <button
+              key={level}
+              role="menuitem"
+              className="pixel-hbtn font-pixel-display text-[9px] px-3 py-1.5 text-left"
+              style={{ color: LEVEL_COLOR[level] }}
+              onClick={() => {
+                setPicking(false);
+                onAddCpu(level);
+              }}
+            >
+              {level}
+            </button>
+          ))}
         </div>
       )}
     </div>

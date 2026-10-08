@@ -73,7 +73,9 @@ export default function BetControls({ legal, pot = 0, currentBet = 0, onMove, me
         max={legal.maxRaiseTo}
         value={amount}
         onChange={(e) => setAmount(Number(e.target.value))}
-        className="flex-1 min-w-[90px]"
+        className="pixel-range flex-1 min-w-[90px]"
+        // How far along the slider is, for its gold fill (see .pixel-range in index.css).
+        style={{ "--fill": `${Math.round(((clamp(amount) - legal.minRaiseTo) / Math.max(1, legal.maxRaiseTo - legal.minRaiseTo)) * 100)}%` }}
       />
       <input
         type="number"

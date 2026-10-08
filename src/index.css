@@ -545,3 +545,36 @@ html[data-motion="reduced"] .turn-banner { animation: none; }
 }
 .poker-clock { transform-origin: left; animation: poker-clock linear forwards; }
 html[data-motion="reduced"] .poker-clock { animation: none; }
+
+/* Poker: the pixel slider. A chunky dark track filled in gold up to the
+   amount (--fill, set by BetControls) and a square gold handle. */
+.pixel-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  background: linear-gradient(to right, #f4c430 0 var(--fill, 0%), #0a0712 var(--fill, 0%) 100%);
+  border: 3px solid #1f1a3d;
+  box-shadow: 0 0 0 2px #0a0712;
+  border-radius: 0;
+  cursor: pointer;
+}
+.pixel-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 26px;
+  background: #f4c430;
+  border: 3px solid #0a0712;
+  border-radius: 0;
+  box-shadow: inset 0 -4px 0 #c89820, 3px 3px 0 #0a0712;
+}
+.pixel-range::-moz-range-thumb {
+  width: 12px;
+  height: 20px;
+  background: #f4c430;
+  border: 3px solid #0a0712;
+  border-radius: 0;
+  box-shadow: inset 0 -4px 0 #c89820, 3px 3px 0 #0a0712;
+}
+.pixel-range::-moz-range-track { background: transparent; border: 0; }
+.pixel-range:focus-visible { outline: 3px solid #5fd4d6; outline-offset: 3px; }

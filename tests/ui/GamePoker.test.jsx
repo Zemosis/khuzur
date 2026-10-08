@@ -108,13 +108,48 @@ describe("poker table online", () => {
     await userEvent.click(screen.getByRole("button", { name: "START" }));
     expect(emitted("start_game")).toEqual([{ lobbyId: LOBBY }]);
     await userEvent.click(screen.getAllByRole("button", { name: "+ CPU" })[0]);
-    expect(emitted("add_cpu")[0]).toMatchObject({ lobbyId: LOBBY, level: "MEDIUM" });
+    await userEvent.click(screen.getByRole("menuitem", { name: "HARD" }));
+    expect(emitted("add_cpu")[0]).toMatchObject({ lobbyId: LOBBY, level: "HARD" });
     const broke = { ...waiting, seats: waiting.seats.map((p, i) => (i === 0 ? { ...p, stack: 0, sittingOut: true } : p)) };
     serverSends("poker_state", view(broke));
     await userEvent.click(screen.getByRole("button", { name: "REBUY" }));
     expect(emitted("poker_rebuy")).toEqual([{ lobbyId: LOBBY }]);
     await userEvent.click(screen.getByRole("button", { name: "CLOSE TABLE" }));
     expect(emitted("close_table")).toEqual([{ lobbyId: LOBBY }]);
+  });
+
+  it("CPUs show their level", async () => {
+    open();
+    await act(async () => {});
+    const s = named(tableWith([1000, null, 1000, null, null, null]));
+    const withCpu = { ...s, seats: s.seats.map((p, i) => (i === 2 ? { ...p, type: "AI", level: "EASY" } : p)) };
+    serverSends("poker_state", view(withCpu));
+    expect(screen.getByText("EASY")).toBeInTheDocument();
+  });
+
+  it("the dealer button sits on the felt, the blinds' chips say SB and BB, and the rest show their place in line", async () => {
+    open();
+    await act(async () => {});
+    const six = named(dealt(tableWith([1000, 1000, 1000, 1000, 1000, 1000]), { button: 0 }));
+    serverSends("poker_state", view(six));
+    expect(screen.getByTestId("dealer-button")).toHaveAttribute("data-seat", "0");
+    const bets = screen.getAllByTestId("bet");
+    expect(bets.map((b) => b.textContent)).toEqual(expect.arrayContaining([expect.stringContaining("SB"), expect.stringContaining("BB")]));
+    // Seat 3 is on turn; 4, 5, you (0), then the blinds follow.
+    expect(screen.getByText("2ND")).toBeInTheDocument();
+    expect(screen.getByText("6TH")).toBeInTheDocument();
+    expect(screen.queryByText("D", { selector: "span" })).not.toBeInTheDocument();
+  });
+
+  it("bets are stacks of chips colored by value", async () => {
+    open();
+    await act(async () => {});
+    let s = named(dealt(tableWith([1000, null, 1000, null, null, null]), { button: 0 }));
+    s = play(s, 0, { type: "raise", amount: 90 });
+    serverSends("poker_state", view(s));
+    const mine = screen.getAllByTestId("bet").find((b) => b.textContent.includes("90"));
+    const chips = [...mine.querySelectorAll("[data-chip]")].map((c) => c.dataset.chip);
+    expect(chips).toEqual(["25", "25", "25", "5", "5", "5"]);
   });
 
   it("a rejected move shows why; leaving the table goes back to the lobby", async () => {

@@ -37,6 +37,14 @@ describe("BetControls", () => {
     expect(onMove).toHaveBeenLastCalledWith({ type: "allin" });
   });
 
+  it("the slider is the pixel one, filled up to the amount", async () => {
+    setup();
+    const slider = screen.getByRole("slider", { name: "Raise slider" });
+    expect(slider).toHaveClass("pixel-range");
+    await userEvent.click(screen.getByRole("button", { name: "POT" })); // 105 of 50–1000
+    expect(slider.style.getPropertyValue("--fill")).toBe("6%");
+  });
+
   it("keeps a typed amount inside the limits", async () => {
     const onMove = setup();
     const box = screen.getByRole("spinbutton", { name: "Raise to" });
