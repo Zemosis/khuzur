@@ -92,6 +92,15 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
       expectLegal(decision, cards(hand), table);
     });
 
+    it("beats a full house with a poker (its four plus its lowest card)", () => {
+      const table = combo("2♦ 2♣ 2♥ A♠ A♥");
+      const hand = "9♦ 9♣ 9♥ 9♠ 4♣ K♦";
+      const { decision } = decideUnderPressure(difficulty, hand, table);
+      expect(decision.action).toBe("play");
+      expectLegal(decision, cards(hand), table);
+      expect(ids(decision.cards).sort()).toEqual(ids(cards("9♦ 9♣ 9♥ 9♠ 4♣")).sort());
+    });
+
     it("beats a same-suit flush with a higher top card", () => {
       const table = combo("4♥ 6♥ 8♥ J♥ Q♥");
       const hand = "3♥ 5♥ 7♥ 9♥ 10♥ K♥";

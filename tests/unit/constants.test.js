@@ -29,12 +29,12 @@ describe.each(COPIES)("constants (%s)", (_name, { constants: C }) => {
     expect(C.GAME_SETTINGS.CARDS_PER_PLAYER).toBe(13);
   });
 
-  it("ranks 5-card hands straight < flush < full house < straight flush < royal flush", () => {
+  it("ranks 5-card hands straight < flush < full house < poker < straight flush < royal flush", () => {
     const T = C.COMBO_TYPES;
-    const order = [T.STRAIGHT, T.FLUSH, T.FULL_HOUSE, T.STRAIGHT_FLUSH, T.ROYAL_FLUSH];
+    const order = [T.STRAIGHT, T.FLUSH, T.FULL_HOUSE, T.POKER, T.STRAIGHT_FLUSH, T.ROYAL_FLUSH];
     const strengths = order.map((t) => C.POKER_COMBO_STRENGTH[t]);
     expect(strengths).toEqual([...strengths].sort((a, b) => a - b));
-    expect(new Set(strengths).size).toBe(5);
+    expect(new Set(strengths).size).toBe(6);
   });
 
   it("names every combination type", () => {

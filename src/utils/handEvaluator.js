@@ -146,6 +146,18 @@ const validate5CardHand = (cards) => {
     };
   }
 
+  // Poker: 4 of a kind + any one card
+  const poker = checkPoker(cards);
+  if (poker) {
+    return {
+      type: COMBO_TYPES.POKER,
+      rank: poker.quadRank,
+      highCard: poker.highCard,
+      strength: POKER_COMBO_STRENGTH[COMBO_TYPES.POKER],
+      cards: poker.cards,
+    };
+  }
+
   // Full House: 3 of a kind + pair
   const fullHouse = checkFullHouse(cards);
   if (fullHouse) {
@@ -265,6 +277,24 @@ const checkFullHouse = (cards) => {
   return null;
 };
 
+/**
+ * Checks if cards form a poker (4 of a kind + any one card)
+ */
+const checkPoker = (cards) => {
+  const grouped = groupByRank(cards);
+  const quadRank = Object.keys(grouped).find((rank) => grouped[rank].length === 4);
+  if (!quadRank) return null;
+
+  const quadCards = grouped[quadRank];
+  // Laid out four first, then the extra card: 9-9-9-9-3
+  const extra = cards.find((card) => card.rank !== quadRank);
+  return {
+    quadRank: RANK_VALUES[quadRank],
+    highCard: quadCards[quadCards.length - 1],
+    cards: [...quadCards, extra],
+  };
+};
+
 // --------------------------------------------
 // COMBINATION COMPARISON
 // --------------------------------------------
@@ -329,7 +359,8 @@ const compare5CardHands = (combo1, combo2) => {
     return combo1.highCard.suitValue > combo2.highCard.suitValue;
   }
 
-  // Same hand type: compare by rank
+  // Same hand type: compare by rank (a poker's and a full house's is the
+  // rank of their four or triple, which no two hands share)
   if (combo1.rank !== combo2.rank) {
     return combo1.rank > combo2.rank;
   }

@@ -84,7 +84,8 @@ A combination can only be beaten by the **same kind**.
 | 5-card hand | see below | a stronger 5-card hand |
 
 There are **no bombs**. Four of a kind can't be played on a 2 or on anything other than
-another four of a kind.
+another four of a kind. With any fifth card added it becomes a **poker**, a 5-card hand
+(below).
 
 ### 5-card hands
 
@@ -97,8 +98,9 @@ Weakest to strongest. Any hand of a stronger **type** beats any hand of a weaker
    K-A-2-3-4 and Q-K-A-2-3 are not valid.
 2. **Flush:** five cards of one suit.
 3. **Full house:** a triple plus a pair.
-4. **Straight flush:** a straight all in one suit.
-5. **Royal flush:** 10-J-Q-K-A all in one suit.
+4. **Poker:** four of a kind plus any one card.
+5. **Straight flush:** a straight all in one suit.
+6. **Royal flush:** 10-J-Q-K-A all in one suit.
 
 ## 4. Breaking ties (same kind)
 
@@ -110,6 +112,7 @@ When two plays are the same kind, this decides which one is higher:
 | Straights, straight flushes | the highest card's rank, then its suit (in A-2-3-4-5 and 2-3-4-5-6 the highest card is the 5 or the 6) |
 | Flushes | the suit first, whatever the cards (a ♣ flush beats any ♦ flush); same suit: the highest card |
 | Full houses | the rank of the triple (then of the pair) |
+| Pokers | the rank of the four, whatever the extra card |
 
 ## 5. Scoring
 

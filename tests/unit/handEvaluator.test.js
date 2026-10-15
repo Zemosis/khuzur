@@ -20,6 +20,8 @@ describe.each(COPIES)("handEvaluator (%s)", (_name, { evaluator: E, constants: C
       ["flush", "3♥ 7♥ 9♥ J♥ K♥", T.FLUSH],
       ["full house", "8♦ 8♣ 8♠ 4♥ 4♠", T.FULL_HOUSE],
       ["full house, pair above triple", "4♦ 4♣ 4♠ K♥ K♠", T.FULL_HOUSE],
+      ["poker (four of a kind plus one)", "9♦ 9♣ 9♥ 9♠ 3♣", T.POKER],
+      ["poker, the extra card above the four", "4♦ 4♣ 4♥ 4♠ 2♠", T.POKER],
       ["straight flush", "5♣ 6♣ 7♣ 8♣ 9♣", T.STRAIGHT_FLUSH],
       ["straight flush J-Q-K-A-2", "J♠ Q♠ K♠ A♠ 2♠", T.STRAIGHT_FLUSH],
       ["straight flush A-2-3-4-5", "A♣ 2♣ 3♣ 4♣ 5♣", T.STRAIGHT_FLUSH],
@@ -46,6 +48,17 @@ describe.each(COPIES)("handEvaluator (%s)", (_name, { evaluator: E, constants: C
       expect(c.highCard.id).toBe("4♠");
     });
 
+    it("poker records the four's rank and lays the four out first", () => {
+      const c = combo("3♣ 9♦ 9♠ 9♥ 9♣");
+      expect(c.rank).toBe(C.RANK_VALUES["9"]);
+      expect(c.highCard.id).toBe("9♠");
+      expect(ids(c.cards)).toEqual(["9♦", "9♣", "9♥", "9♠", "3♣"]);
+    });
+
+    it("three of a kind plus two odd cards is not a hand", () => {
+      expect(combo("9♦ 9♣ 9♥ 3♣ 4♦")).toBeNull();
+    });
+
     it("a wraparound straight's top card is the end of the run, not the 2", () => {
       expect(combo("A♦ 2♠ 3♥ 4♣ 5♦").highCard.id).toBe("5♦");
       expect(combo("A♦ 2♠ 3♥ 4♣ 5♦").rank).toBe(C.RANK_VALUES["5"]);
@@ -69,7 +82,6 @@ describe.each(COPIES)("handEvaluator (%s)", (_name, { evaluator: E, constants: C
       ["Q-K-A-2-3 wraparound", "Q♦ K♣ A♥ 2♠ 3♦"],
       ["5 unrelated cards", "3♦ 5♣ 9♥ J♠ K♦"],
       ["two pair plus one", "3♦ 3♣ 9♥ 9♠ K♦"],
-      ["four of a kind plus kicker", "5♦ 5♣ 5♥ 5♠ 9♦"],
       ["6 cards", "3♦ 4♣ 5♥ 6♠ 7♦ 8♣"],
       ["13 cards", "3♦ 4♦ 5♦ 6♦ 7♦ 8♦ 9♦ 10♦ J♦ Q♦ K♦ A♦ 2♦"],
     ])("%s", (_label, hand) => {
@@ -132,6 +144,7 @@ describe.each(COPIES)("handEvaluator (%s)", (_name, { evaluator: E, constants: C
       ["straight", "10♦ J♣ Q♥ K♠ A♦"],
       ["flush", "3♥ 5♥ 7♥ 9♥ J♥"],
       ["full house", "3♦ 3♣ 3♠ 4♥ 4♠"],
+      ["poker", "3♦ 3♣ 3♥ 3♠ 4♠"],
       ["straight flush", "3♣ 4♣ 5♣ 6♣ 7♣"],
       ["royal flush", "10♦ J♦ Q♦ K♦ A♦"],
     ];
@@ -161,6 +174,11 @@ describe.each(COPIES)("handEvaluator (%s)", (_name, { evaluator: E, constants: C
       ["flush: same suit, lower top card", "3♥ 5♥ 7♥ 9♥ Q♥", "4♥ 6♥ 8♥ 10♥ K♥", false],
       ["full house: higher triple", "9♦ 9♣ 9♠ 3♥ 3♠", "8♦ 8♣ 8♠ A♥ A♠", true],
       ["full house: lower triple", "8♦ 8♣ 8♠ A♥ A♠", "9♦ 9♣ 9♠ 3♥ 3♠", false],
+      ["poker: higher four wins", "9♦ 9♣ 9♥ 9♠ 3♣", "8♦ 8♣ 8♥ 8♠ 2♠", true],
+      ["poker: lower four loses, whatever the extra card", "8♦ 8♣ 8♥ 8♠ 2♠", "9♦ 9♣ 9♥ 9♠ 3♣", false],
+      ["poker: a four of 2s is the highest poker", "2♦ 2♣ 2♥ 2♠ 3♦", "A♦ A♣ A♥ A♠ K♠", true],
+      ["poker beats the highest full house", "3♦ 3♣ 3♥ 3♠ 4♦", "2♦ 2♣ 2♥ A♠ A♥", true],
+      ["poker loses to the lowest straight flush", "K♦ K♣ K♥ K♠ A♠", "A♣ 2♣ 3♣ 4♣ 5♣", false],
       ["straight flush: higher top card", "4♥ 5♥ 6♥ 7♥ 8♥", "3♠ 4♠ 5♠ 6♠ 7♠", true],
       ["straight flush J-Q-K-A-2 still below royal", "J♠ Q♠ K♠ A♠ 2♠", "10♦ J♦ Q♦ K♦ A♦", false],
       ["straight flush A-2-3-4-5 is the lowest", "A♠ 2♠ 3♠ 4♠ 5♠", "3♦ 4♦ 5♦ 6♦ 7♦", false],

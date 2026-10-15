@@ -23,6 +23,7 @@ const HAND_TYPES = new Set([
   "STRAIGHT",
   "FLUSH",
   "FULL_HOUSE",
+  "POKER",
   "STRAIGHT_FLUSH",
   "ROYAL_FLUSH",
 ]);

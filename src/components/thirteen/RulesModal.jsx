@@ -308,7 +308,7 @@ export default function RulesModal({ onClose }) {
               </div>
               <Callout tone="warn" title="NO BOMBS">
                 Four of a kind <Key>doesn't cut</Key> other plays: it can't be played on a single 2 or a pair of 2s. It only
-                beats another four of a kind.
+                beats another four of a kind. Add any fifth card and it becomes a <Key>Poker</Key>, a 5-card hand.
               </Callout>
             </Section>
 
@@ -326,8 +326,9 @@ export default function RulesModal({ onClose }) {
                 />
                 <ComboRow name="2 · FLUSH" spec="3♥ 7♥ 9♥ J♥ K♥" beats="Any five cards of one suit." />
                 <ComboRow name="3 · FULL HOUSE" spec="Q♦ Q♣ Q♠ 4♥ 4♠" beats="A triple plus a pair." />
-                <ComboRow name="4 · STRAIGHT FLUSH" spec="5♠ 6♠ 7♠ 8♠ 9♠" beats="A straight, all in one suit." />
-                <ComboRow name="5 · ROYAL FLUSH" spec="10♦ J♦ Q♦ K♦ A♦" beats="10-J-Q-K-A of one suit. The best hand in the game." />
+                <ComboRow name="4 · POKER" spec="9♦ 9♣ 9♥ 9♠ 3♣" beats="Four of a kind plus any one card." />
+                <ComboRow name="5 · STRAIGHT FLUSH" spec="5♠ 6♠ 7♠ 8♠ 9♠" beats="A straight, all in one suit." />
+                <ComboRow name="6 · ROYAL FLUSH" spec="10♦ J♦ Q♦ K♦ A♦" beats="10-J-Q-K-A of one suit. The best hand in the game." />
               </div>
               <Callout tone="tip" title="STRAIGHTS ARE ALWAYS 5">
                 Runs longer or shorter than five cards aren't valid plays here — a straight is exactly <Key>5 cards</Key>.
@@ -350,6 +351,9 @@ export default function RulesModal({ onClose }) {
                 </li>
                 <li>
                   <Key>Full houses</Key> — the <Hi>triple's rank</Hi> decides.
+                </li>
+                <li>
+                  <Key>Pokers</Key> — the <Hi>four's rank</Hi> decides, whatever the extra card.
                 </li>
               </ul>
               <div className="flex flex-col gap-4 mt-2">

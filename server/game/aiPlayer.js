@@ -533,6 +533,7 @@ const findAll5CardCombos = (hand) => {
   combos.push(...findStraights(hand));
   combos.push(...findFlushes(hand));
   combos.push(...findFullHouses(hand));
+  combos.push(...findPokers(hand));
   return combos;
 };
 
@@ -594,6 +595,21 @@ const findFullHouses = (hand) => {
   }
 
   return fullHouses;
+};
+
+// Each four of a kind with the lowest card left over as its fifth.
+const findPokers = (hand) => {
+  const groups = groupByRank(hand);
+  const pokers = [];
+
+  for (const rank of Object.keys(groups)) {
+    if (groups[rank].length !== 4) continue;
+    const rest = hand.filter((c) => c.rank !== rank);
+    if (rest.length === 0) continue;
+    pokers.push([...groups[rank], findLowestCard(rest)]);
+  }
+
+  return pokers;
 };
 
 export const evaluateHandStrength = (hand) => {

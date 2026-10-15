@@ -69,6 +69,7 @@ export const COMBO_TYPES = {
   STRAIGHT: "STRAIGHT",
   FLUSH: "FLUSH",
   FULL_HOUSE: "FULL_HOUSE",
+  POKER: "POKER", // four of a kind plus any one card
   STRAIGHT_FLUSH: "STRAIGHT_FLUSH",
   ROYAL_FLUSH: "ROYAL_FLUSH",
 };
@@ -78,8 +79,9 @@ export const POKER_COMBO_STRENGTH = {
   [COMBO_TYPES.STRAIGHT]: 0,
   [COMBO_TYPES.FLUSH]: 1,
   [COMBO_TYPES.FULL_HOUSE]: 2,
-  [COMBO_TYPES.STRAIGHT_FLUSH]: 3,
-  [COMBO_TYPES.ROYAL_FLUSH]: 4,
+  [COMBO_TYPES.POKER]: 3,
+  [COMBO_TYPES.STRAIGHT_FLUSH]: 4,
+  [COMBO_TYPES.ROYAL_FLUSH]: 5,
 };
 
 // Human-readable names
@@ -91,6 +93,7 @@ export const COMBO_NAMES = {
   [COMBO_TYPES.STRAIGHT]: "Straight",
   [COMBO_TYPES.FLUSH]: "Flush",
   [COMBO_TYPES.FULL_HOUSE]: "Full House",
+  [COMBO_TYPES.POKER]: "Poker",
   [COMBO_TYPES.STRAIGHT_FLUSH]: "Straight Flush",
   [COMBO_TYPES.ROYAL_FLUSH]: "Royal Flush",
 };
