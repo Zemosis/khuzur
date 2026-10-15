@@ -41,7 +41,7 @@ export function verifyToken(token) {
   }
 }
 
-function requireUser(req, res, next) {
+export function requireUser(req, res, next) {
   const header = req.get("authorization") || "";
   const user = verifyToken(header.replace(/^Bearer\s+/i, ""));
   if (!user) return res.status(401).json({ error: "Not signed in" });
@@ -49,7 +49,14 @@ function requireUser(req, res, next) {
   next();
 }
 
-function requireDb(_req, res, next) {
+/** Like requireUser, but a guest (no token, or a bad one) passes through with req.user unset. */
+export function optionalUser(req, _res, next) {
+  const user = verifyToken((req.get("authorization") || "").replace(/^Bearer\s+/i, ""));
+  if (user) req.user = user;
+  next();
+}
+
+export function requireDb(_req, res, next) {
   if (!pool) return res.status(503).json({ error: "Accounts are not available on this server" });
   next();
 }

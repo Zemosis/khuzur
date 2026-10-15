@@ -58,14 +58,15 @@ export async function createSession({
   maxPlayers = 4,
   playerCount = 0,
   startedAt,
+  pokerTier = null,
 }) {
   if (!pool) return null;
 
   const { rows } = await pool.query(
     `insert into game_sessions (
        game_type, status, host_id, host_display_name, name, is_private,
-       lobby_code, max_players, current_player_count, started_at
-     ) values ($1, 'in_progress', $2, $3, $4, $5, $6, $7, $8, $9)
+       lobby_code, max_players, current_player_count, started_at, poker_tier
+     ) values ($1, 'in_progress', $2, $3, $4, $5, $6, $7, $8, $9, $10)
      returning id`,
     [
       gameType,
@@ -77,6 +78,7 @@ export async function createSession({
       maxPlayers,
       playerCount,
       startedAt || new Date(),
+      pokerTier,
     ],
   );
   return rows[0].id;
