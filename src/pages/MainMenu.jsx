@@ -242,7 +242,7 @@ const MainMenu = () => {
         <div className="checker-strip h-2" />
         <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 gap-y-1 px-4 sm:px-8 py-2 bg-void">
           <div className="font-pixel-body text-bone/60 text-sm">
-            v1.0.0 — patch{" "}
+            v1.1.0 — patch{" "}
             <span className="text-parchment">"CUTE RAY"</span>
             <span className="text-mist mx-2">|</span>
             <Link to="/privacy" className="underline hover:text-parchment">
