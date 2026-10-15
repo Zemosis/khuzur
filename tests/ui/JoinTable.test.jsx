@@ -20,6 +20,8 @@ const { handlers, fakeSocket, auth } = vi.hoisted(() => {
 const serverSends = (ev, data) => act(() => handlers[ev]?.forEach((fn) => fn(data)));
 
 vi.mock("../../src/utils/socket", () => ({ socket: fakeSocket, connectSocket: () => Promise.resolve() }));
+// JoinTable loads credits when a credit table asks for a buy-in.
+vi.mock("../../src/lib/api", () => ({ api: vi.fn(async () => ({})) }));
 vi.mock("../../src/hooks/useAuth", () => ({
   useAuth: () => ({ identity: { name: "FRIEND", tag: "0007", avatar: "2" }, loading: auth.loading }),
 }));

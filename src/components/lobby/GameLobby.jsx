@@ -26,6 +26,12 @@ import { INK, TONES, inputStyle } from "../pixelTokens";
 import SettingsModal from "../SettingsModal";
 import LoginModal from "../auth/LoginModal";
 import { gameRoute } from "../../lib/games";
+import BalancePanel from "../credits/BalancePanel";
+import CreditHostPanel from "../credits/CreditHostPanel";
+import BuyInPanel from "../credits/BuyInPanel";
+import ClaimButton from "../credits/ClaimButton";
+import { useCredits } from "../../hooks/useCredits";
+import { TIERS, buyInRange } from "../../utils/poker/tiers";
 
 const CODE_LENGTH = 6;
 const EXP_PER_LEVEL = 100;
@@ -324,6 +330,11 @@ function TablesPanel({ game, lobbies, onJoin, onRefresh }) {
                     >
                       {lobby.inProgress ? "PLAYING" : "WAITING"}
                     </span>
+                    {lobby.tier && (
+                      <span className="font-pixel-display text-[8px] px-1.5 py-1 shrink-0" style={{ backgroundColor: "#c89820", color: INK }}>
+                        {lobby.tier} {TIERS[lobby.tier].smallBlind}/{TIERS[lobby.tier].bigBlind}
+                      </span>
+                    )}
                   </div>
                   <div className="font-pixel-body text-[18px] text-bone/60 leading-none mt-1 truncate">
                     {lobby.id}
@@ -356,7 +367,7 @@ function TablesPanel({ game, lobbies, onJoin, onRefresh }) {
 
 export default function GameLobby({ game }) {
   const navigate = useNavigate();
-  const { identity } = useAuth();
+  const { identity, isGuest } = useAuth();
   const [lobbies, setLobbies] = useState([]);
   const [error, setError] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -364,6 +375,16 @@ export default function GameLobby({ game }) {
 
   const playerName = `${identity.name} #${identity.tag}`;
   const ev = game.events;
+  // A game with credits (poker) has FREE and CREDITS tabs.
+  const [mode, setMode] = useState("free");
+  const credit = !!game.credits && mode === "credits";
+  const { credits, error: creditsError, busy: claiming, refresh: refreshCredits, claim } = useCredits({ enabled: !!game.credits });
+  // The buy-in panel: { tier, tableName, lobbyId? | create: { name, isPrivate }, busy, error }.
+  const [buyIn, setBuyIn] = useState(null);
+  const buyInRef = useRef(null); // the socket handlers read the panel without re-subscribing
+  useEffect(() => {
+    buyInRef.current = buyIn;
+  }, [buyIn]);
 
   useEffect(() => {
     connectSocket(identity);
@@ -375,16 +396,19 @@ export default function GameLobby({ game }) {
     // The table may be another game's (a code typed here): open the page it belongs to.
     const onJoined = (data) => navigate(data.gameType ? gameRoute(data.gameType) : game.route, { state: { ...data, playerName } });
     const onError = (msg) => {
+      if (buyInRef.current) return setBuyIn((b) => b && { ...b, busy: false, error: String(msg) });
       setError(msg);
       clearTimeout(errorTimer);
       errorTimer = setTimeout(() => setError(""), 4000);
     };
+    const onTableInfo = ({ lobbyId, name, tier }) => setBuyIn({ tier, tableName: name, lobbyId, busy: false, error: "" });
 
     refresh();
     socket.on("connect", refresh);
     socket.on(ev.listUpdate, setLobbies);
     socket.on(ev.joined, onJoined);
     socket.on("error_message", onError);
+    socket.on("credit_table_info", onTableInfo);
     return () => {
       // Off this screen the list's updates are just traffic.
       if (ev.unlist) socket.emit(ev.unlist);
@@ -393,20 +417,29 @@ export default function GameLobby({ game }) {
       socket.off(ev.listUpdate, setLobbies);
       socket.off(ev.joined, onJoined);
       socket.off("error_message", onError);
+      socket.off("credit_table_info", onTableInfo);
     };
   }, [ev, game.id, game.route, navigate, playerName]);
 
   function createTable(name, isPrivate) {
-    socket.emit(ev.create, {
-      lobbyName: name.trim() || `${identity.name}'s table`,
-      playerName,
-      isPrivate,
-      gameType: game.id,
-    });
+    socket.emit(ev.create, { lobbyName: name.trim() || `${identity.name}'s table`, playerName, isPrivate, gameType: game.id });
+  }
+
+  function createCreditTable(name, tier, isPrivate) {
+    setBuyIn({ tier, tableName: name.trim() || `${identity.name}'s table`, create: { isPrivate }, busy: false, error: "" });
   }
 
   function joinTable(lobbyId) {
+    const table = lobbies.find((l) => l.id === lobbyId);
+    if (table?.tier) return setBuyIn({ tier: table.tier, tableName: table.name, lobbyId, busy: false, error: "" });
     socket.emit(ev.join, { lobbyId, playerName });
+  }
+
+  function confirmBuyIn(amount) {
+    setBuyIn((b) => ({ ...b, busy: true, error: "" }));
+    if (buyIn.create) {
+      socket.emit(ev.create, { lobbyName: buyIn.tableName, playerName, isPrivate: buyIn.create.isPrivate, gameType: game.id, tier: buyIn.tier, buyIn: amount });
+    } else socket.emit(ev.join, { lobbyId: buyIn.lobbyId, playerName, buyIn: amount });
   }
 
   function startPractice(difficulty) {
@@ -438,20 +471,54 @@ export default function GameLobby({ game }) {
         </div>
       )}
 
+      {game.credits && (
+        <div role="tablist" aria-label="Stakes" className="flex gap-2 shrink-0" style={{ padding: "var(--gap) var(--gap) 0" }}>
+          {[
+            ["free", "Free"],
+            ["credits", "Credits"],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={mode === id}
+              onClick={() => setMode(id)}
+              className="pixel-btn font-pixel-display text-[11px] uppercase px-4 py-2.5"
+              style={
+                mode === id
+                  ? { backgroundColor: game.accent.main, borderColor: game.accent.deep, color: INK }
+                  : { backgroundColor: "#1f1a3d", borderColor: INK, color: "#ead8b1" }
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <main
         className="flex-1 min-h-0 w-full flex flex-col lg:grid lg:grid-cols-[clamp(380px,24vw,480px)_minmax(0,1fr)] overflow-y-auto"
         style={{ padding: "var(--gap)", gap: "var(--gap)" }}
       >
         <div className="grid shrink-0 lg:grid-rows-[auto_repeat(3,minmax(min-content,1fr))]" style={{ gap: "var(--gap)" }}>
           <AdventurerCard game={game} onSignIn={() => setShowLogin(true)} />
-          <HostPanel game={game} onCreate={createTable} />
-          <JoinPanel onJoin={joinTable} />
-          <PracticePanel onStart={startPractice} />
+          {credit ? (
+            <>
+              <BalancePanel credits={credits} isGuest={isGuest} error={creditsError} onSignIn={() => setShowLogin(true)} onClaim={claim} claiming={claiming} />
+              <CreditHostPanel defaultName={game.defaultTableName} disabled={isGuest || !credits?.canPlay} onCreate={createCreditTable} />
+              <JoinPanel onJoin={joinTable} />
+            </>
+          ) : (
+            <>
+              <HostPanel game={game} onCreate={createTable} />
+              <JoinPanel onJoin={joinTable} />
+              <PracticePanel onStart={startPractice} />
+            </>
+          )}
         </div>
         <div className="shrink-0 h-[420px] lg:h-auto lg:min-h-0">
           <TablesPanel
             game={game}
-            lobbies={lobbies}
+            lobbies={game.credits ? lobbies.filter((l) => !!l.tier === credit) : lobbies}
             onJoin={joinTable}
             onRefresh={() => socket.emit(ev.list)}
           />
@@ -460,6 +527,21 @@ export default function GameLobby({ game }) {
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
+      {buyIn && credits && (
+        <BuyInPanel
+          tier={buyIn.tier}
+          tableName={buyIn.tableName}
+          balance={credits.balance}
+          range={buyInRange(buyIn.tier, credits.balance, credits.rathole?.[buyIn.tier])}
+          rathole={credits.rathole?.[buyIn.tier]}
+          busy={buyIn.busy}
+          error={buyIn.error}
+          onConfirm={confirmBuyIn}
+          onCancel={() => setBuyIn(null)}
+        >
+          <ClaimButton claim={credits.claim} onClaim={() => claim().then(refreshCredits)} busy={claiming} />
+        </BuyInPanel>
+      )}
     </div>
   );
 }

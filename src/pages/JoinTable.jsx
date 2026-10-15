@@ -6,6 +6,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { socket, connectSocket } from "../utils/socket";
 import { useAuth } from "../hooks/useAuth";
 import { gameRoute } from "../lib/games";
+import BuyInPanel from "../components/credits/BuyInPanel";
+import { useCredits } from "../hooks/useCredits";
+import { buyInRange } from "../utils/poker/tiers";
 
 export default function JoinTable() {
   const { code = "" } = useParams();
@@ -14,6 +17,8 @@ export default function JoinTable() {
   // would seat a signed-in player under their guest name.
   const { identity, loading } = useAuth();
   const [error, setError] = useState("");
+  const { credits, refresh } = useCredits({ enabled: false });
+  const [table, setTable] = useState(null); // a credit table asking for a buy-in: { tier, name, busy, error }
   const lobbyId = code.trim().toUpperCase();
   const playerName = `${identity.name} #${identity.tag}`;
 
@@ -21,11 +26,16 @@ export default function JoinTable() {
     if (loading) return;
     const join = () => socket.emit("join_lobby", { lobbyId, playerName });
     const onJoined = (data) => navigate(gameRoute(data.gameType), { replace: true, state: { ...data, playerName } });
-    const onError = (msg) => setError(String(msg || "Lobby not found"));
+    const onTableInfo = ({ name, tier }) => {
+      refresh();
+      setTable({ name, tier, busy: false, error: "" });
+    };
+    const onError = (msg) => setTable((t) => (t ? { ...t, busy: false, error: String(msg) } : (setError(String(msg || "Lobby not found")), t)));
 
     socket.on("connect", join);
     socket.on("lobby_joined", onJoined);
     socket.on("error_message", onError);
+    socket.on("credit_table_info", onTableInfo);
     connectSocket(identity).then(() => {
       if (socket.connected) join();
     });
@@ -33,6 +43,7 @@ export default function JoinTable() {
       socket.off("connect", join);
       socket.off("lobby_joined", onJoined);
       socket.off("error_message", onError);
+      socket.off("credit_table_info", onTableInfo);
     };
     // Join once per code, after the session has loaded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -54,6 +65,22 @@ export default function JoinTable() {
         </>
       ) : (
         <div className="font-pixel-display text-[14px] text-glow-gold blink">JOINING TABLE {lobbyId}...</div>
+      )}
+      {table && credits && (
+        <BuyInPanel
+          tier={table.tier}
+          tableName={table.name}
+          balance={credits.balance}
+          range={buyInRange(table.tier, credits.balance, credits.rathole?.[table.tier])}
+          rathole={credits.rathole?.[table.tier]}
+          busy={table.busy}
+          error={table.error}
+          onConfirm={(amount) => {
+            setTable((t) => ({ ...t, busy: true, error: "" }));
+            socket.emit("join_lobby", { lobbyId, playerName, buyIn: amount });
+          }}
+          onCancel={() => navigate("/lobby-poker")}
+        />
       )}
     </div>
   );

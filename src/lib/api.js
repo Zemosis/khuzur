@@ -23,12 +23,12 @@ export function setToken(token) {
   }
 }
 
-/** Calls /api/auth/<path>. Throws an Error carrying the server's message and HTTP status. */
-export async function api(path, { method = "GET", body } = {}) {
+/** Calls <base><path> (base: /api/auth unless given). Throws an Error carrying the server's message and HTTP status. */
+export async function api(path, { method = "GET", body, base = "/api/auth" } = {}) {
   const token = getToken();
   let res;
   try {
-    res = await fetch(`${SERVER_URL}/api/auth${path}`, {
+    res = await fetch(`${SERVER_URL}${base}${path}`, {
       method,
       headers: {
         ...(body ? { "Content-Type": "application/json" } : {}),
