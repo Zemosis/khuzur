@@ -1,6 +1,6 @@
 // MAIN MENU - Pixel Retro Landing Page
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   PixelCard,
@@ -16,6 +16,7 @@ import PlayerMenu from "../components/auth/PlayerMenu";
 import SettingsModal from "../components/SettingsModal";
 import PixelIcon from "../components/PixelIcon";
 import RulebookPicker from "../components/RulebookPicker";
+import { reducedMotion } from "../utils/motion";
 
 const MainMenu = () => {
   const navigate = useNavigate();
@@ -88,17 +89,11 @@ const MainMenu = () => {
           onSelectAvatar={(v) => updateProfile({ avatar: v }).catch(console.error)}
           onPaint={() => navigate("/avatar-paint")}
           onViewProfile={() => navigate("/profile")}
+          onSignIn={() => setShowLogin(true)}
+          onSignOut={signOut}
         />
+        {/* Signing in and out lives in the player menu and in Settings. */}
         <div className="flex items-center gap-2 sm:gap-3 max-sm:w-full max-sm:justify-between">
-          {isGuest ? (
-            <PixelButton color="gold" size="md" className="max-sm:px-3 whitespace-nowrap" onClick={() => setShowLogin(true)}>
-              <span>Sign In</span>
-            </PixelButton>
-          ) : (
-            <PixelButton color="dusk" size="md" className="max-sm:px-3 whitespace-nowrap" onClick={signOut}>
-              <span>Sign Out</span>
-            </PixelButton>
-          )}
           <RulebookPicker />
           <button
             className="pixel-btn font-pixel-display text-xs px-4 py-2.5 uppercase relative max-sm:px-3 max-[359px]:hidden"
@@ -166,8 +161,8 @@ const MainMenu = () => {
         </div>
       </div>
 
-      {/* GAME CARDS */}
-      <div className="relative flex-1 flex flex-col items-center sm:flex-row sm:flex-wrap sm:items-start sm:justify-center gap-8 sm:gap-6 lg:gap-10 px-4 lg:px-8 pt-2 pb-8">
+      {/* GAME CARDS: one row that scrolls sideways once the games outgrow it */}
+      <GameRail>
         <GameTile
           id="13"
           title="THIRTEEN"
@@ -240,7 +235,7 @@ const MainMenu = () => {
           onMouseEnter={() => setHovered("locked")}
           onMouseLeave={() => setHovered(null)}
         />
-      </div>
+      </GameRail>
 
       {/* FOOTER */}
       <div className="relative">
@@ -278,10 +273,90 @@ const MainMenu = () => {
           initialSetup={needsProfileSetup}
         />
       )}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          account={{
+            isGuest,
+            onSignIn: () => setShowLogin(true),
+            onSignOut: signOut,
+          }}
+        />
+      )}
     </div>
   );
 };
+
+// The game tiles in one sideways-scrolling row. Pixel arrows either side step
+// it one tile at a time; they only show when the row doesn't fit, and each
+// greys out at its end. The tiles stay centred while they all fit.
+function GameRail({ children }) {
+  const railRef = useRef(null);
+  const [edges, setEdges] = useState({ overflow: false, start: true, end: true });
+
+  const measure = useCallback(() => {
+    const el = railRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    setEdges({ overflow: max > 1, start: el.scrollLeft <= 1, end: el.scrollLeft >= max - 1 });
+  }, []);
+
+  useEffect(() => {
+    measure();
+    window.addEventListener("resize", measure);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    if (ro && railRef.current) ro.observe(railRef.current.firstElementChild);
+    return () => {
+      window.removeEventListener("resize", measure);
+      ro?.disconnect();
+    };
+  }, [measure]);
+
+  const step = (dir) => {
+    const el = railRef.current;
+    const tile = el?.firstElementChild?.firstElementChild;
+    if (!el || !tile) return;
+    const gap = parseFloat(getComputedStyle(el.firstElementChild).columnGap) || 0;
+    el.scrollBy({ left: dir * (tile.offsetWidth + gap), behavior: reducedMotion() ? "auto" : "smooth" });
+  };
+
+  const arrow = (dir) => (
+    <button
+      type="button"
+      onClick={() => step(dir)}
+      disabled={dir < 0 ? edges.start : edges.end}
+      aria-label={dir < 0 ? "Previous games" : "More games"}
+      className="pixel-btn flex-none self-center flex items-center justify-center"
+      style={{
+        width: 40,
+        height: 40,
+        padding: 0,
+        backgroundColor: "#463a78",
+        borderColor: "#2a234d",
+        color: "#ead8b1",
+        visibility: edges.overflow ? "visible" : "hidden",
+      }}
+    >
+      <PixelIcon name={dir < 0 ? "left" : "right"} size={14} />
+    </button>
+  );
+
+  return (
+    <div className="relative flex-1 flex items-start gap-2 sm:gap-4 px-2 sm:px-6 pt-2 pb-8 min-w-0">
+      {arrow(-1)}
+      {/* Padding inside the rail leaves room for the tiles' lift and outline. */}
+      <div
+        ref={railRef}
+        onScroll={measure}
+        className="game-rail flex-1 min-w-0 overflow-x-auto snap-x snap-mandatory scroll-px-3"
+        style={{ scrollbarWidth: "none" }}
+      >
+        <div className="flex w-max mx-auto gap-6 lg:gap-10 px-3 pt-4 pb-6">{children}</div>
+      </div>
+      {arrow(1)}
+    </div>
+  );
+}
 
 function GameTile({
   title,
@@ -333,7 +408,7 @@ function GameTile({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={!locked ? onClick : undefined}
-      className="cursor-pointer transition-transform w-full max-w-[340px] sm:w-auto sm:max-w-[320px] sm:flex-[1_1_280px]"
+      className="cursor-pointer transition-transform flex-none snap-start w-[min(300px,calc(100vw-128px))]"
       style={{
         transform: hovered && !locked ? "translateY(-8px)" : "translateY(0)",
         transition: "transform 120ms ease",

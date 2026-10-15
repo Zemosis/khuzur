@@ -30,7 +30,9 @@ export const MotionToggle = ({ className = "text-[10px] px-3 py-2.5" }) => {
   );
 };
 
-const SettingsModal = ({ onClose }) => {
+// `account` (main menu only): { isGuest, onSignIn, onSignOut } adds a small
+// sign in / sign out button under the sliders.
+const SettingsModal = ({ onClose, account = null }) => {
   const [isMuted, setIsMuted] = useState(soundManager.isMuted);
   const [volumes, setVolumes] = useState({
     master: Math.round(soundManager.volumes.master * 100),
@@ -119,6 +121,19 @@ const SettingsModal = ({ onClose }) => {
               className="w-full pixel-range"
             />
           </div>
+
+          {account && (
+            <button
+              onClick={() => {
+                onClose();
+                (account.isGuest ? account.onSignIn : account.onSignOut)();
+              }}
+              className="pixel-btn font-pixel-display text-[9px] px-3 py-2 self-end"
+              style={{ backgroundColor: "#2a234d", borderColor: "#1a1530", color: "#ead8b1" }}
+            >
+              {account.isGuest ? "SIGN IN" : "SIGN OUT"}
+            </button>
+          )}
         </div>
       </div>
     </div>

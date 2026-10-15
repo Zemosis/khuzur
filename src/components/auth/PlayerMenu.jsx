@@ -3,6 +3,7 @@
 // your painted avatar, + to paint one) and a link to your profile and stats.
 // Signed in, the badge also shows your credit balance.
 // Guests can't save an avatar, so they get a note instead of the switch.
+// The menu ends with Sign in (guests) or Sign out.
 
 import React, { useEffect, useRef, useState } from "react";
 import { PixelAvatar } from "../PixelCard";
@@ -21,7 +22,7 @@ const pickStyle = (selected) => ({
   flexShrink: 0,
 });
 
-export default function PlayerMenu({ identity, isGuest, credits = null, onSelectAvatar, onPaint, onViewProfile }) {
+export default function PlayerMenu({ identity, isGuest, credits = null, onSelectAvatar, onPaint, onViewProfile, onSignIn, onSignOut }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const current = String(identity.avatar);
@@ -149,6 +150,19 @@ export default function PlayerMenu({ identity, isGuest, credits = null, onSelect
             <PixelIcon name="user" size={12} />
             View profile & stats
           </button>
+          {(isGuest ? onSignIn : onSignOut) && (
+            <button
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                (isGuest ? onSignIn : onSignOut)();
+              }}
+              className={`pixel-hbtn flex items-center gap-2 px-2 py-2 font-pixel-display text-[10px] uppercase text-left ${isGuest ? "text-glow-gold" : "text-bone/80"}`}
+            >
+              <PixelIcon name={isGuest ? "key" : "back"} size={12} />
+              {isGuest ? "Sign in" : "Sign out"}
+            </button>
+          )}
         </div>
       )}
     </div>

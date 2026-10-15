@@ -5,7 +5,7 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import MainMenu from "../../src/pages/MainMenu";
 
 let stats;
-const { auth } = vi.hoisted(() => ({ auth: { isGuest: true, updateProfile: null } }));
+const { auth } = vi.hoisted(() => ({ auth: { isGuest: true, updateProfile: null, signOut: null } }));
 
 vi.mock("../../src/utils/socket", () => ({ socket: {}, connectSocket: () => {} }));
 const { credits } = vi.hoisted(() => ({ credits: { balance: 2340, notice: null } }));
@@ -16,7 +16,7 @@ vi.mock("../../src/hooks/useAuth", () => ({
     identity: { name: "TESTER", tag: "0001", avatar: "1" },
     isGuest: auth.isGuest,
     needsProfileSetup: false,
-    signOut: () => {},
+    signOut: auth.signOut,
     updateProfile: auth.updateProfile,
   }),
 }));
@@ -31,6 +31,7 @@ const renderMenu = () =>
 beforeEach(() => {
   auth.isGuest = true;
   auth.updateProfile = vi.fn(async () => {});
+  auth.signOut = vi.fn();
   stats = { connected: true, online: 3, tables: 2, ping: 12, lobbies: { thirteen: 2, muushig: 0 } };
 });
 
@@ -122,6 +123,44 @@ describe("MainMenu", () => {
     await user.click(badge);
     await user.click(screen.getByText("KHUZUR"));
     expect(screen.queryByRole("menu", { name: "Player menu" })).not.toBeInTheDocument();
+  });
+
+  it("keeps sign in / out off the top bar: they live in the player menu", async () => {
+    const user = userEvent.setup();
+    auth.isGuest = false;
+    renderMenu();
+    expect(screen.queryByRole("button", { name: /sign out/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /TESTER #0001/ }));
+    await user.click(screen.getByRole("menuitem", { name: /sign out/i }));
+    expect(auth.signOut).toHaveBeenCalled();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("a guest signs in from the player menu", async () => {
+    const user = userEvent.setup();
+    renderMenu();
+    expect(screen.queryByRole("button", { name: /^sign in$/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /TESTER #0001/ }));
+    await user.click(screen.getByRole("menuitem", { name: /sign in/i }));
+    expect(screen.queryByRole("menu", { name: "Player menu" })).not.toBeInTheDocument();
+  });
+
+  it("Settings also signs you out", async () => {
+    const user = userEvent.setup();
+    auth.isGuest = false;
+    renderMenu();
+    await user.click(screen.getByTitle("Settings"));
+    await user.click(screen.getByRole("button", { name: "SIGN OUT" }));
+    expect(auth.signOut).toHaveBeenCalled();
+    expect(screen.queryByText("SETTINGS")).not.toBeInTheDocument();
+  });
+
+  it("the game row's arrows stay hidden while every game fits", () => {
+    renderMenu();
+    expect(screen.queryByRole("button", { name: "More games" })).not.toBeInTheDocument();
+    const prev = screen.getByLabelText("Previous games");
+    expect(prev).toBeDisabled();
+    expect(prev).not.toBeVisible();
   });
 
   it("opens either game's rulebook from the Rules picker", async () => {
