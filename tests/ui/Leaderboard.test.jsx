@@ -20,7 +20,10 @@ const render_ = async (body) => {
   await act(async () => {});
 };
 
-beforeEach(() => apiMock.mockReset());
+// Braces: a function returned from beforeEach is run as teardown, and mockReset returns the mock.
+beforeEach(() => {
+  apiMock.mockReset();
+});
 
 describe("leaderboard", () => {
   it("lists the top players with ranks, totals and who's at a table", async () => {
