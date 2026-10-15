@@ -91,6 +91,10 @@ function Flags({ flags, onReview }) {
 function Pair({ flag, onDone }) {
   const [pair, setPair] = useState(null);
   const [note, setNote] = useState("");
+  // Pre-filled with the net flow (what B kept of A's credits); the admin can change it.
+  const [amount, setAmount] = useState(Math.max(1, flag.flow - flag.back));
+  const [frozen, setFrozen] = useState({ [flag.loser]: !!flag.loserFrozen, [flag.winner]: !!flag.winnerFrozen });
+  const [reversed, setReversed] = useState(false); // RETURN / REMOVE done: not again from this flag
   const [result, setResult] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -102,7 +106,7 @@ function Pair({ flag, onDone }) {
     setBusy(true);
     try {
       const r = await call(path, { ...body, note: note.trim() });
-      setResult(done(r));
+      setResult(await done(r));
       onDone();
     } catch (err) {
       setResult(err.message);
@@ -110,28 +114,61 @@ function Pair({ flag, onDone }) {
       setBusy(false);
     }
   };
+  /** A reversal also dismisses the flag, so the list doesn't offer the same credits back again. */
+  const reverse = (body, verb) =>
+    act("/reverse", { ...body, amount }, async (r) => {
+      setReversed(true);
+      await call("/dismiss", { loserId: flag.loser, winnerId: flag.winner, note: `Reversed: ${note.trim()}` });
+      return `${verb} ${fmt(r.recovered)} of ${fmt(r.requested)}.`;
+    });
+  const toggleFreeze = (userId, name) =>
+    act("/freeze", { userId, frozen: !frozen[userId] }, (r) => {
+      setFrozen((f) => ({ ...f, [userId]: r.frozen }));
+      return `${name} is ${r.frozen ? "frozen" : "unfrozen"}.`;
+    });
   const off = busy || !note.trim();
+  const amountOk = Number.isInteger(amount) && amount >= 1;
 
   return (
     <Panel title={`${flag.loserName} → ${flag.winnerName}`} icon="cards" deep="#463a78">
       <div className="flex flex-col gap-3 p-4">
-        <label className="flex flex-col gap-1">
-          <span className="font-pixel-display text-[10px]">Note</span>
-          <input aria-label="Note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className="font-pixel-body text-[22px] px-3 text-parchment" style={inputStyle} />
-        </label>
+        <div className="grid gap-3" style={{ gridTemplateColumns: "minmax(0,1fr) 140px" }}>
+          <label className="flex flex-col gap-1">
+            <span className="font-pixel-display text-[10px]">Note</span>
+            <input aria-label="Note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className="font-pixel-body text-[22px] px-3 text-parchment" style={inputStyle} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="font-pixel-display text-[10px]">Amount</span>
+            <input
+              aria-label="Amount"
+              type="number"
+              min={1}
+              value={amount}
+              onChange={(e) => setAmount(Math.round(Number(e.target.value)))}
+              className="font-pixel-body text-[22px] px-3 text-parchment"
+              style={inputStyle}
+            />
+          </label>
+        </div>
         <div className="flex flex-wrap gap-2">
-          <Btn tone={TONES.poison} disabled={off} className="px-3" onClick={() => act("/reverse", { from: flag.winner, to: flag.loser, amount: flag.flow }, (r) => `Recovered ${fmt(r.recovered)} of ${fmt(r.requested)}.`)}>
-            Return {fmt(flag.flow)} to {flag.loserName}
-          </Btn>
-          <Btn tone={TONES.rose} disabled={off} className="px-3" onClick={() => act("/reverse", { from: flag.winner, amount: flag.flow }, (r) => `Removed ${fmt(r.recovered)} of ${fmt(r.requested)}.`)}>
-            Remove {fmt(flag.flow)}
-          </Btn>
-          <Btn tone={TONES.dusk} disabled={off} className="px-3" onClick={() => act("/freeze", { userId: flag.winner, frozen: true }, () => `${flag.winnerName} is frozen.`)}>
-            Freeze {flag.winnerName}
-          </Btn>
-          <Btn tone={TONES.dusk} disabled={off} className="px-3" onClick={() => act("/freeze", { userId: flag.loser, frozen: true }, () => `${flag.loserName} is frozen.`)}>
-            Freeze {flag.loserName}
-          </Btn>
+          {!reversed && (
+            <>
+              <Btn tone={TONES.poison} disabled={off || !amountOk} className="px-3" onClick={() => reverse({ from: flag.winner, to: flag.loser }, "Recovered")}>
+                Return {fmt(amount)} to {flag.loserName}
+              </Btn>
+              <Btn tone={TONES.rose} disabled={off || !amountOk} className="px-3" onClick={() => reverse({ from: flag.winner }, "Removed")}>
+                Remove {fmt(amount)}
+              </Btn>
+            </>
+          )}
+          {[
+            [flag.winner, flag.winnerName],
+            [flag.loser, flag.loserName],
+          ].map(([id, name]) => (
+            <Btn key={id} tone={TONES.dusk} disabled={off} className="px-3" onClick={() => toggleFreeze(id, name)}>
+              {frozen[id] ? "Unfreeze" : "Freeze"} {name}
+            </Btn>
+          ))}
           <Btn tone={TONES.cyan} disabled={off} className="px-3" onClick={() => act("/dismiss", { loserId: flag.loser, winnerId: flag.winner }, () => "Dismissed.")}>
             Dismiss
           </Btn>
@@ -177,15 +214,28 @@ function Pair({ flag, onDone }) {
 function Lookup() {
   const [q, setQ] = useState("");
   const [account, setAccount] = useState(null);
+  const [note, setNote] = useState("");
   const [error, setError] = useState("");
-  const search = async (e) => {
-    e.preventDefault();
+  const find = async () => {
     try {
       setAccount(await call(`/accounts?q=${encodeURIComponent(q)}`));
       setError("");
     } catch (err) {
       setError(err.message);
       setAccount(null);
+    }
+  };
+  const search = (e) => {
+    e.preventDefault();
+    find();
+  };
+  const toggleFreeze = async () => {
+    try {
+      await call("/freeze", { userId: account.userId, frozen: !account.frozen, note: note.trim() });
+      setNote("");
+      await find();
+    } catch (err) {
+      setError(err.message);
     }
   };
   return (
@@ -202,6 +252,12 @@ function Lookup() {
           <div className={TEXT}>
             {account.name} · {fmt(account.balance)} credits{account.seat ? ` + ${fmt(account.seat.onTable)} at ${account.seat.tableName}` : ""}
             {account.frozen ? ` · FROZEN (${account.frozenNote})` : ""}
+          </div>
+          <div className="flex gap-2">
+            <input aria-label="Account note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Note" className="flex-1 font-pixel-body text-[22px] px-3 text-parchment" style={inputStyle} />
+            <Btn tone={TONES.dusk} disabled={!note.trim()} className="px-4" onClick={toggleFreeze}>
+              {account.frozen ? "Unfreeze" : "Freeze"}
+            </Btn>
           </div>
           <ol className={`${TEXT} text-bone/80`}>
             {account.ledger.map((r) => (

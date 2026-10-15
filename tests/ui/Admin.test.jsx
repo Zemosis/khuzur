@@ -82,6 +82,48 @@ describe("admin page", () => {
     await userEvent.click(screen.getByRole("button", { name: "Return 1,200 to ANN #0001" }));
     expect(apiMock).toHaveBeenCalledWith("/reverse", { method: "POST", base: "/api/admin", body: { from: BOB, to: ANN, amount: 1200, note: "alt dumping" } });
     expect(await screen.findByText("Recovered 1,200 of 1,200.")).toBeInTheDocument();
+    // Done with this flag: it's dismissed, and the same reversal can't be sent twice.
+    expect(apiMock).toHaveBeenCalledWith("/dismiss", { method: "POST", base: "/api/admin", body: { loserId: ANN, winnerId: BOB, note: "Reversed: alt dumping" } });
+    expect(screen.queryByRole("button", { name: /^Return/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Remove/ })).toBeNull();
+  });
+
+  it("the amount starts at the net flow and can be changed", async () => {
+    routes({ "/flags": () => [{ ...FLAG, back: 200 }] });
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "Review ANN #0001 → BOB #0001" }));
+    const amount = screen.getByLabelText("Amount");
+    expect(amount).toHaveValue(1000);
+    await userEvent.clear(amount);
+    await userEvent.type(amount, "500");
+    await userEvent.type(screen.getByLabelText("Note"), "part of it");
+    await userEvent.click(screen.getByRole("button", { name: "Remove 500" }));
+    expect(apiMock).toHaveBeenCalledWith("/reverse", { method: "POST", base: "/api/admin", body: { from: BOB, amount: 500, note: "part of it" } });
+  });
+
+  it("a frozen player can be unfrozen", async () => {
+    routes({ "/flags": () => [{ ...FLAG, winnerFrozen: true }] });
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "Review ANN #0001 → BOB #0001" }));
+    await userEvent.type(screen.getByLabelText("Note"), "cleared");
+    await userEvent.click(screen.getByRole("button", { name: "Unfreeze BOB #0001" }));
+    expect(apiMock).toHaveBeenCalledWith("/freeze", { method: "POST", base: "/api/admin", body: { userId: BOB, frozen: false, note: "cleared" } });
+    expect(await screen.findByRole("button", { name: "Freeze BOB #0001" })).toBeInTheDocument();
+  });
+
+  it("account lookup can freeze and unfreeze", async () => {
+    let frozen = true;
+    routes({
+      "/accounts?q=BOB%230001": () => ({ userId: BOB, name: "BOB #0001", balance: 2300, frozen, frozenNote: "review", seat: null, ledger: [] }),
+      "/freeze": (opts) => ((frozen = opts.body.frozen), { frozen }),
+    });
+    await open();
+    await userEvent.type(screen.getByLabelText("NAME#TAG"), "BOB#0001");
+    await userEvent.click(screen.getByRole("button", { name: "Find" }));
+    await userEvent.type(await screen.findByLabelText("Account note"), "all clear");
+    await userEvent.click(screen.getByRole("button", { name: "Unfreeze" }));
+    expect(apiMock).toHaveBeenCalledWith("/freeze", { method: "POST", base: "/api/admin", body: { userId: BOB, frozen: false, note: "all clear" } });
+    expect(await screen.findByRole("button", { name: "Freeze" })).toBeInTheDocument();
   });
 
   it("actions stay off until there's a note", async () => {
