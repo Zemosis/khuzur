@@ -718,11 +718,16 @@ io.on("connection", (socket) => {
     if (type === "poker") lobby.game = credit ? createCreditTable(lobby) : createPokerTable(lobby);
     const member = addMember(lobby, socket);
     lobbies.set(lobbyId, lobby);
-    enterRoom(socket, lobbyId);
+    // A credit table's room is entered once the buy-in succeeds: a refused one
+    // leaves the player watching the table list, where they were.
     if (credit) {
       if (!(await sitWithCredits(lobby, member, socket, buyIn))) return;
-    } else if (type === "poker") sitAtPoker(lobby, member);
-    else takeSeat(lobby, member);
+      enterRoom(socket, lobbyId);
+    } else {
+      enterRoom(socket, lobbyId);
+      if (type === "poker") sitAtPoker(lobby, member);
+      else takeSeat(lobby, member);
+    }
     console.log(`${type} lobby created: ${lobbyId} by ${socket.data.displayName}`);
     socket.emit("lobby_joined", { lobbyId, gameType: type, isHost: true, mySocketId: socket.id });
     sendTableTo(lobby, socket);
@@ -782,10 +787,11 @@ io.on("connection", (socket) => {
     }
 
     member = addMember(lobby, socket);
-    enterRoom(socket, lobbyId);
+    if (!lobby.credits) enterRoom(socket, lobbyId); // a credit table's, once the buy-in succeeds
     console.log(`${socket.data.displayName} joined ${lobbyId}`);
     if (lobby.credits) {
       if (!(await sitWithCredits(lobby, member, socket, buyIn))) return;
+      enterRoom(socket, lobbyId);
       if (lobby.sessionPromise) rosterEnter(lobby, member);
     } else if (lobby.gameType === "poker") {
       // Dealt in from the next hand; counted in the record from now.

@@ -272,6 +272,19 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables over sockets (Postgres)", () 
     expect(await balance(bob)).toBe(1000);
   });
 
+  it("a refused buy-in leaves you watching the table list", async () => {
+    const { lobbyId } = await hostTable(await player());
+    const b = await client(await player());
+    b.emit("get_public_lobbies", { gameType: "poker" });
+    await waitFor(b, "public_lobbies_update", (l) => l.some((t) => t.id === lobbyId));
+    b.emit("join_lobby", { lobbyId, buyIn: 50 });
+    expect(await waitFor(b, "error_message")).toBe("This table's minimum is 200");
+    const next = waitFor(b, "public_lobbies_update", (l) => l.some((t) => t.id !== lobbyId && t.tier === "MID"));
+    const host2 = await client(await player());
+    host2.emit("create_lobby", { gameType: "poker", tier: "MID", buyIn: 1000, lobbyName: "Felt" });
+    await next;
+  });
+
   it("LEAVE sent while the buy-in is still going through pays the credits straight back", async () => {
     const { lobbyId } = await hostTable(await player());
     const bob = await player();
