@@ -25,6 +25,8 @@ services:
         value: "22"
       - key: DATABASE_URL
         sync: false # Supabase session pooler URL, with ?sslmode=require&uselibpqcompat=true
+      - key: ADMIN_USER_IDS
+        sync: false # comma-separated user ids that may open /admin (credits review)
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN

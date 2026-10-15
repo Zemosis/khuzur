@@ -20,6 +20,7 @@ import { createChatGuard } from "./chatGuard.js";
 import { migrate, pool } from "./db/index.js";
 import { CreditTable, returnSeatsAfterRestart } from "./credits/tables.js";
 import { creditsRouter } from "./credits/routes.js";
+import { adminRouter } from "./credits/admin.js";
 import { economyCheck } from "./credits/check.js";
 import { isTier } from "./game/poker/tiers.js";
 
@@ -100,6 +101,7 @@ app.get("/", (_req, res) => res.json({ ok: true, service: "card-game-server" }))
 app.use("/api/auth/oauth", oauthRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/credits", creditsRouter({ onTableFor }));
+app.use("/api/admin", adminRouter({ standUp: standUpCreditPlayer }));
 
 const server = http.createServer(app);
 const io = new Server(server, {

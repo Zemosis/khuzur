@@ -253,3 +253,51 @@ export function returnAllSeats() {
     return rows.length;
   });
 }
+
+/**
+ * An admin takes credits off `fromId`: back to `toId` (RETURN) or out of the
+ * economy (REMOVE, toId null). Never below zero: returns what was recovered.
+ */
+export function reverse({ adminId, fromId, toId = null, amount, note }) {
+  return withTransaction(async (client) => {
+    if (!Number.isInteger(amount) || amount < 1) throw new CreditError("Pick an amount");
+    if (toId === fromId) throw new CreditError("Pick two different players");
+    // Locked in a fixed order, so two reversals between the same pair can't deadlock.
+    const locked = new Map();
+    for (const id of [fromId, toId].filter(Boolean).sort()) locked.set(id, await lockAccount(client, id));
+    const from = locked.get(fromId);
+    const taken = Math.min(amount, from.balance);
+    await setBalance(client, fromId, from.balance - taken);
+    await ledger(client, { userId: fromId, kind: toId ? "admin_return_out" : "admin_remove", amount: -taken, balanceAfter: from.balance - taken, note, actorId: adminId });
+    if (toId) {
+      const to = locked.get(toId);
+      await setBalance(client, toId, to.balance + taken);
+      await ledger(client, { userId: toId, kind: "admin_return_in", amount: taken, balanceAfter: to.balance + taken, note, actorId: adminId });
+    }
+    return { recovered: taken, requested: amount };
+  });
+}
+
+/** FREEZE / UNFREEZE: a frozen account can't sit at credit tables or claim. */
+export function setFrozen({ adminId, userId, frozen, note }) {
+  return withTransaction(async (client) => {
+    const a = await lockAccount(client, userId);
+    await client.query("update credit_accounts set frozen_at = $2, frozen_note = $3 where user_id = $1", [userId, frozen ? new Date() : null, frozen ? note : null]);
+    await ledger(client, { userId, kind: frozen ? "freeze" : "unfreeze", amount: 0, balanceAfter: a.balance, note, actorId: adminId });
+    return { frozen: !!frozen };
+  });
+}
+
+/** DISMISS: the pair's flag stays hidden until new credits flow between them. */
+export function dismissFlag({ adminId, loserId, winnerId, note }) {
+  return withTransaction(async (client) => {
+    const a = await lockAccount(client, loserId);
+    await client.query(
+      `insert into credit_flag_reviews (loser_id, winner_id, reviewed_by, note) values ($1, $2, $3, $4)
+       on conflict (loser_id, winner_id) do update set reviewed_at = now(), reviewed_by = $3, note = $4`,
+      [loserId, winnerId, adminId, note],
+    );
+    await ledger(client, { userId: loserId, kind: "dismiss", amount: 0, balanceAfter: a.balance, note, actorId: adminId });
+    return { dismissed: true };
+  });
+}
