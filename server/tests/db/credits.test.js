@@ -46,6 +46,8 @@ describe.skipIf(!TEST_DATABASE_URL)("credit accounts (Postgres)", () => {
       const ann = await player("ANN");
       await sit(ann, T1, "LOW", 800);
       expect((await A.me(ann, 800)).claim).toEqual({ state: "over" });
+      // A hand loses her 500: the table and the database both hold 300 now.
+      await A.saveHand({ tableId: T1, tier: "LOW", isPrivate: false, sessionId: null, events: [], summary: hand(1, [[ann, 800, 300]]), seats: [{ userId: ann, stack: 300, pending: 0, leaving: false }] });
       expect((await A.me(ann, 300)).claim.state).toBe("wait");
       await expect(A.claim(ann, 300)).rejects.toThrow(/Your next claim is in 2[34]h/);
       await lastClaimAgo(ann, DAY + 1);
@@ -53,6 +55,14 @@ describe.skipIf(!TEST_DATABASE_URL)("credit accounts (Postgres)", () => {
       expect(await A.claim(ann, 300)).toEqual({ balance: 700 });
       expect((await ledger(ann)).at(-1)).toMatchObject({ kind: "claim", amount: 500, balance_after: 700 });
       await expect(A.claim(ann, 300)).rejects.toThrow("You have 1,000 or more: nothing to claim");
+    });
+
+    it("counts a seat the caller didn't know about: a buy-in that landed while the claim waited", async () => {
+      const ann = await player("ANN");
+      await sit(ann, T1, "LOW", 1000);
+      await lastClaimAgo(ann, DAY + 1);
+      await expect(A.claim(ann, 0)).rejects.toThrow("nothing to claim");
+      expect(await balance(ann)).toBe(0);
     });
 
     it("an email-only account can't play or claim; a frozen one neither", async () => {

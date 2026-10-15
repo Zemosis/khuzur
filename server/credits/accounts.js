@@ -101,7 +101,14 @@ export function claim(userId, onTable = 0) {
     const a = await lockAccount(client, userId);
     const whyNot = await whyCantPlay(client, userId, a);
     if (whyNot) throw new CreditError(whyNot);
-    const state = claimState({ balance: a.balance, lastClaimAt: a.last_claim_at, frozen: !!a.frozen_at, onTable });
+    // The caller's onTable was read before this lock: a buy-in or cash-out may
+    // have landed since. Under the lock the saved seat is current, so count
+    // whichever is more.
+    const {
+      rows: [seat],
+    } = await client.query("select stack + pending as held from credit_seats where user_id = $1", [userId]);
+    const held = Math.max(onTable ?? 0, seat ? num(seat.held) : 0);
+    const state = claimState({ balance: a.balance, lastClaimAt: a.last_claim_at, frozen: !!a.frozen_at, onTable: held });
     if (state.state === "over") throw new CreditError("You have 1,000 or more: nothing to claim");
     if (state.state === "wait") throw new CreditError(`Your next claim is in ${untilText(Date.parse(state.nextAt) - Date.now())}`);
     const balance = a.balance + state.amount;
