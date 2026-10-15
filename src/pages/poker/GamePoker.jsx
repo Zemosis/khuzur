@@ -35,6 +35,10 @@ import { MAX_SEATS, PHASES, potSize, viewFor } from "../../utils/poker/engine";
 import { buildPots } from "../../utils/poker/pots";
 import { evaluate } from "../../utils/poker/hands";
 import { eventLine } from "../../utils/poker/log";
+import BuyInPanel from "../../components/credits/BuyInPanel";
+import Modal from "../../components/credits/Modal";
+import { useCredits } from "../../hooks/useCredits";
+import { TIERS, buyInRange, fmt, topUpRange } from "../../utils/poker/tiers";
 
 const CPUS = [
   { name: "Bot Saturn", variant: 2 },
@@ -101,6 +105,13 @@ function OnlinePoker({ lobbyId, playerName }) {
   const [fatal, setFatal] = useState("");
   const chatLimit = useChatLimit();
   const seenRef = useRef(0);
+  const { credits, refresh: refreshCredits } = useCredits({ enabled: false });
+  // The buy-in panel at a credit table: { mode: "sit" | "add" | "rebuy", tier, tableName?, busy, error }.
+  const [buyIn, setBuyIn] = useState(null);
+  const buyInRef = useRef(null); // the socket handlers read the panel without re-subscribing
+  useEffect(() => {
+    buyInRef.current = buyIn;
+  }, [buyIn]);
 
   useEffect(() => {
     const join = () => {
@@ -112,11 +123,18 @@ function OnlinePoker({ lobbyId, playerName }) {
       // `received` restarts the turn clock's bar at the time left on arrival.
       setView({ ...v, received: seenRef.current });
       setRejection(null);
+      if (v.mySeat >= 0 && v.seats[v.mySeat]) setBuyIn((b) => (b?.mode === "sit" ? null : b));
     };
     const onChat = (msg) => setMessages((m) => [...m, { ...msg, isMe: msg.sender === playerName }]);
     const onRejected = ({ reason } = {}) => setRejection(reason || "Move rejected");
     const onError = (msg) => {
+      if (buyInRef.current) return setBuyIn((b) => b && { ...b, busy: false, error: String(msg) });
       if (!seenRef.current) setFatal(String(msg || "Lobby not found"));
+    };
+    // Back here without a seat (left, or stood up): sit down again with a buy-in.
+    const onTableInfo = ({ name, tier }) => {
+      refreshCredits();
+      setBuyIn({ mode: "sit", tier, tableName: name, busy: false, error: "" });
     };
     // Sat out too long, or the host closed the table.
     const onLeft = () => navigate("/lobby-poker");
@@ -126,6 +144,7 @@ function OnlinePoker({ lobbyId, playerName }) {
     socket.on("move_rejected", onRejected);
     socket.on("error_message", onError);
     socket.on("table_left", onLeft);
+    socket.on("credit_table_info", onTableInfo);
     connectSocket(identity).then(() => {
       if (socket.connected) join();
     });
@@ -136,6 +155,7 @@ function OnlinePoker({ lobbyId, playerName }) {
       socket.off("move_rejected", onRejected);
       socket.off("error_message", onError);
       socket.off("table_left", onLeft);
+      socket.off("credit_table_info", onTableInfo);
       // Left without EXIT (browser Back): the seat is held for the grace period.
       socket.emit("leave_page", { lobbyId });
     };
@@ -152,14 +172,54 @@ function OnlinePoker({ lobbyId, playerName }) {
     addCpu: (seat, level) => emit("add_cpu", { seat, level }),
     removeCpu: (seat) => emit("remove_cpu", { seat }),
     close: () => emit("close_table"),
+    // Leaving a credit table goes back to the poker lobby, where the CREDITS tab is.
     exit: () => {
       emit("leave_lobby");
-      navigate("/");
+      navigate(view?.tier ? "/lobby-poker" : "/");
     },
     sendChat: (text) => text.trim() && emit("send_chat", { message: text.trim() }),
+    addChips: (amount) => emit("poker_add_chips", { amount }),
+    openBuyIn: (mode) => {
+      refreshCredits();
+      setBuyIn({ mode, tier: view.tier, busy: false, error: "" });
+    },
   };
 
-  if (view) return <PokerScreen view={view} online={{ lobbyId, chatLimit }} actions={actions} messages={messages} setMessages={setMessages} warning={rejection} />;
+  const mine = view?.seats[view.mySeat];
+  const panel = buyIn && credits && (
+    <BuyInPanel
+      tier={buyIn.tier}
+      tableName={buyIn.tableName}
+      mode={buyIn.mode}
+      balance={credits.balance}
+      range={
+        buyIn.mode === "sit"
+          ? buyInRange(buyIn.tier, credits.balance, credits.rathole?.[buyIn.tier])
+          : topUpRange(buyIn.tier, credits.balance, (mine?.stack ?? 0) + (mine?.pending ?? 0))
+      }
+      rathole={buyIn.mode === "sit" ? credits.rathole?.[buyIn.tier] : null}
+      busy={buyIn.busy}
+      error={buyIn.error}
+      onConfirm={(amount) => {
+        if (buyIn.mode === "sit") {
+          setBuyIn((b) => ({ ...b, busy: true, error: "" }));
+          socket.emit("join_lobby", { lobbyId, playerName, buyIn: amount });
+        } else {
+          setBuyIn(null); // a refusal shows in the status line
+          actions.addChips(amount);
+        }
+      }}
+      onCancel={() => setBuyIn(null)}
+    />
+  );
+
+  if (view)
+    return (
+      <>
+        <PokerScreen view={view} online={{ lobbyId, chatLimit }} actions={actions} messages={messages} setMessages={setMessages} warning={rejection} />
+        {panel}
+      </>
+    );
   return (
     <div className="flex flex-col items-center justify-center gap-5 h-full starfield font-pixel-body text-parchment text-center px-4" style={{ position: "fixed", inset: 0 }}>
       {fatal ? (
@@ -179,6 +239,7 @@ function OnlinePoker({ lobbyId, playerName }) {
       ) : (
         <div className="font-pixel-display text-[14px] text-glow-gold blink">JOINING TABLE...</div>
       )}
+      {panel}
     </div>
   );
 }
@@ -230,6 +291,11 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
   const inPlay = running(view.phase);
   const isHost = !!online && !!view.amHost;
   const started = !online || view.started;
+  const tier = online ? (view.tier ?? null) : null; // a credit table
+  const limits = tier ? TIERS[tier] : null;
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const live = !!mine && inPlay && mine.inHand && !mine.folded; // you're in the hand being played
+  const held = mine ? mine.stack + mine.pending : 0;
 
   const faceFor = (seat) =>
     seat === view.mySeat
@@ -261,6 +327,12 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
     ? view.legal.canCheck
       ? "Your turn: check or bet"
       : `Your turn: ${view.legal.toCall} to call`
+    : view.saving
+      ? "Saving…"
+      : view.closingAfterHand
+        ? "Table closing after this hand"
+        : mine?.waitingForBB
+          ? "Waiting for the big blind to reach you"
     : view.turn != null
       ? `Waiting for ${short(view.seats[view.turn]?.name)}…`
       : view.phase === PHASES.RUNOUT
@@ -288,7 +360,7 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
           cardWidth={layout === "full" ? 40 : 30}
           width={SEAT_W[layout]}
           isHost={isHost}
-          onAddCpu={isHost ? (level) => actions.addCpu(seat, level) : undefined}
+          onAddCpu={isHost && !tier ? (level) => actions.addCpu(seat, level) : undefined}
           onRemoveCpu={isHost ? () => actions.removeCpu(seat) : undefined}
         />
       </div>
@@ -309,13 +381,17 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
       <TableHeader
         compact={compact}
         narrow={narrow}
-        onExit={actions.exit}
+        onExit={tier ? () => setConfirmLeave(true) : actions.exit}
         badge={
           <span
             className="font-pixel-display text-[10px] leading-none px-1.5 py-1 whitespace-nowrap"
             style={{ backgroundColor: online ? "#5fd4d6" : LEVEL_COLOR[practice] || "#f4c430", color: "#1a1024", boxShadow: "0 0 0 2px #0a0712" }}
           >
-            {online ? `ONLINE · #${online.lobbyId.replace(/^PUB-/, "")}` : `PRACTICE · ${practice}`}
+            {online
+              ? tier
+                ? `${tier} ${limits.smallBlind}/${limits.bigBlind} · #${online.lobbyId.replace(/^PUB-/, "")}`
+                : `ONLINE · #${online.lobbyId.replace(/^PUB-/, "")}`
+              : `PRACTICE · ${practice}`}
           </span>
         }
         title="POKER"
@@ -363,6 +439,7 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
                   <div className="font-pixel-display text-[12px] text-parchment">
                     YOU <span className="text-glow-gold tabular-nums">{mine.stack}</span>
                   </div>
+                  {mine.pending > 0 && <div className="font-pixel-body text-[20px] leading-none" style={{ color: "#9bd14f" }}>+{fmt(mine.pending)} next hand</div>}
                   {myHand && <div className="font-pixel-body text-[20px] leading-none text-bone/80">{myHand}</div>}
                 </div>
               </div>
@@ -375,9 +452,14 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
                 START
               </button>
             )}
-            {mine && mine.stack === 0 && !(inPlay && mine.inHand && !mine.folded) && (
-              <button className={EXTRA_BTN} style={{ backgroundColor: "#f4c430", borderColor: "#c89820", color: "#1a1024" }} onClick={actions.rebuy}>
+            {mine && held === 0 && !live && (
+              <button className={EXTRA_BTN} style={{ backgroundColor: "#f4c430", borderColor: "#c89820", color: "#1a1024" }} onClick={tier ? () => actions.openBuyIn("rebuy") : actions.rebuy}>
                 REBUY
+              </button>
+            )}
+            {tier && mine && mine.stack > 0 && !live && held < limits.maxBuyIn && (
+              <button className={EXTRA_BTN} style={{ backgroundColor: "#9bd14f", borderColor: "#6a9a30", color: "#1a3a0e" }} onClick={() => actions.openBuyIn("add")}>
+                ADD CHIPS
               </button>
             )}
             {mine?.sittingOut && mine.stack > 0 && (
@@ -398,6 +480,23 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
           <GameChat messages={messages} onSendMessage={actions.sendChat} avatarFor={avatarFor} colorFor={colorFor} {...online?.chatLimit} />
         </TableSidebar>
       </div>
+      {confirmLeave && (
+        <Modal title="Leave the table?" icon="back" deep="#7a1530" onClose={() => setConfirmLeave(false)}>
+          <p className="font-pixel-body text-[22px] text-bone leading-tight">
+            {live && mine.allIn
+              ? "You're all-in: the hand plays out, and whatever it wins goes to your balance."
+              : `${live ? "Your hand folds. " : ""}Your ${fmt(held)} credits go back to your balance.`}
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            <button className={EXTRA_BTN} style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }} onClick={() => setConfirmLeave(false)}>
+              Stay
+            </button>
+            <button className={EXTRA_BTN} style={{ backgroundColor: "#7a1530", borderColor: "#3a0a18", color: "#ead8b1" }} onClick={actions.exit}>
+              Leave
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
