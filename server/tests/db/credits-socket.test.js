@@ -351,7 +351,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables over sockets (Postgres)", () 
   });
 
   // Last: it restarts the server.
-  it("a restart mid-hand sends every seat home at the stack its hand started with, and says so once", async () => {
+  it("a restart mid-hand sends every seat home at the stack its hand started with, and says so until dismissed", async () => {
     const ann = await player();
     const bob = await player();
     const { sock: a, lobbyId } = await hostTable(ann, { buyIn: 600 });
@@ -367,7 +367,9 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables over sockets (Postgres)", () 
     const me = await (await fetch(`${url}/api/credits/me`, { headers: { Authorization: `Bearer ${token(ann)}` } })).json();
     expect(me.notice).toEqual({ amount: 600, tableName: "Felt" });
     const again = await (await fetch(`${url}/api/credits/me`, { headers: { Authorization: `Bearer ${token(ann)}` } })).json();
-    expect(again.notice).toBeNull();
+    expect(again.notice).toEqual({ amount: 600, tableName: "Felt" });
+    const dismissed = await (await fetch(`${url}/api/credits/notice`, { method: "POST", headers: { Authorization: `Bearer ${token(ann)}` } })).json();
+    expect(dismissed.notice).toBeNull();
     expect((await economy()).ok).toBe(true);
   });
 });

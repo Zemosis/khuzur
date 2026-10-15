@@ -380,7 +380,7 @@ export default function GameLobby({ game }) {
   const location = useLocation();
   const [mode, setMode] = useState(game.credits && location.state?.tab === "credits" ? "credits" : "free");
   const credit = !!game.credits && mode === "credits";
-  const { credits, error: creditsError, busy: claiming, refresh: refreshCredits, claim } = useCredits({ enabled: !!game.credits });
+  const { credits, error: creditsError, busy: claiming, refresh: refreshCredits, claim, dismissNotice } = useCredits({ enabled: !!game.credits });
   // The buy-in panel: { tier, tableName, lobbyId? | create: { name, isPrivate }, busy, error }.
   const [buyIn, setBuyIn] = useState(null);
   const buyInRef = useRef(null); // the socket handlers read the panel without re-subscribing
@@ -505,7 +505,7 @@ export default function GameLobby({ game }) {
           <AdventurerCard game={game} onSignIn={() => setShowLogin(true)} />
           {credit ? (
             <>
-              <BalancePanel credits={credits} isGuest={isGuest} error={creditsError} onSignIn={() => setShowLogin(true)} onClaim={claim} claiming={claiming} />
+              <BalancePanel credits={credits} isGuest={isGuest} error={creditsError} onSignIn={() => setShowLogin(true)} onClaim={claim} claiming={claiming} onDismissNotice={dismissNotice} />
               <CreditHostPanel defaultName={game.defaultTableName} disabled={isGuest || !credits?.canPlay} onCreate={createCreditTable} />
               <JoinPanel onJoin={joinTable} />
             </>

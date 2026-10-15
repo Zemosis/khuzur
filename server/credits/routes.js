@@ -30,6 +30,14 @@ export function creditsRouter({ onTableFor = () => null } = {}) {
       return meFor(req.user.id);
     }),
   );
+  router.post(
+    "/notice",
+    requireUser,
+    handle(async (req) => {
+      await accounts.dismissNotice(req.user.id);
+      return meFor(req.user.id);
+    }),
+  );
   router.get("/leaderboard", optionalUser, handle((req) => leaderboard(req.user?.id ?? null)));
   return router;
 }

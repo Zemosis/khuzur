@@ -194,7 +194,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit accounts (Postgres)", () => {
   });
 
   describe("returning seats", () => {
-    it("a restart sends every seat home with stack plus pending, and tells each player once", async () => {
+    it("a restart sends every seat home with stack plus pending, and tells each player until they dismiss it", async () => {
       const ann = await player("ANN");
       const bob = await player("BOB");
       await sit(ann, T1, "LOW", 500);
@@ -204,6 +204,8 @@ describe.skipIf(!TEST_DATABASE_URL)("credit accounts (Postgres)", () => {
       expect([await balance(ann), await balance(bob)]).toEqual([1000, 1000]);
       expect((await ledger(ann)).at(-1)).toMatchObject({ kind: "restart_return", amount: 700 });
       expect((await A.me(ann)).notice).toEqual({ amount: 700, tableName: "Felt" });
+      expect((await A.me(ann)).notice).toEqual({ amount: 700, tableName: "Felt" }); // reading doesn't use it up
+      await A.dismissNotice(ann);
       expect((await A.me(ann)).notice).toBeNull();
     });
 

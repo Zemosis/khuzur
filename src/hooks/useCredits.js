@@ -1,6 +1,6 @@
 // USE CREDITS — the signed-in player's credits from /api/credits/me: balance,
 // CLAIM, whether they can play (and why not), rathole minimums by tier and a
-// restart notice. Guests get null. enabled: false waits for refresh().
+// restart notice (until dismissNotice). Guests get null. enabled: false waits for refresh().
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
@@ -40,5 +40,15 @@ export function useCredits({ enabled = true } = {}) {
     }
   }, []);
 
-  return { credits, error, busy, refresh, claim };
+  // The restart notice goes at once; the server forgets it too.
+  const dismissNotice = useCallback(async () => {
+    setCredits((c) => c && { ...c, notice: null });
+    try {
+      await api("/notice", { method: "POST", ...CREDITS });
+    } catch (err) {
+      setError(err.message);
+    }
+  }, []);
+
+  return { credits, error, busy, refresh, claim, dismissNotice };
 }

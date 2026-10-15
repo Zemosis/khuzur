@@ -8,7 +8,8 @@ let stats;
 const { auth } = vi.hoisted(() => ({ auth: { isGuest: true, updateProfile: null } }));
 
 vi.mock("../../src/utils/socket", () => ({ socket: {}, connectSocket: () => {} }));
-vi.mock("../../src/lib/api", () => ({ api: vi.fn(async () => ({ balance: 2340 })) }));
+const { credits } = vi.hoisted(() => ({ credits: { balance: 2340, notice: null } }));
+vi.mock("../../src/lib/api", () => ({ api: vi.fn(async (path) => (path === "/notice" ? { ...credits, notice: null } : credits)) }));
 vi.mock("../../src/hooks/useServerStats", () => ({ useServerStats: () => stats }));
 vi.mock("../../src/hooks/useAuth", () => ({
   useAuth: () => ({
@@ -148,5 +149,15 @@ describe("MainMenu", () => {
   it("a guest's badge has no balance", () => {
     renderMenu();
     expect(screen.queryByText(/ CR$/)).toBeNull();
+  });
+
+  it("after a restart the main menu says where your table credits went", async () => {
+    auth.isGuest = false;
+    credits.notice = { amount: 600, tableName: "Felt" };
+    renderMenu();
+    expect(await screen.findByText("The server restarted. Your 600 credits from table Felt are back in your balance.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(screen.queryByText(/The server restarted/)).toBeNull();
+    credits.notice = null;
   });
 });

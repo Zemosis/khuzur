@@ -68,8 +68,8 @@ async function payOut(client, userId, tableId, { tier, amount, kind = "cash_out"
 
 /**
  * Everything the CREDITS tab shows. onTable: what the player holds at the
- * table in memory right now (null: read the saved seat). A restart notice is
- * handed over once.
+ * table in memory right now (null: read the saved seat). A restart notice
+ * stays until dismissNotice.
  */
 export function me(userId, onTable = null) {
   return withTransaction(async (client) => {
@@ -81,7 +81,6 @@ export function me(userId, onTable = null) {
     const held = onTable ?? (seat ? num(seat.stack) + num(seat.pending) : 0);
     const rathole = {};
     for (const tier of TIER_IDS) rathole[tier] = await ratholeFor(client, userId, tier);
-    if (a.restart_notice) await client.query("update credit_accounts set restart_notice = null where user_id = $1", [userId]);
     return {
       balance: a.balance,
       onTable: held,
@@ -93,6 +92,11 @@ export function me(userId, onTable = null) {
       notice: a.restart_notice ?? null,
     };
   });
+}
+
+/** The player has read the restart notice. */
+export async function dismissNotice(userId) {
+  await pool.query("update credit_accounts set restart_notice = null where user_id = $1", [userId]);
 }
 
 /** CLAIM: back up to 1000, once a day, while balance plus table is under it. */

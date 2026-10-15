@@ -156,9 +156,12 @@ describe("the CREDITS tab", () => {
     expect(screen.getByRole("button", { name: /Private/ })).toBeDisabled();
   });
 
-  it("after a restart it says where your credits went", async () => {
+  it("after a restart it says where your credits went, until you dismiss it", async () => {
     await openCredits({ ...ME, notice: { amount: 2340, tableName: "HIGH ROLLERS" } });
     expect(screen.getByText("The server restarted. Your 2,340 credits from table HIGH ROLLERS are back in your balance.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(apiMock).toHaveBeenCalledWith("/notice", { method: "POST", base: "/api/credits" });
+    expect(screen.queryByText(/The server restarted/)).toBeNull();
   });
 });
 

@@ -8,6 +8,7 @@ import {
 } from "../components/PixelCard";
 import { useAuth } from "../hooks/useAuth";
 import { useCredits } from "../hooks/useCredits";
+import RestartNotice from "../components/credits/RestartNotice";
 import { useServerStats } from "../hooks/useServerStats";
 import { connectSocket } from "../utils/socket";
 import LoginModal from "../components/auth/LoginModal";
@@ -22,7 +23,7 @@ const MainMenu = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const { identity, isGuest, needsProfileSetup, signOut, updateProfile } = useAuth();
-  const { credits } = useCredits({ enabled: !isGuest });
+  const { credits, dismissNotice } = useCredits({ enabled: !isGuest });
   const stats = useServerStats();
 
   useEffect(() => {
@@ -31,6 +32,12 @@ const MainMenu = () => {
 
   return (
     <div className="relative w-full min-h-dvh starfield font-pixel-body text-parchment overflow-x-hidden flex flex-col">
+      {/* After a restart sent your table credits home: where they went. */}
+      {!isGuest && credits?.notice && (
+        <div className="absolute left-1/2 -translate-x-1/2 z-30 w-[min(560px,calc(100%-32px))]" style={{ top: 88 }}>
+          <RestartNotice notice={credits.notice} onDismiss={dismissNotice} />
+        </div>
+      )}
       {/* Distant pixel mountains silhouette */}
       <div
         style={{
