@@ -82,7 +82,8 @@ describe.skipIf(!TEST_DATABASE_URL)("poker tables (Postgres)", () => {
     await recordTable();
     const body = (await request(app).get("/api/auth/stats").set({ Authorization: `Bearer ${token}` })).body;
     expect(body.overall.games).toBe(0);
-    expect(body.poker).toMatchObject({ sessions: 1, hands: 10, handsWon: 4, winRate: 40, net: 250, biggestPot: 400, vpip: 60, showdowns: 3, showdownsWon: 2 });
-    expect(body.poker.time.totalSeconds).toBeGreaterThan(0);
+    expect(body.poker.free).toMatchObject({ sessions: 1, hands: 10, handsWon: 4, winRate: 40, net: 250, biggestPot: 400, vpip: 60, showdowns: 3, showdownsWon: 2 });
+    expect(body.poker.free.time.totalSeconds).toBeGreaterThan(0);
+    expect(body.poker.credits.hands).toBe(0);
   });
 });

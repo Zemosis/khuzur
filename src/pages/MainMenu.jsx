@@ -7,6 +7,7 @@ import {
   PixelButton,
 } from "../components/PixelCard";
 import { useAuth } from "../hooks/useAuth";
+import { useCredits } from "../hooks/useCredits";
 import { useServerStats } from "../hooks/useServerStats";
 import { connectSocket } from "../utils/socket";
 import LoginModal from "../components/auth/LoginModal";
@@ -21,6 +22,7 @@ const MainMenu = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const { identity, isGuest, needsProfileSetup, signOut, updateProfile } = useAuth();
+  const { credits } = useCredits({ enabled: !isGuest });
   const stats = useServerStats();
 
   useEffect(() => {
@@ -75,6 +77,7 @@ const MainMenu = () => {
         <PlayerMenu
           identity={identity}
           isGuest={isGuest}
+          credits={isGuest ? null : (credits?.balance ?? null)}
           onSelectAvatar={(v) => updateProfile({ avatar: v }).catch(console.error)}
           onPaint={() => navigate("/avatar-paint")}
           onViewProfile={() => navigate("/profile")}

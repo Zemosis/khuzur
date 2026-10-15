@@ -8,7 +8,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PixelAvatar } from "../components/PixelCard";
 import PixelIcon from "../components/PixelIcon";
-import { Panel, Btn, TopBar } from "../components/PixelUI";
+import { Panel, Btn, HeaderBtn, TopBar } from "../components/PixelUI";
 import { INK, TONES, inputStyle } from "../components/pixelTokens";
 import PlacementGraph from "../components/profile/PlacementGraph";
 import HandsPlayed from "../components/profile/HandsPlayed";
@@ -17,6 +17,8 @@ import PlacementBars from "../components/profile/PlacementBars";
 import SettingsModal from "../components/SettingsModal";
 import LoginModal from "../components/auth/LoginModal";
 import { useAuth } from "../hooks/useAuth";
+import { useCredits } from "../hooks/useCredits";
+import { fmt } from "../utils/poker/tiers";
 import { api } from "../lib/api";
 import { connectSocket } from "../utils/socket";
 
@@ -310,15 +312,24 @@ function MuushigFacts({ extras }) {
   );
 }
 
-// Poker has no places or wins: hands, chips won or lost, and how you play.
-function PokerSheet({ v }) {
+// Poker has no places or wins: hands, chips won or lost, and how you play,
+// for free tables and credit tables apart.
+const STAKES = [
+  ["free", "Free"],
+  ["credits", "Credits"],
+];
+
+function PokerSheet({ poker }) {
+  const [stakes, setStakes] = useState("free");
+  const v = poker[stakes];
   const net = v.net > 0 ? `+${v.net}` : String(v.net);
   return (
     <>
+      <Toggle label="Stakes" options={STAKES} value={stakes} onChange={setStakes} />
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <StatTile label="Hands" value={v.hands} note={`at ${v.sessions} ${v.sessions === 1 ? "table" : "tables"}`} />
         <StatTile label="Hands won" value={v.handsWon} note={v.winRate == null ? "-" : `${v.winRate}% of hands`} />
-        <StatTile label="Chips" value={net} note="won or lost, all tables" />
+        <StatTile label="Chips" value={net} note={stakes === "credits" ? "credits won or lost" : "won or lost, all tables"} />
         <StatTile label="Biggest pot" value={v.biggestPot} note="won in one hand" />
       </div>
       <div className="grid gap-6 xl:grid-cols-2">
@@ -352,7 +363,7 @@ function StatsSheet({ data }) {
     return (
       <div className="flex-1 flex flex-col gap-6 p-4 overflow-y-auto min-h-0">
         <Toggle label="Game" options={FILTERS} value={filter} onChange={setFilter} />
-        <PokerSheet v={data.poker} />
+        <PokerSheet poker={data.poker} />
       </div>
     );
   }
@@ -436,6 +447,8 @@ function StatsSheet({ data }) {
 }
 
 function StatsPanel() {
+  const navigate = useNavigate();
+  const { credits } = useCredits();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
@@ -446,7 +459,19 @@ function StatsPanel() {
   }, []);
 
   return (
-    <Panel title="Stats" icon="star" deep="#463a78" className="max-lg:shrink-0 lg:h-full">
+    <Panel
+      title="Stats"
+      icon="star"
+      deep="#463a78"
+      className="max-lg:shrink-0 lg:h-full"
+      right={
+        credits && (
+          <HeaderBtn onClick={() => navigate("/leaderboard")} bg="#f4c430" title="The credits leaderboard">
+            {fmt(credits.balance + credits.onTable)} CR{credits.rank ? ` · #${credits.rank}` : ""}
+          </HeaderBtn>
+        )
+      }
+    >
       {error ? (
         <p role="alert" className="p-6 font-pixel-body text-[22px] text-rose">
           Couldn't load your stats: {error}

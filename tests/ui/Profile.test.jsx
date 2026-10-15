@@ -52,7 +52,7 @@ const empty = {
   overall: view(),
   thirteen: view({ extras: {}, hands: {} }),
   muushig: view({ extras: {} }),
-  poker: pokerView(),
+  poker: { free: pokerView(), credits: pokerView() },
 };
 const match = (game, place, of, won, daysAgo) => ({
   id: `${game}-${daysAgo}`,
@@ -110,7 +110,8 @@ const played = {
 };
 
 const renderProfile = async (data) => {
-  api.mockResolvedValue(data);
+  // /api/credits/me for the credits line; everything else is /stats.
+  api.mockImplementation(async (_path, opts) => (opts?.base === "/api/credits" ? { balance: 12340, onTable: 0, rank: 57 } : data));
   render(
     <MemoryRouter>
       <Profile />
@@ -170,7 +171,7 @@ describe("Profile stats", () => {
     const user = userEvent.setup();
     await renderProfile({
       ...empty,
-      poker: pokerView({ sessions: 3, hands: 120, handsWon: 30, winRate: 25, net: -340, biggestPot: 900, vpip: 28.5, showdowns: 20, showdownsWon: 11 }),
+      poker: { free: pokerView({ sessions: 3, hands: 120, handsWon: 30, winRate: 25, net: -340, biggestPot: 900, vpip: 28.5, showdowns: 20, showdownsWon: 11 }), credits: pokerView() },
     });
     await user.click(within(screen.getByRole("group", { name: "Game" })).getByRole("button", { name: "Poker" }));
     expect(tile("Hands")).toHaveTextContent("120");
@@ -182,6 +183,17 @@ describe("Profile stats", () => {
     expect(within(poker).getByText("Played the hand (VPIP)").nextSibling).toHaveTextContent("28.5%");
     expect(within(poker).getByText("Showdowns won").nextSibling).toHaveTextContent("11 / 20");
     expect(screen.queryByText("Dead last")).not.toBeInTheDocument();
+  });
+
+  it("shows your credits and rank, and splits poker into free and credit play", async () => {
+    const user = userEvent.setup();
+    await renderProfile({ ...empty, poker: { free: pokerView({ hands: 120 }), credits: pokerView({ hands: 7, net: 450 }) } });
+    expect(await screen.findByText("12,340 CR · #57")).toBeInTheDocument();
+    await user.click(within(screen.getByRole("group", { name: "Game" })).getByRole("button", { name: "Poker" }));
+    expect(tile("Hands")).toHaveTextContent("120");
+    await user.click(within(screen.getByRole("group", { name: "Stakes" })).getByRole("button", { name: "Credits" }));
+    expect(tile("Hands")).toHaveTextContent("7");
+    expect(tile("Chips")).toHaveTextContent("+450");
   });
 
   it("lists recent matches, or graphs their placings", async () => {

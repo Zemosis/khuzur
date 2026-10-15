@@ -8,6 +8,7 @@ let stats;
 const { auth } = vi.hoisted(() => ({ auth: { isGuest: true, updateProfile: null } }));
 
 vi.mock("../../src/utils/socket", () => ({ socket: {}, connectSocket: () => {} }));
+vi.mock("../../src/lib/api", () => ({ api: vi.fn(async () => ({ balance: 2340 })) }));
 vi.mock("../../src/hooks/useServerStats", () => ({ useServerStats: () => stats }));
 vi.mock("../../src/hooks/useAuth", () => ({
   useAuth: () => ({
@@ -136,5 +137,16 @@ describe("MainMenu", () => {
     await user.click(screen.getByRole("button", { name: /rules/i }));
     await user.click(screen.getByRole("menuitem", { name: /muushig/i }));
     expect(screen.getByRole("dialog", { name: "HOW TO PLAY MUUSHIG" })).toBeInTheDocument();
+  });
+
+  it("a signed-in player sees their credit balance on their badge", async () => {
+    auth.isGuest = false;
+    renderMenu();
+    expect(await screen.findByText("2,340 CR")).toBeInTheDocument();
+  });
+
+  it("a guest's badge has no balance", () => {
+    renderMenu();
+    expect(screen.queryByText(/ CR$/)).toBeNull();
   });
 });

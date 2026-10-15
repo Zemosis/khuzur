@@ -1,11 +1,13 @@
 // PLAYER MENU — the main menu's player badge. The whole badge (avatar, name,
 // tag) is one button; it opens a menu with the quick avatar switch (presets,
 // your painted avatar, + to paint one) and a link to your profile and stats.
+// Signed in, the badge also shows your credit balance.
 // Guests can't save an avatar, so they get a note instead of the switch.
 
 import React, { useEffect, useRef, useState } from "react";
 import { PixelAvatar } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
+import { fmt } from "../../utils/poker/tiers";
 
 const PRESETS = ["1", "2", "3", "4", "5"];
 
@@ -19,7 +21,7 @@ const pickStyle = (selected) => ({
   flexShrink: 0,
 });
 
-export default function PlayerMenu({ identity, isGuest, onSelectAvatar, onPaint, onViewProfile }) {
+export default function PlayerMenu({ identity, isGuest, credits = null, onSelectAvatar, onPaint, onViewProfile }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const current = String(identity.avatar);
@@ -61,6 +63,7 @@ export default function PlayerMenu({ identity, isGuest, onSelectAvatar, onPaint,
           <span className="block font-pixel-body text-xs text-parchment leading-none">
             {identity.name} #{identity.tag}
           </span>
+          {credits != null && <span className="block font-pixel-display text-[8px] text-glow-gold mt-1 tabular-nums">{fmt(credits)} CR</span>}
         </span>
         <span className="text-bone/70" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 120ms ease" }}>
           <PixelIcon name="down" size={10} />
