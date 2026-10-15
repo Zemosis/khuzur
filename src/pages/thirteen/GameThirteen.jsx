@@ -51,6 +51,10 @@ const AVATAR_COLOR = { 1: "#f4c430", 2: "#5fd4d6", 3: "#e85a7a", 4: "#9bd14f", 5
 // Side seat = tall name plate (124) + gap (12) + sideways card fan (88).
 const SIDE_SEAT_W = 224;
 const ROW_SEAT_W = 150; // slim seats on a short screen
+// How long the winning play stays on the felt before the round's scores cover
+// it (the server's round-end delay leaves room for this).
+const ROUND_REVEAL_MS = 2500;
+const SOLO_NEXT_ROUND_MS = ROUND_REVEAL_MS + 4000;
 
 const GameThirteen = () => {
   const navigate = useNavigate();
@@ -315,49 +319,60 @@ const GameThirteen = () => {
   }, [gameState, isSoloGame, isDealing]);
 
   // --- AUTO-CONTINUE: ROUND_END → next round ---
+  // A round that ends in front of you leaves the winning play on the felt for
+  // a moment before the scores cover it; one you load into shows them at once.
+  const prevPhaseRef = useRef(null);
   useEffect(() => {
+    const prevPhase = prevPhaseRef.current;
+    prevPhaseRef.current = gameState?.gameState ?? null;
     if (!gameState) return;
-
-    if (
+    const over =
       gameState.gameState === GAME_STATES.ROUND_END ||
-      gameState.gameState === GAME_STATES.GAME_OVER
-    ) {
-      const roundWinner =
-        gameState.winnerIndex !== undefined
-          ? gameState.players[gameState.winnerIndex]
-          : null;
+      gameState.gameState === GAME_STATES.GAME_OVER;
+    if (!over) return;
 
-      setRoundEndData({
-        roundNumber: gameState.roundNumber,
-        players: gameState.players.map((p, idx) => ({
-          name: p.name,
-          score: p.score,
-          isEliminated: p.isEliminated,
-          matchWins: (gameState.matchWins || [0, 0, 0, 0])[idx],
-        })),
-        roundWinnerName: roundWinner?.name,
-        isGameOver: gameState.gameState === GAME_STATES.GAME_OVER,
-      });
+    const roundWinner =
+      gameState.winnerIndex !== undefined
+        ? gameState.players[gameState.winnerIndex]
+        : null;
+
+    setRoundEndData({
+      roundNumber: gameState.roundNumber,
+      players: gameState.players.map((p, idx) => ({
+        name: p.name,
+        score: p.score,
+        isEliminated: p.isEliminated,
+        matchWins: (gameState.matchWins || [0, 0, 0, 0])[idx],
+      })),
+      roundWinnerName: roundWinner?.name,
+      isGameOver: gameState.gameState === GAME_STATES.GAME_OVER,
+    });
+
+    const timers = [];
+    if (prevPhase === GAME_STATES.PLAYING) {
+      timers.push(setTimeout(() => setShowRoundEnd(true), ROUND_REVEAL_MS));
+    } else {
       setShowRoundEnd(true);
     }
 
     // Multiplayer: the server starts the next round itself.
-    if (!isSoloGame) return;
-    if (gameState.gameState !== GAME_STATES.ROUND_END) return;
+    if (isSoloGame && gameState.gameState === GAME_STATES.ROUND_END) {
+      timers.push(
+        setTimeout(() => {
+          const { hands } = initializeGame();
+          const nextState = startNextRound(gameState, hands);
 
-    const timer = setTimeout(() => {
-      const { hands } = initializeGame();
-      const nextState = startNextRound(gameState, hands);
+          setShowRoundEnd(false);
+          setRoundEndData(null);
+          dealOrderRef.current = null;
+          setDealCounts([0, 0, 0, 0]);
+          setIsDealing(true);
+          setGameState(nextState);
+        }, SOLO_NEXT_ROUND_MS),
+      );
+    }
 
-      setShowRoundEnd(false);
-      setRoundEndData(null);
-      dealOrderRef.current = null;
-      setDealCounts([0, 0, 0, 0]);
-      setIsDealing(true);
-      setGameState(nextState);
-    }, 4000);
-
-    return () => clearTimeout(timer);
+    return () => timers.forEach(clearTimeout);
   }, [gameState?.gameState]);
 
   // --- STATS: a finished practice match is recorded for your profile (online
@@ -652,7 +667,8 @@ const GameThirteen = () => {
     const history = gameState.moveHistory || [];
     for (let i = history.length - 1; i >= 0; i--) {
       const move = history[i];
-      if (move.type === "NEW_ROUND" || move.type === "ROUND_END") break;
+      // The round's own ROUND_END is the last move: its winning play stays up.
+      if (move.type === "NEW_ROUND" || (move.type === "ROUND_END" && i < history.length - 1)) break;
       if (move.type === "PLAY") {
         pile.unshift({
           key: `${gameState.matchNumber || 1}-${gameState.roundNumber}-${i}`,

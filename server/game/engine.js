@@ -13,8 +13,9 @@ import { makeAIDecision } from "./aiPlayer.js";
 import { GAME_STATES } from "./constants.js";
 
 const AI_TURN_DELAY = 1500;
-// Client round-end overlay shows for ~4s before expecting the next round.
-const ROUND_END_DELAY = 4500;
+// Clients leave the winning play up for 2.5s, then show the round-end overlay
+// for ~4s before expecting the next round.
+const ROUND_END_DELAY = 7000;
 // The deal (shuffle + 52 cards) takes this long on every player's screen: the
 // browsers fit their animation to it, CPUs wait it out and humans can't move
 // before it ends, so nobody starts the round ahead of the others.

@@ -117,6 +117,29 @@ describe("GameThirteen before the deal", () => {
     expect(screen.queryByRole("button", { name: "REMATCH" })).not.toBeInTheDocument();
   });
 
+  it("a round that ends live leaves the winning play up before the scores cover it", async () => {
+    const player = (id, name, type = "AI") => ({
+      id, name, type, hand: [], score: 0, isEliminated: false, hasPassed: false, socketId: id === 0 ? "sock-1" : null,
+    });
+    const base = {
+      players: [player(0, "HOSTY #0001", "HUMAN"), player(1, "Bot Saturn"), player(2, "Bot Venus"), player(3, "Bot Mars")],
+      currentPlayerIndex: 1,
+      currentPlay: null,
+      lastPlayedBy: null,
+      moveHistory: [],
+      roundNumber: 3,
+      matchNumber: 1,
+      matchWins: [0, 0, 0, 0],
+      dealerIndex: 0,
+    };
+    renderGame();
+    await act(async () => {});
+    serverSends("game_state_update", { ...base, gameState: "PLAYING" });
+    serverSends("game_state_update", { ...base, gameState: "ROUND_END", winnerIndex: 1 });
+    expect(screen.queryByText("ROUND 3 COMPLETE")).not.toBeInTheDocument();
+    expect(await screen.findByText("ROUND 3 COMPLETE", {}, { timeout: 4000 })).toBeInTheDocument();
+  });
+
   it("a chat flood the server turns away holds the chat box with a notice", async () => {
     renderGame();
     await act(async () => {});
