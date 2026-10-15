@@ -11,7 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
 const COPIES = [
   ["muushig", ["engine.js", "ai.js"]],
-  ["poker", ["hands.js", "pots.js", "engine.js", "ai.js", "table.js"]],
+  ["poker", ["hands.js", "pots.js", "engine.js", "ai.js", "table.js", "tiers.js"]],
 ].flatMap(([game, files]) => files.map((file) => [game, file]));
 
 describe.each(COPIES)("%s/%s", (game, file) => {

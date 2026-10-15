@@ -10,7 +10,7 @@ const D = DEFAULT_POKER_DELAYS;
 let table;
 let hands;
 let kicked;
-const make = (delays = {}) => {
+const make = (delays = {}, options = {}) => {
   hands = [];
   kicked = [];
   table = new PokerTable({
@@ -21,8 +21,17 @@ const make = (delays = {}) => {
       kicked.push(seat);
       table.standUp(seat);
     },
+    ...options,
   });
   return table;
+};
+/** Folds our turns and lets the CPU play until the hand in play is over. */
+const untilHandOver = () => {
+  for (let i = 0; i < 1000 && table.state.phase !== PHASES.HAND_OVER; i++) {
+    if (table.state.phase === PHASES.BETTING && table.state.turn === 0) table.move(0, { type: "fold" });
+    else vi.advanceTimersByTime(100);
+  }
+  expect(table.state.phase).toBe(PHASES.HAND_OVER);
 };
 const human = (name = "ME") => table.sit({ name, type: "HUMAN", key: name });
 const cpu = (name = "BOT") => table.sit({ name, type: "AI", level: "MEDIUM" });
@@ -158,5 +167,76 @@ describe("poker table", () => {
     expect(table.turnMsLeft()).toBeNull();
     vi.advanceTimersByTime(10 * 60_000);
     expect(table.state.turn).toBe(0);
+  });
+});
+
+describe("saving hands and closing (credit tables)", () => {
+  const deal = () => {
+    human();
+    cpu();
+    table.start();
+    vi.advanceTimersByTime(D.firstHand);
+  };
+
+  it("deals the next hand only once the finished one is saved", async () => {
+    let release;
+    const saves = [];
+    make({}, { beforeNextHand: (h) => (saves.push(h), new Promise((r) => (release = r))) });
+    deal();
+    untilHandOver();
+    const hand = table.state.handNumber;
+    await vi.advanceTimersByTimeAsync(D.handGap + D.slowSave + 10);
+    expect(table.state.handNumber).toBe(hand);
+    expect(table.saving).toBe(true);
+    release();
+    await vi.waitFor(() => expect(table.state.handNumber).toBe(hand + 1));
+    expect(table.saving).toBe(false);
+    expect(saves).toHaveLength(1);
+    expect(saves[0].roundNumber).toBe(hand);
+  });
+
+  it("retries a failed save until it works", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const rounds = []; // the hand each save attempt was for
+    make({}, { beforeNextHand: async (h) => { rounds.push(h.roundNumber); if (rounds.length < 3) throw new Error("db down"); } });
+    deal();
+    untilHandOver();
+    const hand = table.state.handNumber;
+    await vi.advanceTimersByTimeAsync(D.handGap + 2 * D.saveRetry + 100);
+    await vi.waitFor(() => expect(table.state.handNumber).toBe(hand + 1));
+    // The next hand may end and save too; the first three tries were all for this one.
+    expect(rounds.slice(0, 3)).toEqual([hand, hand, hand]);
+  });
+
+  it("closing after the hand deals no more and calls onClosed once it's saved", async () => {
+    const onClosed = vi.fn();
+    make({}, { onClosed, beforeNextHand: async () => {} });
+    deal();
+    const hand = table.state.handNumber;
+    table.closeAfterHand();
+    expect(table.closing).toBe(true);
+    expect(onClosed).not.toHaveBeenCalled();
+    untilHandOver();
+    await vi.advanceTimersByTimeAsync(D.handGap + 10);
+    expect(onClosed).toHaveBeenCalledTimes(1);
+    expect(table.state.handNumber).toBe(hand);
+  });
+
+  it("closing with no hand running closes at once", async () => {
+    const onClosed = vi.fn();
+    make({}, { onClosed });
+    human();
+    table.closeAfterHand();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onClosed).toHaveBeenCalledTimes(1);
+  });
+
+  it("seats a player with their own stack, adds chips, and carries the owner's info", () => {
+    make({}, { info: { tier: "MID" } });
+    expect(table.sit({ name: "ME", type: "HUMAN", key: "me", stack: 350 })).toEqual({ ok: true, seat: 0 });
+    expect(table.state.seats[0].stack).toBe(350);
+    expect(table.addChips(0, 100, 500)).toEqual({ ok: true });
+    expect(table.addChips(0, 100, 500)).toEqual({ ok: false, error: "You can have at most 500 on the table" });
+    expect(table.info).toEqual({ tier: "MID" });
   });
 });

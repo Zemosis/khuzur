@@ -13,6 +13,7 @@ import {
   BUY_IN,
   PHASES,
   act,
+  addChips,
   advance,
   canStartHand,
   createTable,
@@ -38,18 +39,30 @@ export const DEFAULT_POKER_DELAYS = {
   handGap: 4000, // the result shows, then the next hand deals
   firstHand: 1500, // from enough players sitting down to the first deal
   sitOutKick: 300_000, // sitting out this long stands you up
+  saveRetry: 3000, // a failed save (credit tables) is tried again after this
+  slowSave: 1000, // the next deal has waited this long on a save: the table shows "Saving…"
 };
 export const MAX_TIMEOUTS = 2; // turn clocks run out this many times in a row: sit out
+const running = (s) => s.phase === PHASES.BETTING || s.phase === PHASES.RUNOUT;
 
 export class PokerTable {
-  constructor({ smallBlind, bigBlind, buyIn = BUY_IN, delays, rng = secureRandom, onState, onHandEnd, onKick } = {}) {
+  /**
+   * beforeNextHand(summary) → Promise: called when a hand ends; the next deal
+   * waits for it (retried after delays.saveRetry while it rejects). onClosed:
+   * after closeAfterHand(), once no hand runs and the last save is done.
+   * info: anything the owner wants every view to carry (a credit table's tier).
+   */
+  constructor({ smallBlind, bigBlind, buyIn = BUY_IN, waitForBigBlind = false, allInPlaysOut = false, info = null, delays, rng = secureRandom, onState, onHandEnd, onKick, beforeNextHand, onClosed } = {}) {
     this.delays = { ...DEFAULT_POKER_DELAYS, ...delays };
     this.buyIn = buyIn;
     this.rng = rng;
+    this.info = info;
     this.onState = onState;
     this.onHandEnd = onHandEnd;
     this.onKick = onKick;
-    this.state = createTable({ smallBlind, bigBlind });
+    this.beforeNextHand = beforeNextHand;
+    this.onClosed = onClosed;
+    this.state = createTable({ smallBlind, bigBlind, waitForBigBlind, allInPlaysOut });
     this.started = false;
     this.destroyed = false;
     this.turnEndsAt = null;
@@ -57,17 +70,25 @@ export class PokerTable {
     this.timerFor = null; // which moment of the table that step was armed for (see stepKey)
     this.kickTimers = new Map(); // seat -> timer
     this.timeouts = Array(this.state.seats.length).fill(0);
+    this.save = null; // the last hand's save while it runs
+    this.saveWait = null; // the next deal, waiting on that save
+    this.slowTimer = null;
+    this.saving = false; // the next deal has waited delays.slowSave on the save
+    this.closing = false; // closeAfterHand(): no more hands
+    this.closed = false;
   }
+
 
   firstFreeSeat() {
     return this.state.seats.findIndex((s) => s === null);
   }
 
-  /** player: { name, type, level?, avatar?, key? }. → { ok, seat } or { ok: false, error }. */
+  /** player: { name, type, level?, avatar?, key?, stack? }. → { ok, seat } or { ok: false, error }. */
   sit(player, seat = this.firstFreeSeat()) {
     if (seat === -1) return { ok: false, error: "The table is full" };
-    return this.change((s) => sit(s, seat, { ...player, stack: this.buyIn }), { seat });
+    return this.change((s) => sit(s, seat, { stack: this.buyIn, ...player }), { seat });
   }
+
 
   standUp(seat) {
     this.timeouts[seat] = 0;
@@ -83,6 +104,19 @@ export class PokerTable {
     this.timeouts[seat] = 0;
     return this.change((s) => setSittingOut(s, seat, false));
   }
+  /** Chips that land on `seat`'s stack before the next deal (credit tables). */
+  addChips(seat, amount, max) {
+    return this.change((s) => addChips(s, seat, amount, max));
+  }
+
+  /** No more hands: the one in play finishes and is saved, then onClosed. */
+  closeAfterHand() {
+    if (this.closing) return;
+    this.closing = true;
+    this.onState?.(this);
+    if (!running(this.state)) this.finishClose();
+  }
+
 
   /** The host's START. Hands then follow each other while 2+ players have chips. */
   start() {
@@ -128,7 +162,11 @@ export class PokerTable {
   apply(next) {
     const prev = this.state;
     this.state = next;
-    if (next.phase === PHASES.HAND_OVER && prev.phase !== PHASES.HAND_OVER) this.onHandEnd?.(handSummary(next));
+    if (next.phase === PHASES.HAND_OVER && prev.phase !== PHASES.HAND_OVER) {
+      const summary = handSummary(next);
+      this.onHandEnd?.(summary);
+      if (this.beforeNextHand) this.save = this.saveHand(summary);
+    }
     this.reschedule();
     this.onState?.(this);
   }
@@ -172,6 +210,8 @@ export class PokerTable {
   }
 
   nextHand() {
+    if (this.closing) return this.finishClose();
+    if (this.save) return this.waitForSave();
     let s = this.state;
     // CPUs at a free table buy back in on their own.
     s.seats.forEach((p, i) => {
@@ -179,6 +219,43 @@ export class PokerTable {
     });
     this.apply(canStartHand(s) ? startHand(s, this.rng) : s.phase === PHASES.WAITING ? s : toWaiting(s));
   }
+
+  /** Runs beforeNextHand until it succeeds (the owner keeps it safe to repeat). */
+  async saveHand(summary) {
+    for (;;) {
+      try {
+        await this.beforeNextHand(summary);
+        break;
+      } catch (err) {
+        console.error("[poker] saving the hand failed, retrying:", err.message);
+        await new Promise((resolve) => setTimeout(resolve, this.delays.saveRetry));
+      }
+    }
+    this.save = null;
+  }
+
+  /** The next deal waits for the save; after slowSave the table says so. */
+  waitForSave() {
+    if (this.saveWait) return;
+    this.slowTimer = setTimeout(() => {
+      this.saving = true;
+      this.onState?.(this);
+    }, this.delays.slowSave);
+    this.saveWait = this.save.then(() => {
+      clearTimeout(this.slowTimer);
+      this.saveWait = null;
+      this.saving = false;
+      if (!this.destroyed) this.nextHand();
+    });
+  }
+
+  finishClose() {
+    if (this.closed) return;
+    this.closed = true;
+    this.clearTimer();
+    Promise.resolve(this.save).then(() => this.onClosed?.(this));
+  }
+
 
   playCpu() {
     const s = this.state;
@@ -238,6 +315,7 @@ export class PokerTable {
   destroy() {
     this.destroyed = true;
     this.clearTimer();
+    clearTimeout(this.slowTimer);
     for (const t of this.kickTimers.values()) clearTimeout(t);
     this.kickTimers.clear();
   }
