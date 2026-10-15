@@ -184,4 +184,40 @@ describe("poker tables online", () => {
     const list = await waitFor(watcher, "public_lobbies_update", (l) => l.some((t) => t.id === lobbyId));
     expect(list.find((t) => t.id === lobbyId)).toMatchObject({ gameType: "poker", current: 2, max: 6, inProgress: false });
   });
+
+  it("a player stood up for sitting out no longer hears the table's chat", async () => {
+    const { sock, lobbyId } = await host();
+    const idle = await guest();
+    idle.emit("join_lobby", { lobbyId });
+    await waitFor(idle, "poker_state", (v) => v.mySeat === 1);
+    sock.on("poker_state", (v) => {
+      if (v.legal && v.turn === v.mySeat) sock.emit("poker_move", { lobbyId, move: { type: v.legal.canCheck ? "check" : "call" } });
+    });
+    sock.emit("start_game", { lobbyId });
+    await waitFor(idle, "table_left", (d) => d.reason === "away", 20000);
+    const heard = [];
+    idle.on("receive_chat", (msg) => heard.push(msg));
+    sock.emit("send_chat", { lobbyId, message: "still there?" });
+    await waitFor(sock, "receive_chat");
+    await new Promise((r) => setTimeout(r, 200));
+    expect(heard).toEqual([]);
+  });
+
+  it("the table list frees a seat the moment its player leaves, mid-hand too", async () => {
+    // Earlier tests' players leave after the grace and re-send the list: let that pass first.
+    await new Promise((r) => setTimeout(r, 600));
+    const { sock, lobbyId } = await host();
+    const other = await guest();
+    other.emit("join_lobby", { lobbyId });
+    await waitFor(other, "poker_state", (v) => v.mySeat === 1);
+    sock.emit("start_game", { lobbyId });
+    await waitFor(sock, "poker_state", (v) => v.phase === "BETTING");
+    const watcher = await guest();
+    watcher.emit("get_public_lobbies", { gameType: "poker" });
+    await waitFor(watcher, "public_lobbies_update", (l) => l.find((t) => t.id === lobbyId)?.current === 2);
+    // The first list after the leave already counts the seat free (it used to wait for the next hand).
+    const next = waitFor(watcher, "public_lobbies_update", (l) => l.some((t) => t.id === lobbyId));
+    other.emit("leave_lobby", { lobbyId });
+    expect((await next).find((t) => t.id === lobbyId).current).toBe(1);
+  });
 });
