@@ -43,7 +43,8 @@ Honest status, as of the first deploy (2026-10-01).
 | **Thirteen** | **Playable.** Server-authoritative, reconnect handling, match recording |
 | **Muushig** | **Playable online and in practice.** Online: server-authoritative, up to 5 humans with CPUs in the empty seats, reconnect handling, match recording. Practice: 4 CPUs (Easy/Medium/Hard) in the browser |
 | **Poker** | **Playable online and in practice.** Free chips, 2–6 players, CPUs at free tables, joining between hands, recorded with its own stats |
-| Shop / economy | Not started; `coins` accrues in the DB |
+| **Credits** | **Built.** Balances with a daily CLAIM, credit poker tables (LOW / MID / HIGH, humans only), an all-time leaderboard, a ledger of every credit movement, pair flags and an admin page (§5 Credits) |
+| Shop / economy | Not started; `coins` accrues in the DB (credits are separate) |
 | Deployment | **Live** at https://khuzur.onrender.com — Render (site + game server) and Supabase (Postgres). See §9 |
 
 **Muushig runs in both places.** The rules are pure functions in
@@ -116,7 +117,9 @@ src/
   utils/          socket, SoundManager, avatarConstants,
                   + a client-side copy of the Thirteen rules (display only)
                   + muushig/ (the Muushig engine and CPU players)
-                  + poker/ (the Poker engine, CPU players and PokerTable)
+                  + poker/ (the Poker engine, CPU players, PokerTable and the credit tiers)
+  components/credits/  the buy-in panel, CLAIM, the balance and credit-host panels
+  pages/          … plus Leaderboard and Admin (credits)
 server/
   index.js        Socket.IO entry, auth middleware, lobby management
   game/           engine.js (ThirteenGame, redactState) + Thirteen rules modules
@@ -126,6 +129,9 @@ server/
   auth.js         sign-up/login, JWTs, profile routes (/api/auth/*)
   oauth.js        Google / Discord sign-in (/api/auth/oauth/*)
   persistence.js  match recording
+  credits/        accounts (balances, CLAIM, buy-ins, saved hands), tables
+                  (CreditTable), leaderboard, flagRules + flags, admin, routes,
+                  check (the economy check) — see §5 Credits
   db/             pg pool, migration runner, migrations/ — the schema
 docs/             this file, STYLEGUIDE.md, the two rulebooks
 render.yaml       Render Blueprint: the site and the game server (§9)
@@ -262,17 +268,53 @@ host can add or remove CPUs at any time and `close_table`, which sends everyone
 promoted when the host leaves gets the REMATCH button; the client trusts it over
 the router state it was opened with.
 
+### Credits
+
+Signed-in players with a linked Google or Discord login play poker for
+**credits** at credit tables (LOW 5/10, MID 25/50, HIGH 100/200; the tiers
+and buy-in limits are `src/utils/poker/tiers.js`, copied to the server like
+the rules). Every credit is either in a balance (`credit_accounts`) or at a
+table seat (`credit_seats`), and every move between them is a `credit_ledger`
+row; `server/credits/check.js` checks that the two add up to everything ever
+granted or claimed, minus what an admin removed — at boot and on the admin page.
+
+A credit lobby's `game` is a `PokerTable` with `waitForBigBlind` and
+`allInPlaysOut` on, wrapped in a `CreditTable` (`lobby.credits`,
+`server/credits/tables.js`). The CreditTable runs every change to who holds
+what — buying in, adding chips, saving a finished hand, leaving, releasing the
+table — through **one queue per table**, each a database transaction. The
+PokerTable's `beforeNextHand` is the CreditTable's `saveHand`: the next hand
+doesn't deal until the last one is saved, and a save that fails is retried
+while the felt shows "Saving…". Before writing, the save checks that each
+seated player holds what the database says plus what the hand won or lost
+them; a mismatch is refused, so a bug stops the table instead of spreading.
+
+Leaving between hands pays the saved stack (plus chips waiting to land) back
+at once. A player who leaves in a hand — folding, or playing out an all-in —
+is paid by that hand's save. The host's CLOSE TABLE and the last player out
+both run `closeAfterHand`: the hand in play finishes and is saved, then every
+seat is released and the lobby destroyed. A restart can't keep tables, so at
+boot `returnSeatsAfterRestart` sends every seat home (a hand in play doesn't
+count) and leaves each player a one-time notice.
+
+Routes: `GET /api/credits/me` (balance, CLAIM state, whether you can play,
+your seat, rathole minimums by tier, rank, the restart notice), `POST
+/api/credits/claim`, `GET /api/credits/leaderboard` (top 100; outside it,
+your rank ±5; cached 30s), and `/api/admin/*` (§7).
+
 ### Socket protocol
 
-Client emits: `create_lobby { gameType }`, `join_lobby`, `leave_lobby`,
+Client emits: `create_lobby { gameType, tier?, buyIn? }`, `join_lobby { lobbyId, buyIn? }`, `leave_lobby`,
 `get_public_lobbies { gameType }`, `leave_public_lobbies`, `check_game_status`,
 `add_cpu`, `remove_cpu`, `set_cpu_level`, `start_game`, `leave_page`, `request_move` (Thirteen),
-`muushig_move` (Muushig), `poker_move`, `poker_rebuy`, `poker_sit_in`,
+`muushig_move` (Muushig), `poker_move`, `poker_rebuy`, `poker_add_chips` (credit tables), `poker_sit_in`,
 `close_table` (Poker), `request_rematch`, `send_chat`, `ping_check`,
 `get_stats`.
 
 Server emits: `lobby_joined { gameType }`, `table_update`, `game_state_update`
-(Thirteen), `muushig_state` (Muushig), `poker_state` and `table_left` (Poker),
+(Thirteen), `muushig_state` (Muushig), `poker_state` (with `tier`, `saving`,
+`closingAfterHand` at credit tables), `credit_table_info` (a credit table
+asking for a buy-in) and `table_left { reason }` (Poker),
 `move_rejected`, `public_lobbies_update`, `receive_chat`, `chat_rejected`,
 `error_message`.
 
@@ -445,6 +487,20 @@ summarises is worse than a join.
 Note on score direction: in Thirteen a **lower** score is better (points are
 penalties for cards left in hand), so `best_score` is a `MIN`.
 
+### Credits tables
+
+`009_credits.sql`. `credit_accounts` (one per player, opened with 1000 the
+first time they touch credits; `last_claim_at`, `first_hand_at`, `frozen_at`,
+`restart_notice`), `credit_seats` (who holds what at a table: `stack` as of the
+last saved hand, `pending` chips added since), `credit_hands` (every credit
+hand: each seat's result and hole cards, the board, the event log; unique per
+table run and hand number), `credit_ledger` (append-only: grant, claim,
+buy_in, top_up, cash_out, restart_return, the admin kinds) and
+`credit_flag_reviews` (dismissed flags). `game_sessions.poker_tier` marks a
+credit table's session, and `player_poker_stats` groups by `stakes`
+(`free` | `credits`). The invariant:
+`sum(balance) + sum(stack + pending) = granted + claimed − removed`.
+
 ### `leaderboards`
 
 A **view** aggregating `game_players` — not a table.
@@ -500,8 +556,18 @@ are written only by `persistence.js` when a match finishes, inside one
 transaction that locks the affected profile rows.
 
 **Restart recovery.** Game state is in RAM, so on boot any session still
-`in_progress` is marked `abandoned`. This assumes one game server per
-database.
+`in_progress` is marked `abandoned`, and every credit seat goes back to its
+balance. This assumes one game server per database.
+
+**Credits admin.** `/api/admin/*` and the `/admin` page are open only to the
+user ids in `ADMIN_USER_IDS`; to anyone else the API answers 404. Hole cards
+saved in `credit_hands` leave the server only through that API. Against alt
+accounts feeding a main one: credit play needs a linked Google or Discord
+login; leaving a table and re-sitting within the hour at the same stakes needs
+at least the stack you left with; and `server/credits/flagRules.js` flags pairs
+where one account lost 1,000+ to another, 60%+ of its losses, with little back
+(30-day window). An admin can RETURN or REMOVE credits (never below zero),
+FREEZE an account, or DISMISS a flag — each with a note, each in the ledger.
 
 ## 8. Local development
 
@@ -587,6 +653,7 @@ Router serves `/game-13`, `/profile` and invite links like `/join/CODE`.
 | `PORT` | server (Render sets it) | `10000` on Render; the server reads it |
 | `GOOGLE_CLIENT_ID` / `_SECRET` | server (secret, Render dashboard) | From Google Cloud Console → Credentials. Redirect URI: `https://khuzur-server.onrender.com/api/auth/oauth/google/callback` |
 | `DISCORD_CLIENT_ID` / `_SECRET` | server (secret, Render dashboard) | From the Discord Developer Portal → OAuth2. Redirect: `https://khuzur-server.onrender.com/api/auth/oauth/discord/callback` |
+| `ADMIN_USER_IDS` | server (secret, Render dashboard) | Comma-separated user ids that may open `/admin` (credits review). Empty: nobody |
 | `PUBLIC_URL`, `SITE_URL` | server (optional) | Where providers send players back, and the site they land on. Default to Render's `RENDER_EXTERNAL_URL` and the first `CORS_ORIGIN` |
 
 Secrets are never in git: `DATABASE_URL` is `sync: false` in the Blueprint, and

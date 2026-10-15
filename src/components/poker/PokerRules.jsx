@@ -9,6 +9,7 @@ import React from "react";
 import Rulebook, { Callout, CardRow, Hi, Kbd, Key, Section, Steps } from "../Rulebook";
 import { BIG_BLIND, BUY_IN, MAX_SEATS, SMALL_BLIND } from "../../utils/poker/engine";
 import { DEFAULT_POKER_DELAYS, MAX_TIMEOUTS } from "../../utils/poker/table";
+import { TIERS, fmt } from "../../utils/poker/tiers";
 
 const SECTIONS = [
   ["goal", "The goal"],
@@ -18,6 +19,7 @@ const SECTIONS = [
   ["showdown", "Showdown and pots"],
   ["table", "Seats and chips"],
   ["controls", "Controls"],
+  ["credits", "Credit tables"],
 ];
 
 export default function PokerRules({ onClose }) {
@@ -103,6 +105,23 @@ export default function PokerRules({ onClose }) {
           <Kbd>F</Kbd> fold · <Kbd>C</Kbd> check or call · <Kbd>R</Kbd> raise by the amount set. ½ POT, POT and ALL-IN set the amount; the slider
           and the box fine-tune it, and <Kbd>Enter</Kbd> in the box raises.
         </p>
+      </Section>
+
+      <Section id="credits" n={8} title="Credit tables">
+        <p>
+          Signed in with Google or Discord, you can also play for <Key>credits</Key>, which stay with your account. You start with <Key>1,000</Key>; once a day, if your balance
+          plus what's at a table is under 1,000, <Hi>CLAIM</Hi> tops you back up to exactly 1,000.
+        </p>
+        <Steps
+          items={[
+            ...Object.values(TIERS).map((t) => `${t.id}: blinds ${t.smallBlind}/${t.bigBlind}, buy in ${fmt(t.minBuyIn)}–${fmt(t.maxBuyIn)}. People only, no CPUs.`),
+            "Sitting down moves your buy-in from your balance to the table. Left a table at the same stakes within the hour? Bring at least what you left with.",
+            "Newcomers and players back from sitting out are dealt in when the big blind reaches them.",
+            "Between hands, ADD CHIPS tops you up to the table's maximum. Out of chips, REBUY.",
+            "Leaving sends your stack home. In a hand you fold — unless you're all-in: then it plays out and what it wins is yours.",
+            "If the server restarts, every stack goes home and a hand being played doesn't count.",
+          ]}
+        />
       </Section>
     </Rulebook>
   );
