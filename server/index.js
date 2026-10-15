@@ -573,11 +573,10 @@ function removeMember(lobby, member, { convertSeat = true } = {}) {
   }
 
   // Poker: the seat empties (the hand in play folds). A credit seat's credits
-  // go home now, or when the hand they're in is saved.
-  if (lobby.gameType === "poker" && member.seatIndex != null) {
-    if (lobby.credits) member.cashedOut = lobby.credits.leave(member.userId);
-    else lobby.game.standUp(member.seatIndex);
-  }
+  // go home now, or when the hand they're in is saved. leave() is queued behind
+  // any buy-in still in flight, so it's always called and pays out whatever got seated.
+  if (lobby.credits) member.cashedOut = lobby.credits.leave(member.userId);
+  else if (lobby.gameType === "poker" && member.seatIndex != null) lobby.game.standUp(member.seatIndex);
 
   // Mid-game: a CPU inherits the seat and hand so the match can continue.
   const cpuTookOver = !!(convertSeat && lobby.game && lobby.gameType !== "poker" && member.seatIndex != null);

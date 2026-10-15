@@ -272,6 +272,20 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables over sockets (Postgres)", () 
     expect(await balance(bob)).toBe(1000);
   });
 
+  it("LEAVE sent while the buy-in is still going through pays the credits straight back", async () => {
+    const { lobbyId } = await hostTable(await player());
+    const bob = await player();
+    const b = await client(bob);
+    b.emit("join_lobby", { lobbyId, buyIn: 400 });
+    b.emit("leave_lobby", { lobbyId });
+    await until(async () => {
+      const { rows } = await m.pool.query("select kind from credit_ledger where user_id = $1 order by id", [bob]);
+      return rows.map((r) => r.kind).join() === "grant,buy_in,cash_out";
+    }, 4000);
+    expect(await seatRow(bob)).toBeNull();
+    expect(await balance(bob)).toBe(1000);
+  });
+
   it("the same account in two tabs: LEAVE in one pays out once, and the other can't play on", async () => {
     const ann = await player();
     const { sock: tab1, lobbyId } = await hostTable(ann);
