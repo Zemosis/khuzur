@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import GamePoker from "../../src/pages/poker/GamePoker";
 import { act as play, viewFor } from "../../src/utils/poker/engine.js";
 import { tableWith, dealt } from "../helpers/poker.js";
@@ -43,12 +43,15 @@ const inHand = () => named(dealt(tableWith([500, null, 500, null, null, null], C
 const patchMe = (s, patch) => ({ ...s, seats: s.seats.map((p, i) => (i === 0 ? { ...p, ...patch } : p)) });
 const view = (s, extra = {}) => ({ ...viewFor(s, 0), turnMsLeft: null, started: true, amHost: true, tier: "LOW", saving: false, closingAfterHand: false, ...extra });
 
+function Lobby() {
+  return <div>POKER LOBBY {useLocation().state?.tab ?? "free"}</div>;
+}
 const open = () =>
   render(
     <MemoryRouter initialEntries={[{ pathname: "/game-poker", state: { lobbyId: LOBBY, playerName: "ME #0003" } }]}>
       <Routes>
         <Route path="/game-poker" element={<GamePoker />} />
-        <Route path="/lobby-poker" element={<div>POKER LOBBY</div>} />
+        <Route path="/lobby-poker" element={<Lobby />} />
         <Route path="/" element={<div>MAIN MENU</div>} />
       </Routes>
     </MemoryRouter>,
@@ -143,5 +146,22 @@ describe("a credit table", () => {
     const dialog = await screen.findByRole("dialog", { name: "Buy in · LOW 5/10" });
     await userEvent.click(within(dialog).getByRole("button", { name: "Sit with 200" }));
     expect(emitted("join_lobby").at(-1)).toEqual({ lobbyId: LOBBY, playerName: "ME #0003", buyIn: 200 });
+  });
+
+  it("leaving goes back to the lobby's CREDITS tab", async () => {
+    open();
+    await act(async () => {});
+    serverSends("poker_state", view(between()));
+    await userEvent.click(screen.getByRole("button", { name: "Exit" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Leave" }));
+    expect(screen.getByText("POKER LOBBY credits")).toBeInTheDocument();
+  });
+
+  it("closed or stood up, it goes back to the CREDITS tab too", async () => {
+    open();
+    await act(async () => {});
+    serverSends("poker_state", view(between()));
+    serverSends("table_left", { reason: "closed" });
+    expect(screen.getByText("POKER LOBBY credits")).toBeInTheDocument();
   });
 });

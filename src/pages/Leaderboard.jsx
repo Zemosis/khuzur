@@ -40,14 +40,17 @@ function Rows({ rows, label }) {
               <td className="px-3 py-2">
                 <span className="flex items-center gap-3 min-w-0">
                   <PixelAvatar variant={face.variant} size={34} customAvatarData={face.customAvatarData} />
-                  <span className="font-pixel-body text-[22px] text-parchment truncate">
-                    {r.name} #{r.tag}
-                  </span>
-                  {r.atTable && (
-                    <span className="font-pixel-display text-[8px] px-1.5 py-1 shrink-0" style={{ backgroundColor: "#2a8a8c", color: "#0a2a2c" }}>
-                      AT TABLE
+                  {/* On a phone the AT TABLE tag goes under the name, which keeps its width. */}
+                  <span className="flex items-center gap-x-3 gap-y-1 min-w-0 max-sm:flex-col max-sm:items-start">
+                    <span className="font-pixel-body text-[22px] text-parchment truncate max-w-full">
+                      {r.name} #{r.tag}
                     </span>
-                  )}
+                    {r.atTable && (
+                      <span className="font-pixel-display text-[8px] px-1.5 py-1 shrink-0" style={{ backgroundColor: "#2a8a8c", color: "#0a2a2c" }}>
+                        AT TABLE
+                      </span>
+                    )}
+                  </span>
                 </span>
               </td>
               <td className="px-3 py-2 text-right font-pixel-display text-[12px] text-glow-gold tabular-nums">{fmt(r.total)}</td>

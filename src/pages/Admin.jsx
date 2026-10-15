@@ -8,6 +8,8 @@ import { useNavigate } from "react-router-dom";
 import { TopBar, Panel, Btn } from "../components/PixelUI";
 import { TONES, INK, inputStyle } from "../components/pixelTokens";
 import { api } from "../lib/api";
+import { connectSocket } from "../utils/socket";
+import { useAuth } from "../hooks/useAuth";
 import { fmt } from "../utils/poker/tiers";
 import { eventLine } from "../utils/poker/log";
 
@@ -218,7 +220,12 @@ function Lookup() {
 
 export default function Admin() {
   const navigate = useNavigate();
+  const { identity } = useAuth();
   const [state, setState] = useState({ status: "loading" });
+  // Keeps the top bar's server status live, as on every other screen.
+  useEffect(() => {
+    connectSocket(identity);
+  }, [identity.name, identity.tag]);
   const [reviewing, setReviewing] = useState(null);
 
   const [version, setVersion] = useState(0); // bumped after an action: load everything again

@@ -162,6 +162,20 @@ describe("the CREDITS tab", () => {
   });
 });
 
+describe("coming back from a credit table", () => {
+  it("opens on the CREDITS tab", async () => {
+    apiMock.mockResolvedValue(ME);
+    render(
+      <MemoryRouter initialEntries={[{ pathname: "/lobby-poker", state: { tab: "credits" } }]}>
+        <LobbyPoker />
+      </MemoryRouter>,
+    );
+    await settle();
+    expect(screen.getByRole("tab", { name: "Credits" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("2,340")).toBeInTheDocument();
+  });
+});
+
 describe("an invite link to a credit table", () => {
   it("shows the buy-in panel, then joins with the amount", async () => {
     apiMock.mockResolvedValue(ME);

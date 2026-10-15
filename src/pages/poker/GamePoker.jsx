@@ -105,6 +105,7 @@ function OnlinePoker({ lobbyId, playerName }) {
   const [fatal, setFatal] = useState("");
   const chatLimit = useChatLimit();
   const seenRef = useRef(0);
+  const tierRef = useRef(null); // a credit table's tier, so leaving lands on the lobby's CREDITS tab
   const { credits, refresh: refreshCredits } = useCredits({ enabled: false });
   // The buy-in panel at a credit table: { mode: "sit" | "add" | "rebuy", tier, tableName?, busy, error }.
   const [buyIn, setBuyIn] = useState(null);
@@ -122,6 +123,7 @@ function OnlinePoker({ lobbyId, playerName }) {
       seenRef.current += 1;
       // `received` restarts the turn clock's bar at the time left on arrival.
       setView({ ...v, received: seenRef.current });
+      tierRef.current = v.tier ?? null;
       setRejection(null);
       if (v.mySeat >= 0 && v.seats[v.mySeat]) setBuyIn((b) => (b?.mode === "sit" ? null : b));
     };
@@ -137,7 +139,7 @@ function OnlinePoker({ lobbyId, playerName }) {
       setBuyIn({ mode: "sit", tier, tableName: name, busy: false, error: "" });
     };
     // Sat out too long, or the host closed the table.
-    const onLeft = () => navigate("/lobby-poker");
+    const onLeft = () => navigate("/lobby-poker", tierRef.current ? { state: { tab: "credits" } } : undefined);
     socket.on("connect", join);
     socket.on("poker_state", onState);
     socket.on("receive_chat", onChat);
@@ -175,7 +177,8 @@ function OnlinePoker({ lobbyId, playerName }) {
     // Leaving a credit table goes back to the poker lobby, where the CREDITS tab is.
     exit: () => {
       emit("leave_lobby");
-      navigate(view?.tier ? "/lobby-poker" : "/");
+      if (view?.tier) navigate("/lobby-poker", { state: { tab: "credits" } });
+      else navigate("/");
     },
     sendChat: (text) => text.trim() && emit("send_chat", { message: text.trim() }),
     addChips: (amount) => emit("poker_add_chips", { amount }),
@@ -488,10 +491,10 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
               : `${live ? "Your hand folds. " : ""}Your ${fmt(held)} credits go back to your balance.`}
           </p>
           <div className="grid grid-cols-2 gap-2.5">
-            <button className={EXTRA_BTN} style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }} onClick={() => setConfirmLeave(false)}>
+            <button className={`${EXTRA_BTN} uppercase`} style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }} onClick={() => setConfirmLeave(false)}>
               Stay
             </button>
-            <button className={EXTRA_BTN} style={{ backgroundColor: "#7a1530", borderColor: "#3a0a18", color: "#ead8b1" }} onClick={actions.exit}>
+            <button className={`${EXTRA_BTN} uppercase`} style={{ backgroundColor: "#7a1530", borderColor: "#3a0a18", color: "#ead8b1" }} onClick={actions.exit}>
               Leave
             </button>
           </div>

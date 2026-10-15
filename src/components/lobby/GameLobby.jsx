@@ -16,7 +16,7 @@
 // rather than squeezing panels into each other.
 
 import React, { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { socket, connectSocket } from "../../utils/socket";
 import { PixelAvatar } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
@@ -376,7 +376,9 @@ export default function GameLobby({ game }) {
   const playerName = `${identity.name} #${identity.tag}`;
   const ev = game.events;
   // A game with credits (poker) has FREE and CREDITS tabs.
-  const [mode, setMode] = useState("free");
+  // Back from a credit table, the lobby opens on the CREDITS tab.
+  const location = useLocation();
+  const [mode, setMode] = useState(game.credits && location.state?.tab === "credits" ? "credits" : "free");
   const credit = !!game.credits && mode === "credits";
   const { credits, error: creditsError, busy: claiming, refresh: refreshCredits, claim } = useCredits({ enabled: !!game.credits });
   // The buy-in panel: { tier, tableName, lobbyId? | create: { name, isPrivate }, busy, error }.

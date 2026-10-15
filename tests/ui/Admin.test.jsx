@@ -4,9 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import Admin from "../../src/pages/Admin";
 
-const { apiMock } = vi.hoisted(() => ({ apiMock: vi.fn() }));
+const { apiMock, connectSocket } = vi.hoisted(() => ({ apiMock: vi.fn(), connectSocket: vi.fn() }));
 vi.mock("../../src/lib/api", () => ({ api: apiMock }));
-vi.mock("../../src/utils/socket", () => ({ socket: {}, connectSocket: () => {} }));
+vi.mock("../../src/utils/socket", () => ({ socket: {}, connectSocket }));
 vi.mock("../../src/hooks/useServerStats", () => ({ useServerStats: () => ({ connected: true, online: 1 }) }));
 vi.mock("../../src/hooks/useAuth", () => ({ useAuth: () => ({ identity: { name: "BOSS", tag: "0001", avatar: "1" }, isGuest: false, loading: false }) }));
 
@@ -96,5 +96,11 @@ describe("admin page", () => {
     routes({ "/check": () => ({ ...CHECK, ok: false }) });
     await open();
     expect(screen.getByText("MISMATCH")).toBeInTheDocument();
+  });
+
+  it("connects to the server like every other screen, so the top bar shows it online", async () => {
+    routes();
+    await open();
+    expect(connectSocket).toHaveBeenCalledWith(expect.objectContaining({ name: "BOSS" }));
   });
 });
