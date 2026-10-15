@@ -295,11 +295,14 @@ is paid by that hand's save. The host's CLOSE TABLE and the last player out
 both run `closeAfterHand`: the hand in play finishes and is saved, then every
 seat is released and the lobby destroyed. A restart can't keep tables, so at
 boot `returnSeatsAfterRestart` sends every seat home (a hand in play doesn't
-count) and leaves each player a one-time notice.
+count) and leaves each player a notice, shown until they dismiss it. A deploy
+boots the new server before stopping the old one, so on SIGTERM the old one
+refuses new buy-ins and releases every credit table before exiting.
 
 Routes: `GET /api/credits/me` (balance, CLAIM state, whether you can play,
 your seat, rathole minimums by tier, rank, the restart notice), `POST
-/api/credits/claim`, `GET /api/credits/leaderboard` (top 100; outside it,
+/api/credits/claim` (counts the saved seat under the account lock, so a claim
+racing a buy-in can't add credits), `POST /api/credits/notice` (dismisses it), `GET /api/credits/leaderboard` (top 100; outside it,
 your rank ±5; cached 30s), and `/api/admin/*` (§7).
 
 ### Socket protocol
