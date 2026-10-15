@@ -1047,7 +1047,14 @@ io.on("connection", (socket) => {
   socket.on("leave_lobby", ({ lobbyId } = {}) => {
     const lobby = lobbies.get(lobbyId);
     const member = lobby?.members.get(socket.data.playerKey);
-    if (!lobby || !member || member.socketId !== socket.id) return;
+    if (!lobby || !member) return;
+    if (member.socketId !== socket.id) {
+      // An older tab of the same player. At a poker table its EXIT still leaves
+      // (a seat left behind would keep posting blinds), and the tab holding the seat is told.
+      if (lobby.gameType !== "poker") return;
+      if (member.connected && member.socketId) io.to(member.socketId).emit("table_left", { reason: "left" });
+      io.sockets.sockets.get(member.socketId)?.leave(lobbyId);
+    }
     socket.leave(lobbyId);
     removeMember(lobby, member);
   });

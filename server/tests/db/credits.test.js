@@ -13,12 +13,13 @@ describe.skipIf(!TEST_DATABASE_URL)("credit accounts (Postgres)", () => {
   let A; // server/credits/accounts.js
   let C; // server/credits/check.js
   let CreditError;
+  let CreditMismatch;
   beforeAll(async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     m = await loadDb();
     A = await import("../../credits/accounts.js");
     C = await import("../../credits/check.js");
-    ({ CreditError } = await import("../../credits/rules.js"));
+    ({ CreditError, CreditMismatch } = await import("../../credits/rules.js"));
   });
   beforeEach(() => truncateAll(m.pool));
   afterAll(() => m?.pool.end());
@@ -188,7 +189,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit accounts (Postgres)", () => {
       await sit(ann, T1, "LOW", 500);
       await expect(
         A.saveHand({ tableId: T1, tier: "LOW", isPrivate: false, sessionId: null, events: [], summary: hand(1, [[ann, 500, 600]]), seats: [{ userId: ann, stack: 700, pending: 0, leaving: false }] }),
-      ).rejects.toThrow(/don't match/);
+      ).rejects.toThrow(CreditMismatch);
       expect((await m.pool.query("select count(*)::int as n from credit_hands")).rows[0].n).toBe(0);
     });
   });

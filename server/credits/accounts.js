@@ -5,7 +5,7 @@
 
 import { pool, withTransaction } from "../db/index.js";
 import { TIERS, TIER_IDS, RATHOLE_MS, buyInRange, topUpRange, fmt } from "../game/poker/tiers.js";
-import { CreditError, START_BALANCE, claimState, untilText } from "./rules.js";
+import { CreditError, CreditMismatch, START_BALANCE, claimState, untilText } from "./rules.js";
 
 const num = (v) => (v == null ? null : Number(v));
 
@@ -225,7 +225,7 @@ export function saveHand({ tableId, tier, isPrivate, sessionId, summary, events,
     for (const x of seats) {
       const expected = saved.has(x.userId) ? saved.get(x.userId) + (net.get(x.userId) ?? 0) : null;
       if (x.stack + x.pending !== expected) {
-        throw new Error(`credits at table ${tableId} don't match the database for ${x.userId}: ${x.stack + x.pending} vs ${expected}`);
+        throw new CreditMismatch(`credits at table ${tableId} don't match the database for ${x.userId}: ${x.stack + x.pending} vs ${expected}`);
       }
     }
     for (const x of seats) {

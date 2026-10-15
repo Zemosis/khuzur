@@ -9,6 +9,9 @@ const RETRY_MS = Number(process.env.CREDIT_RETRY_MS) || 5000;
 /** A refusal the player can act on: its message is shown to them as is. */
 export class CreditError extends Error {}
 
+/** A table in memory and the database disagree about who holds what: a bug, never shown to players. */
+export class CreditMismatch extends Error {}
+
 /**
  * Where CLAIM stands: { state: "ready", amount } | { state: "wait", nextAt }
  * | { state: "over" } | { state: "frozen" }. onTable: what the player holds

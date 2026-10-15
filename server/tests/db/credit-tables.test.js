@@ -195,4 +195,60 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables (Postgres)", () => {
     expect(await handsSaved()).toBeGreaterThanOrEqual(1);
     expect((await C.economyCheck()).ok).toBe(true);
   });
+
+  it("a player who leaves while an already-saved hand is retried still gets paid at once", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const real = await import("../../credits/accounts.js");
+    let lostReply = true;
+    let failed = false;
+    // The first save commits, then its reply is "lost": the table retries a save that's already written.
+    const store = {
+      ...real,
+      saveHand: async (args) => {
+        const id = await real.saveHand(args);
+        if (lostReply) {
+          lostReply = false;
+          failed = true;
+          throw new Error("reply lost");
+        }
+        return id;
+      },
+    };
+    const ct = table({ store, delays: { ...DELAYS, saveRetry: 300 } });
+    const { ann } = await twoSeated(ct);
+    let summary;
+    ct.table.onHandEnd = (h) => (summary = h);
+    ct.table.start();
+    await playUntil(ct, async () => ct.table.state.phase === "BETTING" && ct.table.state.turn === 0);
+    ct.table.move(0, { type: "fold" }); // heads-up: the hand ends at once
+    await playUntil(ct, async () => failed);
+    await ct.leave(ann);
+    expect(await saved(ann)).toBeNull();
+    expect(await balance(ann)).toBe(500 + summary.seatResults.find((r) => r.player_key === ann).stack_after);
+  });
+
+  it("a table whose saves keep disagreeing with the database closes, sending everyone's saved credits home", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { CreditMismatch } = await import("../../credits/rules.js");
+    const real = await import("../../credits/accounts.js");
+    const store = { ...real, saveHand: async () => Promise.reject(new CreditMismatch("credits don't match")) };
+    const onClosed = vi.fn();
+    const ct = table({ store, onClosed });
+    const { ann, bob } = await twoSeated(ct);
+    ct.table.start();
+    await playUntil(ct, async () => onClosed.mock.calls.length > 0);
+    expect([await balance(ann), await balance(bob)]).toEqual([1000, 1000]);
+    expect(await saved(ann)).toBeNull();
+  });
+
+  it("a table closing after its hand takes no new buy-ins", async () => {
+    const ct = table();
+    await twoSeated(ct);
+    ct.table.start();
+    await playUntil(ct, async () => ct.table.state.phase === "BETTING");
+    ct.table.closeAfterHand();
+    const carol = await makePlayer(m.pool, "CAROL");
+    expect(await ct.sit({ userId: carol, name: "CAROL" }, 300)).toEqual({ ok: false, error: "This table is closing" });
+    expect(await balance(carol)).toBe(1000);
+  });
 });

@@ -8,9 +8,12 @@ import { randomUUID } from "node:crypto";
 import { PokerTable } from "../game/poker/table.js";
 import { TIERS } from "../game/poker/tiers.js";
 import * as accounts from "./accounts.js";
-import { failure, retry } from "./rules.js";
+import { CreditMismatch, failure, retry } from "./rules.js";
 
 const running = (s) => s.phase === "BETTING" || s.phase === "RUNOUT";
+// A save the database refuses this many times in a row as not matching is a bug:
+// the table closes, everyone home at the stacks last saved.
+const MAX_MISMATCHES = 3;
 
 export class CreditTable {
   /**
@@ -31,6 +34,7 @@ export class CreditTable {
     this.unsaved = false; // a hand has ended and its save hasn't finished
     this.leavers = new Map(); // userId -> [resolve]: paid out by the hand being played or saved
     this.released = false;
+    this.mismatches = 0;
     this.table = new PokerTable({
       ...options,
       smallBlind: t.smallBlind,
@@ -67,7 +71,7 @@ export class CreditTable {
    */
   sit({ userId, name, avatar = null }, amount, onSeat = () => {}) {
     return this.enqueue(async () => {
-      if (this.released) return { ok: false, error: "This table is closing" };
+      if (this.released || this.table.closing) return { ok: false, error: "This table is closing" };
       const seat = this.table.firstFreeSeat();
       if (seat === -1) return { ok: false, error: "The table is full" };
       try {
@@ -135,9 +139,22 @@ export class CreditTable {
       const seats = s.seats.flatMap((p, seat) =>
         p?.type === "HUMAN" ? [{ seat, userId: p.key, stack: p.stack, pending: p.pending, leaving: p.leaving || this.leavers.has(p.key) }] : [],
       );
-      await this.store.saveHand({ tableId: this.id, tier: this.tier, isPrivate: this.isPrivate, sessionId: await this.sessionId(), summary, events: s.events, seats });
+      let handId;
+      try {
+        handId = await this.store.saveHand({ tableId: this.id, tier: this.tier, isPrivate: this.isPrivate, sessionId: await this.sessionId(), summary, events: s.events, seats });
+      } catch (err) {
+        if (!(err instanceof CreditMismatch) || ++this.mismatches < MAX_MISMATCHES) throw err; // tried again
+        // Never deal on credits the database disagrees with: void this hand and close the table.
+        console.error(`[credits] TABLE ${this.id} DISAGREES WITH THE DATABASE (${this.mismatches}x): closing it, everyone home at the stacks last saved:`, err.message);
+        this.table.closeAfterHand();
+        return this.releaseNow("cash_out");
+      }
+      this.mismatches = 0;
       this.unsaved = false;
       for (const x of seats.filter((x) => x.leaving)) {
+        // No id: this hand was saved by an earlier try whose reply was lost, before
+        // this player left — so that save didn't pay them. Pay them now.
+        if (handId == null) await retry(() => this.store.cashOut(x.userId, this.id), `paying out ${x.userId}`);
         if (this.table.state.seats[x.seat]) this.table.standUp(x.seat); // the hand is over: the seat empties now
         for (const resolve of this.leavers.get(x.userId) ?? []) resolve();
         this.leavers.delete(x.userId);
@@ -147,12 +164,15 @@ export class CreditTable {
 
   /** Everyone's credits home at the stacks last saved; a hand still running is void. */
   release(kind = "cash_out") {
-    return this.enqueue(async () => {
-      this.released = true;
-      await retry(() => this.store.releaseTable(this.id, kind), `releasing table ${this.id}`);
-      for (const list of this.leavers.values()) for (const resolve of list) resolve();
-      this.leavers.clear();
-    });
+    return this.enqueue(() => this.releaseNow(kind));
+  }
+
+  /** release()'s work, for a job already in the queue. */
+  async releaseNow(kind) {
+    this.released = true;
+    await retry(() => this.store.releaseTable(this.id, kind), `releasing table ${this.id}`);
+    for (const list of this.leavers.values()) for (const resolve of list) resolve();
+    this.leavers.clear();
   }
 
   destroy() {

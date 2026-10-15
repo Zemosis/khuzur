@@ -316,6 +316,20 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables over sockets (Postgres)", () 
     expect(await balance(ann)).toBe(1000);
   });
 
+  it("LEAVE from an older tab of the same account still leaves, and the newer tab is told", async () => {
+    const ann = await player();
+    const { sock: tab1, lobbyId } = await hostTable(ann);
+    await joinTable(await player(), lobbyId);
+    const tab2 = await client(ann);
+    tab2.emit("join_lobby", { lobbyId });
+    await waitFor(tab2, "lobby_joined");
+    const told = waitFor(tab2, "table_left", (d) => d.reason === "left");
+    tab1.emit("leave_lobby", { lobbyId });
+    await told;
+    await until(async () => !(await seatRow(ann)));
+    expect(await balance(ann)).toBe(1000);
+  });
+
   it("reconnecting mid-hand finds your seat, your cards and your stack", async () => {
     const ann = await player();
     const { sock: a, lobbyId } = await hostTable(ann);
