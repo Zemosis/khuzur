@@ -42,3 +42,15 @@ export async function makeUser(pool, email, profile = {}) {
   );
   return row;
 }
+
+/**
+ * A signed-in player with a name, and (unless linked: false) a Google login,
+ * which credit play needs. Returns the user id.
+ */
+export async function makePlayer(pool, name, { linked = true } = {}) {
+  const p = await makeUser(pool, `${name.toLowerCase()}@test.dev`, { username: name, tag: "0001" });
+  if (linked) {
+    await pool.query("insert into oauth_identities (provider, provider_user_id, user_id) values ('google', $1, $2)", [`g-${p.id}`, p.id]);
+  }
+  return p.id;
+}
