@@ -492,6 +492,7 @@ async function endCreditTable(lobby) {
 /** Why this socket can't host or join a credit table at `tier`, or null. A linked login and frozen accounts are checked with the buy-in. */
 function creditRefusal(socket, tier) {
   if (!pool) return "Credit tables aren't available right now";
+  if (shuttingDown) return "The server is restarting. Try again in a minute.";
   if (!isTier(tier)) return "Pick LOW, MID or HIGH";
   if (!socket.data.userId) return "Sign in to play for credits";
   return null;
@@ -1074,6 +1075,23 @@ io.on("connection", (socket) => {
     holdSeat(lobby, member);
   });
 });
+
+// A deploy starts the new server before this one is told to stop (SIGTERM).
+// The new one sends seats home at boot, but this one could still take buy-ins
+// meanwhile — so, told to stop, refuse new ones and send every credit seat home
+// (a hand in play doesn't count) before exiting.
+let shuttingDown = false;
+async function shutDown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const tables = [...lobbies.values()].filter((l) => l.credits);
+  console.log(`[credits] ${signal}: sending ${tables.length} credit table(s) home before exiting`);
+  const released = Promise.all(tables.map((l) => l.credits.release("restart_return")));
+  await Promise.race([released, new Promise((resolve) => setTimeout(resolve, 10_000))]);
+  process.exit(0);
+}
+process.on("SIGTERM", () => shutDown("SIGTERM"));
+process.on("SIGINT", () => shutDown("SIGINT"));
 
 // Schema first: a server that accepted players before its tables existed would
 // fail every match write. No credit table survives a restart, so their seats'

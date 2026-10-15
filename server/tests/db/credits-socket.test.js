@@ -330,6 +330,26 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables over sockets (Postgres)", () 
     expect(v.seats[0].stack).toBe(during.seats[0].stack);
   });
 
+  it("told to stop (a deploy), the server sends every seat home before it exits", async () => {
+    const ann = await player();
+    const bob = await player();
+    const { sock: a, lobbyId } = await hostTable(ann, { buyIn: 600 });
+    await joinTable(bob, lobbyId, 400);
+    a.emit("start_game", { lobbyId });
+    await waitFor(a, "poker_state", (v) => v.phase === "BETTING");
+    const exited = new Promise((r) => server.once("exit", r));
+    server.kill("SIGTERM");
+    await exited;
+    // Before any new server boots: nothing left at a table, everyone paid at the stack their hand started with.
+    expect(await seatRow(ann)).toBeNull();
+    expect([await balance(ann), await balance(bob)]).toEqual([1000, 1000]);
+    const { rows } = await m.pool.query("select kind from credit_ledger where user_id = $1 order by id desc limit 1", [ann]);
+    expect(rows[0].kind).toBe("restart_return");
+    await startServer();
+    const me = await (await fetch(`${url}/api/credits/me`, { headers: { Authorization: `Bearer ${token(ann)}` } })).json();
+    expect(me.notice).toEqual({ amount: 600, tableName: "Felt" });
+  });
+
   // Last: it restarts the server.
   it("a restart mid-hand sends every seat home at the stack its hand started with, and says so once", async () => {
     const ann = await player();

@@ -234,14 +234,21 @@ export function saveHand({ tableId, tier, isPrivate, sessionId, summary, events,
   });
 }
 
-/** Every seat at `tableId` home at its saved stack plus pending (a hand still running is void). */
+/**
+ * Every seat at `tableId` home at its saved stack plus pending (a hand still
+ * running is void). A restart_return (the server stopping) leaves each player
+ * the one-time notice too.
+ */
 export function releaseTable(tableId, kind = "cash_out") {
   return withTransaction(async (client) => {
-    const { rows } = await client.query("select user_id, tier, stack, pending from credit_seats where table_id = $1 order by user_id for update", [tableId]);
+    const { rows } = await client.query("select user_id, table_name, tier, stack, pending from credit_seats where table_id = $1 order by user_id for update", [tableId]);
     const paid = [];
     for (const r of rows) {
       const amount = num(r.stack) + num(r.pending);
       await payOut(client, r.user_id, tableId, { tier: r.tier, amount, kind });
+      if (kind === "restart_return") {
+        await client.query("update credit_accounts set restart_notice = $2 where user_id = $1", [r.user_id, JSON.stringify({ amount, tableName: r.table_name })]);
+      }
       paid.push({ userId: r.user_id, amount });
     }
     return paid;
