@@ -48,11 +48,18 @@ export function shuffle(cards, rng = secureRandom) {
 
 // ---- Table and seats ---------------------------------------------------------
 
-export function createTable({ smallBlind = SMALL_BLIND, bigBlind = BIG_BLIND } = {}) {
+/**
+ * waitForBigBlind: newcomers (and players back from sitting out) aren't dealt
+ * in until the big blind reaches them. allInPlaysOut: an all-in player who
+ * leaves keeps their hand. Credit tables turn both on; free tables neither.
+ */
+export function createTable({ smallBlind = SMALL_BLIND, bigBlind = BIG_BLIND, waitForBigBlind = false, allInPlaysOut = false } = {}) {
   return {
     seats: Array(MAX_SEATS).fill(null),
     smallBlind,
     bigBlind,
+    waitForBigBlind,
+    allInPlaysOut,
     phase: PHASES.WAITING,
     handNumber: 0,
     button: null,
@@ -117,27 +124,35 @@ export function sit(state, seat, { name, type = "HUMAN", level = null, avatar = 
     bought: stack, // every chip ever brought to the table: net = stack - bought
     sittingOut: false,
     leaving: false,
+    pending: 0, // chips added since the last deal: they land on the stack when the next hand starts
+    waitingForBB: !!state.waitForBigBlind, // not dealt in until the big blind reaches them
     ...handFields(),
   });
 }
 
-/** The player leaves. In a hand, their cards fold now and the seat empties when it ends. */
+/**
+ * The player leaves. In a hand, their cards fold now and the seat empties when
+ * it ends — except an all-in at a table with allInPlaysOut: that hand plays
+ * out, and whatever it wins is on the seat when it ends.
+ */
 export function standUp(state, seat) {
   const p = state.seats[seat];
   if (!p) return state;
   if (!handRunning(state) || !p.inHand) return withSeat(state, seat, null);
+  if (state.allInPlaysOut && p.allIn && !p.folded) return patchSeat(state, seat, { leaving: true });
   let s = patchSeat(state, seat, { leaving: true });
   if (!p.folded) s = fold(s, seat);
   if (s.phase === PHASES.RUNOUT) return liveSeats(s).length === 1 ? winUncontested(s, liveSeats(s)[0]) : s;
   return settle(s, (s.turn + MAX_SEATS - 1) % MAX_SEATS);
 }
 
-/** Sitting out keeps the seat and stack but isn't dealt in. Coming back needs chips. */
+/** Sitting out keeps the seat and stack but isn't dealt in. Coming back needs chips, and may wait for the big blind. */
 export function setSittingOut(state, seat, out) {
   const p = state.seats[seat];
   if (!p) throw new Error("No one sits there");
-  if (!out && p.stack === 0) throw new Error("Rebuy first");
-  return patchSeat(state, seat, { sittingOut: !!out });
+  if (!out && p.stack + p.pending === 0) throw new Error("Rebuy first");
+  const back = !out && p.sittingOut && state.waitForBigBlind;
+  return patchSeat(state, seat, { sittingOut: !!out, ...(back ? { waitingForBB: true } : {}) });
 }
 
 /** A busted player buys back in (free chips): back to `amount`, dealt in next hand. */
@@ -149,9 +164,33 @@ export function rebuy(state, seat, amount = BUY_IN) {
   return patchSeat(state, seat, { stack: amount, bought: p.bought + amount, sittingOut: false });
 }
 
-/** Seats that would be dealt into a hand starting now. */
+/**
+ * Chips brought to a seat (credit tables): held as `pending` and put on the
+ * stack when the next hand is dealt, so they never play in a hand already
+ * running. Stack plus pending may not pass `max`. A busted player who adds
+ * chips is back in, waiting for the big blind where the table asks for it.
+ */
+export function addChips(state, seat, amount, max = Infinity) {
+  const p = state.seats[seat];
+  if (!p) throw new Error("No one sits there");
+  if (!Number.isInteger(amount) || amount <= 0) throw new Error("Pick an amount");
+  if (p.stack + p.pending + amount > max) throw new Error(`You can have at most ${max} on the table`);
+  const back = p.sittingOut && p.stack + p.pending === 0;
+  return patchSeat(state, seat, {
+    pending: p.pending + amount,
+    ...(back ? { sittingOut: false, waitingForBB: !!state.waitForBigBlind } : {}),
+  });
+}
+
+/** Pending chips land on the stacks (a new hand is starting). */
+const landPending = (s) => ({
+  ...s,
+  seats: s.seats.map((p) => (p?.pending ? { ...p, stack: p.stack + p.pending, bought: p.bought + p.pending, pending: 0 } : p)),
+});
+
+/** Seats with chips (or chips about to land) that may be dealt into the next hand. */
 export const nextHandSeats = (state) =>
-  state.seats.flatMap((p, i) => (p && !p.leaving && !p.sittingOut && p.stack > 0 ? [i] : []));
+  state.seats.flatMap((p, i) => (p && !p.leaving && !p.sittingOut && p.stack + p.pending > 0 ? [i] : []));
 
 export const canStartHand = (state) => !handRunning(state) && nextHandSeats(state).length >= 2;
 
@@ -174,16 +213,35 @@ export function toWaiting(state) {
 
 // ---- A hand ------------------------------------------------------------------
 
+/**
+ * Who plays the next hand, and where the button and blinds go. Players
+ * waiting for the big blind sit it out unless the big blind falls to them;
+ * with fewer than two others there's nothing to wait for, so everyone ready
+ * is dealt in.
+ */
+function seatsForHand(s, rng) {
+  const ready = nextHandSeats(s);
+  const settled = ready.filter((i) => !s.seats[i].waitingForBB);
+  const waiting = s.button != null && settled.length >= 2 && settled.length < ready.length;
+  const pool = waiting ? settled : ready;
+  const inPool = (i) => pool.includes(i);
+  const button = s.button == null ? pool[Math.floor(rng() * pool.length)] : nextFrom(s.button, inPool);
+  if (waiting) {
+    const sb = nextFrom(button, inPool);
+    const bb = nextFrom(sb, (i) => ready.includes(i));
+    if (s.seats[bb].waitingForBB) return { dealt: [...pool, bb].sort((a, b) => a - b), button, sb, bb };
+  }
+  // Heads-up the button is the small blind.
+  const sb = pool.length === 2 ? button : nextFrom(button, inPool);
+  return { dealt: pool, button, sb, bb: nextFrom(sb, inPool) };
+}
+
 /** Moves the button, posts the blinds, deals two cards each, and opens preflop betting. */
 export function startHand(state, rng = secureRandom) {
   if (!canStartHand(state)) throw new Error("Need two players with chips");
-  let s = toWaiting(state);
-  const dealt = nextHandSeats(s);
+  let s = landPending(toWaiting(state));
+  const { dealt, button, sb, bb } = seatsForHand(s, rng);
   const isDealt = (i) => dealt.includes(i);
-  const button = s.button == null ? dealt[Math.floor(rng() * dealt.length)] : nextFrom(s.button, isDealt);
-  // Heads-up the button is the small blind.
-  const sb = dealt.length === 2 ? button : nextFrom(button, isDealt);
-  const bb = nextFrom(sb, isDealt);
 
   const deck = shuffle(createDeck(), rng);
   const order = fromLeftOf(button, MAX_SEATS).filter(isDealt);
@@ -199,7 +257,7 @@ export function startHand(state, rng = secureRandom) {
     deck,
     currentBet: s.bigBlind,
     minRaise: s.bigBlind,
-    seats: s.seats.map((p, i) => (isDealt(i) ? { ...p, inHand: true, canRaise: true, hole: holes.get(i) } : p)),
+    seats: s.seats.map((p, i) => (isDealt(i) ? { ...p, inHand: true, canRaise: true, hole: holes.get(i), waitingForBB: false } : p)),
     events: [{ type: "hand", handNumber: s.handNumber + 1, button, seats: dealt }],
   };
   s = postBlind(s, sb, s.smallBlind, "small");
@@ -431,7 +489,7 @@ function payOut(s, won, pots, hands) {
     phase: PHASES.HAND_OVER,
     turn: null,
     // A player out of chips sits out until they rebuy.
-    seats: s.seats.map((p, i) => (p ? { ...p, stack: p.stack + won[i], sittingOut: p.sittingOut || p.stack + won[i] === 0 } : p)),
+    seats: s.seats.map((p, i) => (p ? { ...p, stack: p.stack + won[i], sittingOut: p.sittingOut || p.stack + won[i] + p.pending === 0 } : p)),
     result: { pots, won, hands },
   };
 }
@@ -458,8 +516,9 @@ const VOLUNTARY = new Set(["call", "bet", "raise", "allin"]);
 
 /**
  * A finished hand, one entry per seat dealt in, for the match record:
- * { roundNumber, winnerSeat, seatResults: [{ seat_index, player_key, stack_before,
- * stack_after, net, won, folded_street, shown_hand, vpip, showdown }] }.
+ * { roundNumber, winnerSeat, board, seatResults: [{ seat_index, player_key,
+ * stack_before, stack_after, net, won, folded_street, shown_hand, committed,
+ * hole, vpip, showdown }] }. `board` and `hole` are card ids.
  */
 export function handSummary(state) {
   if (state.phase !== PHASES.HAND_OVER) throw new Error("The hand isn't over");
@@ -479,11 +538,13 @@ export function handSummary(state) {
         won: won[i],
         folded_street: foldedOn,
         shown_hand: hands[i]?.name ?? null,
+        committed: p.committed,
+        hole: p.hole.map((c) => c.id),
         vpip: state.events.some((e) => e.type === "act" && e.seat === i && e.street === "PREFLOP" && VOLUNTARY.has(e.action)),
         showdown: contested && !p.folded,
       },
     ];
   });
   const winnerSeat = seatResults.reduce((best, r) => (best == null || r.net > best.net ? r : best), null)?.seat_index ?? null;
-  return { roundNumber: state.handNumber, winnerSeat, seatResults };
+  return { roundNumber: state.handNumber, winnerSeat, board: state.board.map((c) => c.id), seatResults };
 }

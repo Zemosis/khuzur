@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { actingOrder } from "../../src/components/poker/seatInfo";
+import { actingOrder, seatTags } from "../../src/components/poker/seatInfo";
 import { act, viewFor } from "../../src/utils/poker/engine.js";
 import { tableWith, dealt } from "../helpers/poker.js";
 
@@ -20,5 +20,13 @@ describe("acting order", () => {
 
   it("is empty when nobody is betting", () => {
     expect(actingOrder(viewFor(tableWith([1000, 1000, null, null, null, null]), 0))).toEqual([]);
+  });
+});
+
+describe("seat tags", () => {
+  it("tags a seat that left mid-hand LEFT, and one waiting for the big blind", () => {
+    const base = { stack: 500, inHand: false, folded: false, allIn: false, sittingOut: false, type: "HUMAN" };
+    expect(seatTags({ ...base, leaving: true, inHand: true, allIn: true }, { phase: "RUNOUT" }).map((t) => t.label)).toEqual(["ALL-IN", "LEFT"]);
+    expect(seatTags({ ...base, waitingForBB: true }, { phase: "BETTING" }).map((t) => t.label)).toEqual(["WAITING FOR BB"]);
   });
 });
