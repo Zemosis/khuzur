@@ -28,16 +28,17 @@ import {
   toWaiting,
   viewFor,
 } from "./engine.js";
-import { chooseAction } from "./ai.js";
+import { chooseAction, updateReads } from "./ai.js";
 
 // Milliseconds. `turn: null` turns the clock off (practice).
 export const DEFAULT_POKER_DELAYS = {
   thinkMin: 900, // a CPU's pause before acting...
   thinkMax: 2200, // ...somewhere in between
+  deal: 3000, // a new hand's first CPU also waits for the shuffle and the deal round the table
   turn: 20_000, // a human's turn clock
   runout: 1400, // between all-in board cards
   handGap: 4000, // the result shows, then the next hand deals
-  firstHand: 1500, // from enough players sitting down to the first deal
+  firstHand: 3000, // from enough players sitting down to the first deal (the table counts it down)
   sitOutKick: 300_000, // sitting out this long stands you up
   saveRetry: 3000, // a failed save (credit tables) is tried again after this
   slowSave: 1000, // the next deal has waited this long on a save: the table shows "Saving…"
@@ -66,6 +67,7 @@ export class PokerTable {
     this.started = false;
     this.destroyed = false;
     this.turnEndsAt = null;
+    this.nextHandAt = null; // when the next hand deals, while one is coming
     this.timer = null; // the one pending step: a CPU move, the clock, a runout card, the next hand
     this.timerFor = null; // which moment of the table that step was armed for (see stepKey)
     this.kickTimers = new Map(); // seat -> timer
@@ -76,6 +78,7 @@ export class PokerTable {
     this.saving = false; // the next deal has waited delays.slowSave on the save
     this.closing = false; // closeAfterHand(): no more hands
     this.closed = false;
+    this.reads = []; // what the table has seen each player do, for the CPUs (see updateReads)
   }
 
 
@@ -123,6 +126,7 @@ export class PokerTable {
     if (this.started) return { ok: false, error: "The table has already started" };
     this.started = true;
     this.reschedule();
+    this.onState?.(this); // the countdown to the first hand starts
     return { ok: true };
   }
 
@@ -139,6 +143,11 @@ export class PokerTable {
   /** Milliseconds left on the turn clock, or null when no clock runs. */
   turnMsLeft() {
     return this.turnEndsAt == null ? null : Math.max(0, this.turnEndsAt - Date.now());
+  }
+
+  /** Milliseconds until the next hand deals, or null when none is coming yet. */
+  nextHandMsLeft() {
+    return this.nextHandAt == null ? null : Math.max(0, this.nextHandAt - Date.now());
   }
 
   /** For the server's shared broadcast: poker has no deal clock. */
@@ -163,6 +172,7 @@ export class PokerTable {
     const prev = this.state;
     this.state = next;
     if (next.phase === PHASES.HAND_OVER && prev.phase !== PHASES.HAND_OVER) {
+      this.reads = updateReads(this.reads, next);
       const summary = handSummary(next);
       this.onHandEnd?.(summary);
       if (this.beforeNextHand) this.save = this.saveHand(summary);
@@ -189,13 +199,15 @@ export class PokerTable {
     if (this.timer && key === this.timerFor) return;
     this.clearTimer();
     this.turnEndsAt = null;
+    this.nextHandAt = null;
     this.timerFor = key;
     if (!this.started) return;
     const s = this.state;
     const d = this.delays;
     if (s.phase === PHASES.BETTING) {
       const p = s.seats[s.turn];
-      if (p.type === "AI") this.later(d.thinkMin + this.rng() * (d.thinkMax - d.thinkMin), () => this.playCpu());
+      const dealing = !s.events.some((e) => e.type === "act") ? d.deal : 0;
+      if (p.type === "AI") this.later(dealing + d.thinkMin + this.rng() * (d.thinkMax - d.thinkMin), () => this.playCpu());
       else if (d.turn != null) {
         this.turnEndsAt = Date.now() + d.turn;
         this.later(d.turn, () => this.timeOut(s.turn));
@@ -203,8 +215,10 @@ export class PokerTable {
     } else if (s.phase === PHASES.RUNOUT) {
       this.later(d.runout, () => this.apply(advance(this.state)));
     } else if (s.phase === PHASES.HAND_OVER) {
+      this.nextHandAt = Date.now() + d.handGap;
       this.later(d.handGap, () => this.nextHand());
     } else if (canStartHand(s)) {
+      this.nextHandAt = Date.now() + d.firstHand;
       this.later(d.firstHand, () => this.nextHand());
     }
   }
@@ -263,7 +277,7 @@ export class PokerTable {
     const p = s.seats[seat];
     let next;
     try {
-      next = act(s, seat, chooseAction(viewFor(s, seat), seat, p.level, this.rng));
+      next = act(s, seat, chooseAction(viewFor(s, seat), seat, p.level, this.rng, this.reads));
     } catch (err) {
       // A CPU must never stall the table: check if it can, else fold.
       console.error("[poker] CPU move failed:", err);

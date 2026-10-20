@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { PixelAvatar } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
 import { fmt } from "../../utils/poker/tiers";
+import { useCountUp } from "../../hooks/useCountUp";
 
 const PRESETS = ["1", "2", "3", "4", "5"];
 
@@ -22,10 +23,12 @@ const pickStyle = (selected) => ({
   flexShrink: 0,
 });
 
-export default function PlayerMenu({ identity, isGuest, credits = null, onSelectAvatar, onPaint, onViewProfile, onSignIn, onSignOut }) {
+export default function PlayerMenu({ identity, isGuest, credits = null, rank = null, onSelectAvatar, onPaint, onViewProfile, onSignIn, onSignOut }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const current = String(identity.avatar);
+  // A claim rolls the balance up, and the badge glows as it lands.
+  const { shown, landed } = useCountUp(credits);
 
   useEffect(() => {
     if (!open) return;
@@ -51,7 +54,7 @@ export default function PlayerMenu({ identity, isGuest, credits = null, onSelect
         aria-haspopup="menu"
         aria-expanded={open}
         title="Avatar and profile"
-        className="pixel-hbtn flex items-center gap-2 px-3 py-2 text-left"
+        className={`pixel-hbtn flex items-center gap-2 px-3 py-2 text-left ${landed ? "badge-landed" : ""}`}
         style={{
           backgroundColor: open ? "#2a234d" : "#1f1a3d",
           border: "3px solid #0a0712",
@@ -64,7 +67,7 @@ export default function PlayerMenu({ identity, isGuest, credits = null, onSelect
           <span className="block font-pixel-body text-xs text-parchment leading-none">
             {identity.name} #{identity.tag}
           </span>
-          {credits != null && <span className="block font-pixel-display text-[8px] text-glow-gold mt-1 tabular-nums">{fmt(credits)} CR</span>}
+          {credits != null && <span className="block font-pixel-display text-[8px] text-glow-gold mt-1 tabular-nums">{fmt(shown)} CR{rank ? ` · #${rank}` : ""}</span>}
         </span>
         <span className="text-bone/70" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 120ms ease" }}>
           <PixelIcon name="down" size={10} />

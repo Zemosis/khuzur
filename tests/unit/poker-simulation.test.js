@@ -32,5 +32,5 @@ describe.each([1, 2, 3])("a CPU table, seed %i", (seed) => {
       expect(stacks(s)).toBe(before);
       expect(E.handSummary(s).seatResults.reduce((sum, r) => sum + r.net, 0)).toBe(0);
     }
-  });
+  }, 30_000); // HARD plays out a few hundred deals per move
 });

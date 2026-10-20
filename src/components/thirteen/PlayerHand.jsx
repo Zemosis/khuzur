@@ -14,6 +14,10 @@
 // the card follows the pointer, the others make room, and dropping it calls
 // onReorder with the new left-to-right ids. `sortMode` "custom" then lays the
 // hand out in `order`; cards not in it (just drawn) join at the right.
+//
+// `bubble` (lines) is what you just said in chat: it pops up just right of
+// your cards. When a full hand leaves no room there, it slides back over your
+// last cards rather than off the table.
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
@@ -21,6 +25,7 @@ import { PixelCard } from "../PixelCard";
 import { sortHand, sortHandBySuit } from "../../utils/deckUtils";
 import { CARD_RATIO, DEAL_FLY } from "../../hooks/useTableMetrics";
 import { reducedMotion } from "../../utils/motion";
+import ChatBubble from "../ChatBubble";
 
 const HAND_SIZE = 13;
 const SORT_HOLD = 0.5;
@@ -29,6 +34,7 @@ const SORT_SLIDE = 0.42;
 const REFLOW = 0.32;
 const DRAG_START = 6; // px a press must move before it's a drag, not a click
 const MAKE_ROOM = 0.15;
+const BUBBLE_ROOM = 214; // a chat bubble's widest, plus its gap
 
 /** `hand` in `order` (card ids); cards not in it go at the end, by rank. */
 function inOrder(hand, order) {
@@ -73,6 +79,7 @@ const PlayerHand = ({
   arrival,
   order, // card ids, left to right, for sortMode "custom"
   onReorder, // optional (ids) => void: makes the cards draggable
+  bubble = null,
 }) => {
   const containerRef = useRef(null);
   const [width, setWidth] = useState(0);
@@ -324,6 +331,12 @@ const PlayerHand = ({
     onSelectionChange(isSelected ? selectedCards.filter((c) => c.id !== card.id) : [...selectedCards, card]);
   };
 
+  // Your chat bubble's anchor: the right edge of the fan, or as far right as
+  // a bubble still fits.
+  const fanCount = isDealing ? handSize : displayHand.length;
+  const fanEdge = fanCount ? handSlot(fanCount - 1, fanCount, cardWidth, width, spread).x + cardWidth / 2 : 0;
+  const bubbleX = Math.max(0, Math.min(width / 2 + fanEdge, width - BUBBLE_ROOM));
+
   const liftVars = {
     "--lift": `${Math.round(cardH * 0.18)}px`,
     "--hover-lift": `${Math.round(cardH * 0.08)}px`,
@@ -336,6 +349,11 @@ const PlayerHand = ({
       style={{ height: cardH + base + Math.round(cardH * 0.08), overflow: "visible" }}
       aria-label="Your hand"
     >
+      {bubble && width > 0 && (
+        <div className="absolute" style={{ left: bubbleX, bottom: base + cardH / 2, width: 0, height: 0 }}>
+          <ChatBubble name="You" lines={bubble} side="right" align="center" />
+        </div>
+      )}
       {hand.length === 0 && !isDealing ? (
         <div className="absolute inset-0 flex items-center justify-center font-pixel-display text-[12px] text-glow-gold">
           {emptyMessage ?? (isEliminated ? "YOU'RE OUT — WATCHING THE REST OF THE MATCH" : "NO CARDS — YOU WIN!")}

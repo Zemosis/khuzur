@@ -20,6 +20,7 @@ import {
   allowedPlays,
 } from "./muushig/engine.js";
 import { aiAction, applyAction } from "./muushig/ai.js";
+import { muushigHighlights } from "./highlights.js";
 
 // Milliseconds. Each follows what the browser shows at that moment, so a CPU
 // never moves while the table is still animating (see GameMuushig).
@@ -291,6 +292,7 @@ function summariseRound(s) {
       score_after: r.score,
       eliminated: false,
     })),
+    highlights: muushigHighlights(s.events),
   };
 }
 

@@ -2,11 +2,15 @@
 // when it's your turn: FOLD, CHECK or CALL n, and a raise row (½ POT, POT,
 // ALL-IN, a slider and the exact amount). Keys: F folds, C checks or calls,
 // R raises; Enter in the amount box raises too. Raises are "to" amounts, as
-// the engine takes them. On a phone the raise row folds into a drawer.
+// the engine takes them. The bar keeps its height whether or not it's your
+// turn, so the table above never resizes. On a phone (`compact`) and on a
+// short screen (`short`, all in one row) the raise row folds into a drawer
+// that opens over the table.
 
 import React, { useEffect, useState } from "react";
 
 const BTN = "pixel-btn font-pixel-display text-[11px] px-4 py-3 whitespace-nowrap";
+const ROW_H = 46; // one row of the bar: the status line and the buttons
 const TONE = {
   fold: { backgroundColor: "#7a1530", borderColor: "#3a0a18", color: "#ead8b1" },
   call: { backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" },
@@ -21,7 +25,8 @@ const typing = (e) => /^(INPUT|TEXTAREA)$/.test(e.target?.tagName) && e.target.t
  * pot: every chip in this hand (potSize); currentBet: the bet to match.
  * message: the status line (whose turn, what just happened); warning shows instead, in rose.
  */
-export default function BetControls({ legal, pot = 0, currentBet = 0, onMove, message = "", warning = null, compact = false, children }) {
+export default function BetControls({ legal, pot = 0, currentBet = 0, onMove, message = "", warning = null, compact = false, short = false, children }) {
+  const drawn = compact || short; // the raise row is a drawer
   const [amount, setAmount] = useState(legal?.minRaiseTo ?? 0);
   const [drawer, setDrawer] = useState(false);
   // A new turn (or a new minimum) starts the amount at the minimum raise.
@@ -56,7 +61,7 @@ export default function BetControls({ legal, pot = 0, currentBet = 0, onMove, me
 
   const raiseWord = currentBet === 0 ? "BET" : "RAISE TO";
   const raiseRow = legal?.canRaise && (
-    <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Raise amount">
+    <div className={`flex items-center gap-2 ${drawn ? "flex-wrap" : ""}`} style={{ minHeight: ROW_H }} role="group" aria-label="Raise amount">
       <button className={BTN} style={TONE.preset} onClick={() => setAmount(potRaise(0.5))}>
         ½ POT
       </button>
@@ -73,7 +78,7 @@ export default function BetControls({ legal, pot = 0, currentBet = 0, onMove, me
         max={legal.maxRaiseTo}
         value={amount}
         onChange={(e) => setAmount(Number(e.target.value))}
-        className="pixel-range flex-1 min-w-[90px]"
+        className="pixel-range flex-1 min-w-[60px]"
         // How far along the slider is, for its gold fill (see .pixel-range in index.css).
         style={{ "--fill": `${Math.round(((clamp(amount) - legal.minRaiseTo) / Math.max(1, legal.maxRaiseTo - legal.minRaiseTo)) * 100)}%` }}
       />
@@ -95,37 +100,53 @@ export default function BetControls({ legal, pot = 0, currentBet = 0, onMove, me
     </div>
   );
 
+  const buttons = (
+    <>
+      {children}
+      {legal && (
+        <>
+          <button className={BTN} style={TONE.fold} onClick={() => onMove({ type: "fold" })}>
+            FOLD{!compact && <span className="text-[8px] opacity-70"> (F)</span>}
+          </button>
+          <button className={BTN} style={TONE.call} onClick={checkOrCall}>
+            {legal.canCheck ? "CHECK" : `CALL ${legal.toCall}`}
+            {!compact && <span className="text-[8px] opacity-70"> (C)</span>}
+          </button>
+          {drawn && legal.canRaise && (
+            <button className={BTN} style={TONE.raise} onClick={() => setDrawer((d) => !d)} aria-expanded={drawer}>
+              {raiseWord.split(" ")[0]}
+            </button>
+          )}
+        </>
+      )}
+    </>
+  );
+
   return (
-    <div className="flex flex-col gap-2">
-      {compact && drawer && raiseRow}
-      <div className="flex items-stretch gap-2 flex-wrap">
-        <div
-          className="flex-1 min-w-[160px] flex items-center px-4"
-          style={{ backgroundColor: "#0a0712", border: "3px solid #1f1a3d", minHeight: 46 }}
-        >
+    // Room for two rows, used or not: on a wide screen the raise row over
+    // the status line and buttons; on a phone the status line over the
+    // buttons. A short screen has one row.
+    <div className="relative flex flex-col justify-end gap-2 shrink-0" style={{ minHeight: short && !compact ? ROW_H : ROW_H * 2 + 8 }}>
+      {drawn && drawer && raiseRow && (
+        <div className="absolute left-0 right-0 bottom-full mb-2 z-40 p-2" style={{ backgroundColor: "#14102a", border: "3px solid #0a0712", boxShadow: "4px 4px 0 #0a0712" }}>
+          {raiseRow}
+        </div>
+      )}
+      {!drawn && raiseRow}
+      <div className={`flex items-stretch gap-2 ${compact ? "flex-col" : "flex-wrap"}`}>
+        <div className="flex-1 min-w-[160px] flex items-center px-4" style={{ backgroundColor: "#0a0712", border: "3px solid #1f1a3d", minHeight: ROW_H }}>
           <div role="status" className="font-pixel-body text-[20px] leading-none" style={{ color: warning ? "#e85a7a" : legal ? "#f4c430" : "rgba(200,184,144,0.85)" }}>
             {warning || message}
           </div>
         </div>
-        {children}
-        {legal && (
-          <>
-            <button className={BTN} style={TONE.fold} onClick={() => onMove({ type: "fold" })}>
-              FOLD <span className="text-[8px] opacity-70">(F)</span>
-            </button>
-            <button className={BTN} style={TONE.call} onClick={checkOrCall}>
-              {legal.canCheck ? "CHECK" : `CALL ${legal.toCall}`}{" "}
-              <span className="text-[8px] opacity-70">(C)</span>
-            </button>
-            {compact && legal.canRaise && (
-              <button className={BTN} style={TONE.raise} onClick={() => setDrawer((d) => !d)} aria-expanded={drawer}>
-                {raiseWord.split(" ")[0]}
-              </button>
-            )}
-          </>
+        {compact ? (
+          <div className="flex gap-2 [&>*]:flex-1 [&>*]:min-w-0 [&>*]:px-2" style={{ minHeight: ROW_H }}>
+            {buttons}
+          </div>
+        ) : (
+          buttons
         )}
       </div>
-      {!compact && raiseRow}
     </div>
   );
 }

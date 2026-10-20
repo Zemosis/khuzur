@@ -8,6 +8,7 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import GamePoker from "../../src/pages/poker/GamePoker";
 import { act as play, viewFor } from "../../src/utils/poker/engine.js";
 import { tableWith, dealt } from "../helpers/poker.js";
+import { setReducedMotion } from "../../src/utils/motion";
 
 const { handlers, fakeSocket } = vi.hoisted(() => {
   const handlers = {};
@@ -71,6 +72,24 @@ describe("poker table online", () => {
     serverSends("poker_state", view(hand()));
     await userEvent.click(screen.getByRole("button", { name: /CALL 5/ }));
     expect(emitted("poker_move")).toEqual([{ lobbyId: LOBBY, move: { type: "call" } }]);
+  });
+
+  it("a new hand is shuffled and dealt before anyone's turn shows", async () => {
+    setReducedMotion(false);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      open();
+      await act(async () => {});
+      serverSends("poker_state", view(named(tableWith([1000, null, 1000, null, null, null]))));
+      serverSends("poker_state", view(hand()));
+      expect(screen.queryByRole("button", { name: /FOLD/ })).not.toBeInTheDocument();
+      expect(screen.getByText("Shuffling and dealing…")).toBeInTheDocument();
+      await act(async () => vi.advanceTimersByTime(4000));
+      expect(screen.getByRole("button", { name: /FOLD/ })).toBeInTheDocument();
+    } finally {
+      setReducedMotion(true);
+      vi.useRealTimers();
+    }
   });
 
   it("waits for the other player, with their turn clock running", async () => {
@@ -188,10 +207,12 @@ describe("poker practice", () => {
   beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
   afterEach(() => vi.useRealTimers());
 
-  it("seats you with five CPUs and deals you in", async () => {
+  it("seats you with five CPUs, counts down to the first hand and deals you in", async () => {
     open({ lobbyId: "SOLO-ABC123", playerName: "ME #0003", aiDifficulty: "EASY" });
     expect(screen.getByText(/PRACTICE · EASY/)).toBeInTheDocument();
-    await act(async () => vi.advanceTimersByTime(2000));
+    expect(screen.getByRole("timer", { name: "First hand" })).toHaveTextContent("FIRST HAND IN3");
+    expect(screen.queryByLabelText("Your cards")).not.toBeInTheDocument();
+    await act(async () => vi.advanceTimersByTime(3500));
     expect(screen.getByLabelText("Your cards").querySelectorAll(".pixel-card")).toHaveLength(2);
     expect(screen.getByLabelText("Scoreboard")).toHaveTextContent("Bot Saturn");
     expect(fakeSocket.emit).not.toHaveBeenCalled();

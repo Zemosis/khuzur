@@ -59,14 +59,15 @@ export async function createSession({
   playerCount = 0,
   startedAt,
   pokerTier = null,
+  seats = null,
 }) {
   if (!pool) return null;
 
   const { rows } = await pool.query(
     `insert into game_sessions (
        game_type, status, host_id, host_display_name, name, is_private,
-       lobby_code, max_players, current_player_count, started_at, poker_tier
-     ) values ($1, 'in_progress', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       lobby_code, max_players, current_player_count, started_at, poker_tier, seats
+     ) values ($1, 'in_progress', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      returning id`,
     [
       gameType,
@@ -79,6 +80,7 @@ export async function createSession({
       playerCount,
       startedAt || new Date(),
       pokerTier,
+      seats ? JSON.stringify(seats) : null,
     ],
   );
   return rows[0].id;
@@ -101,7 +103,7 @@ export async function closeOrphanedSessions() {
 }
 
 /** Ranks seats: not-eliminated first, then by score ascending (lower is better). */
-function rankSeats(state) {
+export function rankSeats(state) {
   const positionBySeat = {};
   state.players
     .map((p, i) => ({ i, p }))
@@ -221,11 +223,12 @@ export async function finishSession(rec) {
     // the stats blob can be derived from the same source.
     for (const r of rounds) {
       await client.query(
-        `insert into game_rounds (session_id, round_number, winner_seat, seat_results)
-         values ($1, $2, $3, $4)
+        `insert into game_rounds (session_id, round_number, winner_seat, seat_results, highlights)
+         values ($1, $2, $3, $4, $5)
          on conflict (session_id, round_number) do update
-           set winner_seat = excluded.winner_seat, seat_results = excluded.seat_results`,
-        [rec.sessionId, r.roundNumber, r.winnerSeat, JSON.stringify(r.seatResults)],
+           set winner_seat = excluded.winner_seat, seat_results = excluded.seat_results,
+               highlights = excluded.highlights`,
+        [rec.sessionId, r.roundNumber, r.winnerSeat, JSON.stringify(r.seatResults), r.highlights ? JSON.stringify(r.highlights) : null],
       );
     }
 

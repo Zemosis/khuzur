@@ -70,4 +70,23 @@ describe("BetControls", () => {
     expect(screen.queryByRole("button", { name: /FOLD/ })).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Waiting for ANN…");
   });
+
+  it("keeps the same height on and off your turn, so the table above never resizes", () => {
+    const heightOf = (props) => {
+      const { container, unmount } = render(<BetControls pot={45} currentBet={30} onMove={() => {}} {...props} />);
+      const h = container.firstChild.style.minHeight;
+      unmount();
+      return h;
+    };
+    for (const layout of [{}, { compact: true }, { short: true }]) {
+      expect(heightOf({ legal: facing, ...layout })).toBe(heightOf({ legal: null, ...layout }));
+    }
+  });
+
+  it("on a phone the raise row is a drawer that opens over the table", async () => {
+    setup({ compact: true });
+    expect(screen.queryByRole("group", { name: "Raise amount" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "RAISE" }));
+    expect(screen.getByRole("group", { name: "Raise amount" }).parentElement).toHaveClass("absolute");
+  });
 });

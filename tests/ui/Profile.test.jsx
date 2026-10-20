@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import Profile from "../../src/pages/Profile";
 
 const { api } = vi.hoisted(() => ({ api: vi.fn() }));
@@ -155,6 +155,14 @@ describe("Profile stats", () => {
     const hands = section("Hands played");
     expect(within(hands).getByText("Pair").parentElement).toHaveTextContent("6");
     expect(within(hands).getByText("Royal Flush").parentElement).toHaveTextContent("0");
+    // By rank (weakest first) until sorted by how often each was played.
+    const names = () => within(hands).getAllByRole("listitem").map((li) => li.firstChild.textContent);
+    expect(names().slice(0, 3)).toEqual(["Single", "Pair", "Triple"]);
+    await user.click(within(hands).getByRole("button", { name: "Most played" }));
+    expect(names().slice(0, 4)).toEqual(["Single", "Pair", "Straight", "Triple"]);
+    expect(names().at(-1)).toBe("Royal Flush");
+    await user.click(within(hands).getByRole("button", { name: "By rank" }));
+    expect(names().slice(0, 3)).toEqual(["Single", "Pair", "Triple"]);
     const thirteen = section("Thirteen");
     expect(within(thirteen).getByText("Went out first").nextSibling).toHaveTextContent("10");
     expect(within(thirteen).getByText("Avg cards left when caught").nextSibling).toHaveTextContent("4.5");
@@ -207,5 +215,58 @@ describe("Profile stats", () => {
     await user.click(within(recent).getByRole("button", { name: "Graph" }));
     expect(within(recent).getByRole("img", { name: /finishing place over your last 2 matches/i })).toBeInTheDocument();
     expect(within(recent).queryByText("1st of 4")).not.toBeInTheDocument();
+  });
+
+  it("an online match opens its match page; a solo one isn't a link", async () => {
+    const user = userEvent.setup();
+    api.mockImplementation(async (_path, opts) => (opts?.base === "/api/credits" ? null : played));
+    render(
+      <MemoryRouter initialEntries={["/profile"]}>
+        <Routes>
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/match/:id" element={<p>match page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await screen.findByRole("group", { name: "Game" });
+    const recent = section("Recent matches");
+    expect(within(recent).getByText("5th of 5").closest("button")).toBeNull(); // the solo one
+    await user.click(within(recent).getByText("1st of 4").closest("button"));
+    expect(await screen.findByText("match page")).toBeInTheDocument();
+  });
+
+  it("the Poker tab charts the hands you showed down and lists your tables, each opening its page", async () => {
+    const user = userEvent.setup();
+    const free = pokerView({
+      hands: 30,
+      showdownRanks: { PAIR: { shown: 5, won: 2 }, FLUSH: { shown: 1, won: 1 }, "TWO PAIR": { shown: 3, won: 3 } },
+      recent: [
+        { id: "t-2", tier: null, table: "High Rollers", net: 240, hands: 18, seconds: 1500, finishedAt: "2026-10-19T10:00:00Z" },
+        { id: "t-1", tier: null, table: "Felt", net: -90, hands: 12, seconds: 600, finishedAt: "2026-10-18T10:00:00Z" },
+      ],
+    });
+    api.mockImplementation(async (_path, opts) => (opts?.base === "/api/credits" ? null : { ...empty, poker: { free, credits: pokerView() } }));
+    render(
+      <MemoryRouter initialEntries={["/profile"]}>
+        <Routes>
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/match/:id" element={<p>table page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await user.click(within(await screen.findByRole("group", { name: "Game" })).getByRole("button", { name: "Poker" }));
+
+    const showdowns = section("Showdown hands");
+    const rows = () => within(showdowns).getAllByRole("listitem").map((li) => [li.firstChild.textContent, li.lastChild.textContent]);
+    expect(rows().slice(0, 3)).toEqual([["High card", "0/0"], ["Pair", "2/5"], ["Two pair", "3/3"]]);
+    expect(rows().at(-1)).toEqual(["Royal flush", "0/0"]);
+    await user.click(within(showdowns).getByRole("button", { name: "Most shown" }));
+    expect(rows().slice(0, 3)).toEqual([["Pair", "2/5"], ["Two pair", "3/3"], ["Flush", "1/1"]]);
+
+    const tables = section("Recent tables");
+    expect(within(tables).getByText("High Rollers").closest("button")).toHaveTextContent("+240");
+    expect(within(tables).getByText("Felt").closest("button")).toHaveTextContent("-90");
+    await user.click(within(tables).getByText("High Rollers").closest("button"));
+    expect(await screen.findByText("table page")).toBeInTheDocument();
   });
 });

@@ -9,7 +9,11 @@ const { auth } = vi.hoisted(() => ({ auth: { isGuest: true, updateProfile: null,
 
 vi.mock("../../src/utils/socket", () => ({ socket: {}, connectSocket: () => {} }));
 const { credits } = vi.hoisted(() => ({ credits: { balance: 2340, notice: null } }));
-vi.mock("../../src/lib/api", () => ({ api: vi.fn(async (path) => (path === "/notice" ? { ...credits, notice: null } : credits)) }));
+// CLAIM tops the balance back up to 1,000: the server then says "over".
+const claimed = () => ({ ...credits, balance: 1000, claim: { state: "over" } });
+vi.mock("../../src/lib/api", () => ({
+  api: vi.fn(async (path) => (path === "/notice" ? { ...credits, notice: null } : path === "/claim" ? claimed() : credits)),
+}));
 vi.mock("../../src/hooks/useServerStats", () => ({ useServerStats: () => stats }));
 vi.mock("../../src/hooks/useAuth", () => ({
   useAuth: () => ({
@@ -188,6 +192,62 @@ describe("MainMenu", () => {
   it("a guest's badge has no balance", () => {
     renderMenu();
     expect(screen.queryByText(/ CR$/)).toBeNull();
+  });
+
+  it("shows your leaderboard rank beside your balance", async () => {
+    auth.isGuest = false;
+    credits.rank = 57;
+    renderMenu();
+    expect(await screen.findByText("2,340 CR · #57")).toBeInTheDocument();
+    credits.rank = null;
+  });
+
+  it("claiming tops you up: the loader, the amount floats off, and the strip says FULL", async () => {
+    auth.isGuest = false;
+    credits.balance = 240;
+    credits.claim = { state: "ready", amount: 760 };
+    renderMenu();
+    const claim = await screen.findByRole("button", { name: "CLAIM +760 CR" });
+    await userEvent.click(claim);
+    // The pixel loader shows while it goes through, for long enough to see.
+    expect(screen.getByRole("button", { name: "Claiming" })).toBeInTheDocument();
+    expect(await screen.findByText("1,000 CR")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("+760 CR");
+    expect(screen.queryByRole("button", { name: /CLAIM/ })).toBeNull();
+    expect(screen.getByText("FULL · CLAIM UNDER 1,000")).toBeInTheDocument();
+    credits.balance = 2340;
+    credits.claim = undefined;
+  });
+
+  it("the claim strip is always there: FULL over 1,000, a countdown while you wait, nothing for guests", async () => {
+    auth.isGuest = false;
+    credits.claim = { state: "over" };
+    const { unmount } = renderMenu();
+    expect(await screen.findByText("FULL · CLAIM UNDER 1,000")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /CLAIM/ })).toBeNull();
+    unmount();
+    credits.claim = { state: "wait", nextAt: new Date(Date.now() + 3_600_000).toISOString() };
+    const second = renderMenu();
+    expect(await screen.findByRole("timer", { name: "Next claim" })).toHaveTextContent(/NEXT CLAIM 0[01]:\d\d:\d\d/);
+    second.unmount();
+    auth.isGuest = true;
+    renderMenu();
+    expect(screen.queryByRole("timer")).toBeNull();
+    expect(screen.queryByText(/FULL/)).toBeNull();
+    credits.claim = undefined;
+  });
+
+  it("RANKS opens the leaderboard, for guests too", async () => {
+    render(
+      <MemoryRouter>
+        <Routes>
+          <Route path="/" element={<MainMenu />} />
+          <Route path="/leaderboard" element={<p>leaderboard page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Leaderboard" }));
+    expect(screen.getByText("leaderboard page")).toBeInTheDocument();
   });
 
   it("after a restart the main menu says where your table credits went", async () => {

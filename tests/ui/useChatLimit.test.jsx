@@ -45,6 +45,16 @@ describe("useChatLimit", () => {
     expect(result.current.notice).toBeNull();
   });
 
+  it("muted: holds chat for the whole mute, counting down", () => {
+    const { result } = renderHook(() => useChatLimit());
+    serverSends("chat_rejected", { reason: "muted", retryInMs: 30_000 });
+    expect(result.current).toEqual({ notice: "Too much chat — muted for 30s", blocked: true });
+    act(() => vi.advanceTimersByTime(25_000));
+    expect(result.current.notice).toBe("Too much chat — muted for 5s");
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(result.current).toEqual({ notice: null, blocked: false });
+  });
+
   it("stops listening once unmounted", () => {
     const { unmount } = renderHook(() => useChatLimit());
     unmount();

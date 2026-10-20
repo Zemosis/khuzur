@@ -1,7 +1,8 @@
 // CHAT LIMIT — the server turns away chat floods (`chat_rejected`, see
 // server/chatGuard.js). This turns its answer into a notice for the chat box,
 // and holds the box for as long as the server said. Only the sender hears
-// about it; nobody else at the table sees a thing.
+// about it; nobody else at the table sees a thing. A player who keeps at it
+// is muted for a while ("muted"), and the box stays held until it ends.
 
 import { useEffect, useState } from "react";
 import { socket } from "../utils/socket";
@@ -36,5 +37,6 @@ export function useChatLimit() {
   if (!limit) return { notice: null, blocked: false };
   if (limit.reason === "repeat") return { notice: "You just said that — try something new", blocked: false };
   const seconds = Math.max(1, Math.ceil((limit.until - now) / 1000));
+  if (limit.reason === "muted") return { notice: `Too much chat — muted for ${seconds}s`, blocked: true };
   return { notice: `Slow down — chat again in ${seconds}s`, blocked: true };
 }

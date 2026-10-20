@@ -22,9 +22,9 @@ function Chip({ value, size }) {
   );
 }
 
-/** label: "SB" | "BB" for a blind. big: the pot's larger chips. */
-export default function ChipStack({ amount, label = null, big = false, testId = "bet" }) {
-  const size = big ? 22 : 16;
+/** label: "SB" | "BB" for a blind. big: the pot's larger chips. chipSize: any other chip width (the rulebook's). */
+export default function ChipStack({ amount, label = null, big = false, chipSize = null, testId = "bet" }) {
+  const size = chipSize ?? (big ? 22 : 16);
   return (
     <div className="flex flex-col items-center gap-1" data-testid={testId}>
       <div className="flex items-end gap-0.5" style={{ paddingTop: Math.round(size * 0.18) }}>

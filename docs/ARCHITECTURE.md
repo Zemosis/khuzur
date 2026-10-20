@@ -1,6 +1,21 @@
 # Architecture
 
-**Project:** Khuzur Card Hall — a retro pixel-art multiplayer card game site.
+How Khuzur Card Hall is built: a React site, a Node game server that owns every table, and a Postgres database for accounts and match history. For what the project is, see the [README](../README.md).
+
+## Contents
+
+1. [Goal](#1-goal)
+2. [Current build state](#2-current-build-state)
+3. [Tech stack](#3-tech-stack)
+4. [Repository layout](#4-repository-layout)
+5. [Runtime architecture](#5-runtime-architecture), including [CPU players](#cpu-players), [Credits](#credits) and the [socket protocol](#socket-protocol)
+6. [Database](#6-database)
+7. [Security model](#7-security-model)
+8. [Local development](#8-local-development)
+9. [Deployment](#9-deployment)
+10. [What's next](#10-whats-next)
+
+---
 
 ## 1. Goal
 
@@ -13,7 +28,7 @@ The shape of the thing:
 
 * A **main menu** as the hub — profile in the top right, settings, live server
   stats, and a horizontally scrollable rack of game modes.
-* **Multiple game modes**, currently Thirteen (Tiến lên, 4 players), Muushig
+* **Multiple game modes**, currently Thirteen (Tiến lên, 2–4 players), Muushig
   (5 players) and Poker (no-limit Hold'em, up to 6). Rules in
   [thirteen-rulebook.md](thirteen-rulebook.md),
   [muushig-rulebook.md](muushig-rulebook.md) and
@@ -33,14 +48,14 @@ Two design commitments follow from that and explain most of what is below:
 
 ## 2. Current build state
 
-Honest status, as of the first deploy (2026-10-01).
+Honest status, as of October 2026.
 
 | Area | State |
 |---|---|
 | Main menu, settings, avatar painter | Built |
 | Auth in the Node server | Built: email + password, and Google / Discord sign-in (each button shows once its credentials are set, §9). No password reset or email confirmation yet |
 | Database schema, views | Built; applied automatically on server start |
-| **Thirteen** | **Playable.** Server-authoritative, reconnect handling, match recording |
+| **Thirteen** | **Playable online and in practice.** 2–4 players, server-authoritative, reconnect handling, match recording; CPUs at three levels (see [CPU players](#cpu-players)) |
 | **Muushig** | **Playable online and in practice.** Online: server-authoritative, up to 5 humans with CPUs in the empty seats, reconnect handling, match recording. Practice: 4 CPUs (Easy/Medium/Hard) in the browser |
 | **Poker** | **Playable online and in practice.** Free chips, 2–6 players, CPUs at free tables, joining between hands, recorded with its own stats |
 | **Credits** | **Built.** Balances with a daily CLAIM, credit poker tables (LOW / MID / HIGH, humans only), an all-time leaderboard, a ledger of every credit movement, pair flags and an admin page (§5 Credits) |
@@ -52,7 +67,7 @@ Honest status, as of the first deploy (2026-10-01).
 the CPU players are in `src/utils/muushig/ai.js`, at three levels. Practice
 runs them in the browser. Online tables run byte-identical copies in
 `server/game/muushig/` (the server deploys from `server/` alone;
-`tests/unit/muushig-copies.test.js` fails if they drift — edit the browser copy,
+`tests/unit/rules-copies.test.js` fails if they drift — edit the browser copy,
 then copy it over) inside `MuushigGame` (`server/game/muushigGame.js`), which
 plays the CPU seats (at MEDIUM) and the automatic steps on timers paced to the
 browser's animations. `src/pages/muushig/GameMuushig.jsx` renders either: in
@@ -77,7 +92,7 @@ Postgres suites that run only when `TEST_DATABASE_URL` is set) and `ui`
 (table components in jsdom). Muushig's engine and CPU players have their own
 `unit` suites (`tests/unit/muushig-*.test.js`), including whole CPU matches at
 each difficulty; its server table has `server/tests/muushig-game.test.js` and
-real-socket games in `socket.test.js`. See the README's Testing section.
+real-socket games in `socket.test.js`. See the [README's Testing section](../README.md#testing).
 
 ## 3. Tech stack
 
@@ -115,7 +130,7 @@ src/
   lib/            api (HTTP client + session token), guestIdentity,
                   games (each game's table route)
   utils/          socket, SoundManager, avatarConstants,
-                  + a client-side copy of the Thirteen rules (display only)
+                  + the Thirteen rules and CPU players (aiPlayer, aiCombos, aiSearch)
                   + muushig/ (the Muushig engine and CPU players)
                   + poker/ (the Poker engine, CPU players, PokerTable and the credit tiers)
   components/credits/  the buy-in panel, CLAIM, the balance and credit-host panels
@@ -133,13 +148,16 @@ server/
                   (CreditTable), leaderboard, flagRules + flags, admin, routes,
                   check (the economy check) — see §5 Credits
   db/             pg pool, migration runner, migrations/ — the schema
-docs/             this file, STYLEGUIDE.md, the two rulebooks
+docs/             this file, STYLEGUIDE.md, the three rulebooks
 render.yaml       Render Blueprint: the site and the game server (§9)
 ```
 
-Note that `src/utils/gameLogic.js`, `handEvaluator.js` etc. are mirrored in
-`server/game/`. The **server copies are authoritative**; the client copies exist
-for optimistic rendering and hints. Do not let them diverge in rules.
+> **Two copies of the rules.** `src/utils/gameLogic.js`, `handEvaluator.js`,
+> the CPU files and the rest are mirrored in `server/game/`. Practice games run
+> the browser copies; online, the **server copies are authoritative** and the
+> browser's are only for instant hints. Every rule test runs against both, and
+> `tests/unit/rules-copies.test.js` checks the files that must match byte for
+> byte. Edit the browser copy, then copy it over.
 
 ## 5. Runtime architecture
 
@@ -153,7 +171,7 @@ Browser ──HTTP  /api/auth/*──────────> Node server ─�
 
 Account routes: `POST /signup`, `POST /login`, `GET /me`, `PATCH /profile`,
 `GET /stats` (everything the profile's Stats panel shows, for each game filter
-— overall, Thirteen, Muushig — in one round trip; see `server/stats.js`) and
+— overall, Thirteen, Muushig, Poker — in one round trip; see `server/stats.js`) and
 `POST /matches`.
 
 **Google / Discord sign-in** (`server/oauth.js`, under `/api/auth/oauth`) is
@@ -174,8 +192,8 @@ account it first reached (`oauth_identities`). A new identity joins the
 account with the same verified email, else a new account is made. A provider
 without a verified email is refused.
 
-**Solo matches** — games against CPUs run in the browser (Thirteen practice,
-all of Muushig), so the browser reports each finished one to `POST /matches`
+**Solo matches** — practice games against CPUs run in the browser (Thirteen
+and Muushig practice), so the browser reports each finished one to `POST /matches`
 (`src/hooks/useSoloMatchReport.js`). `server/solo.js` checks the report and
 places the player from the final scores itself; the match is saved with
 `game_sessions.solo = true` and counts for stats only — no coins, exp or
@@ -187,10 +205,10 @@ Node server, so authorization lives in its routes rather than in database
 policies.
 
 **Game state lives in RAM on the Node server**, in a `Map` of lobbies. Each
-lobby has a `gameType` (`thirteen` | `muushig`, set at creation), holds its
+lobby has a `gameType` (`thirteen` | `muushig` | `poker`, set at creation), holds its
 members keyed by a stable `playerKey` (the user id, or `name#tag` for a guest)
-and a `ThirteenGame` or `MuushigGame` instance. `GAMES` in `server/index.js`
-holds what differs per game: seats (4 | 5), the engine, the redaction and the
+and a `ThirteenGame`, `MuushigGame` or `PokerTable` instance. `GAMES` in `server/index.js`
+holds what differs per game: seats (4 | 5 | 6), the engine, the redaction and the
 state event. Socket ids are rebound to
 the player key on reconnect, which is what makes refresh-and-rejoin work.
 
@@ -267,6 +285,43 @@ host can add or remove CPUs at any time and `close_table`, which sends everyone
 **Host** — each player's state update carries `amHost`, so a player
 promoted when the host leaves gets the REMATCH button; the client trusts it over
 the router state it was opened with.
+
+### CPU players
+
+Every game has CPUs at three levels, EASY, MEDIUM and HARD. The same code
+plays practice tables in the browser and CPU seats online (the server copies).
+**No CPU sees a hidden card**: each decides from what a player in its seat
+could know.
+
+| Game | Code | How the levels differ |
+|---|---|---|
+| Thirteen | `src/utils/aiPlayer.js` (levels), `aiCombos.js` (cards as numbers 0–51, every combination in a hand, the best split of a hand into plays), `aiSearch.js` (what a seat knows, the round simulator) | EASY plays its lowest winning card and slips now and then. MEDIUM plans its hand, keeps aces and 2s while its hand is big, and blocks a player on their last card. HARD also counts the round's cards, reads passes, and before every move plays the round out 40 times over random deals of the unseen cards, keeping the move that costs it the fewest points. |
+| Muushig | `src/utils/muushig/ai.js` (cards as numbers 0–31, the levels, the round simulator) | EASY reads its hand roughly, often misjudges going in, counts no cards and throws a random card one time in three. MEDIUM prices each card by its measured chance to eat a pile, goes in when that beats the risk of the +5 (a dealer counts the face-up trump), swaps cards a fresh draw would beat, counts played cards and eats with the cheapest card that holds. HARD plays every choice out a few hundred times over deals of the unseen cards that fit what the table has shown (who couldn't follow suit, who swapped few cards), with MEDIUM's judgement for every seat, and keeps the move likeliest to win the match. |
+| Poker | `src/utils/poker/ai.js` | EASY plays too many hands, calls with any pair or draw and never bluffs. MEDIUM uses starting-hand charts that respect the size of a raise, then its chance of winning against random hands, shaded down for every bet it faces, against the price of calling. HARD reads hands: each opponent's raises, calls and checks this hand, sized by how that player has played so far at the table (`updateReads`), decide which hands it deals them in a few hundred simulated run-outs. It sizes bets by strength, bluffs and semi-bluffs where a bluff works (fewer into players who never fold), and plays push-or-fold when short. |
+
+How each stays honest:
+
+* **Thirteen** CPUs read the table only through `readTable` (`aiSearch.js`),
+  which takes the CPU's own hand, everyone's card count, the passes and this
+  round's plays, and reads other hands for their length alone. A test swaps
+  the hidden cards and checks the decisions don't change.
+* **Poker** CPUs get `viewFor(state, seat)`, the same redacted view a player
+  at that seat receives, and the table's reads on its players (how often each
+  put chips in, raised, bet, called and folded), built from public moves
+  alone.
+* **Muushig** CPUs read their own hand and discards, the pile sizes, the
+  cards played and how many cards each player swapped. HARD deals the other
+  hands itself, from the cards it hasn't seen.
+
+CPU randomness (EASY's slips, HARD's simulated deals) uses the table's random
+source: secure in play, seeded in tests, so a seeded test replays the CPUs'
+choices exactly. The levels were tuned by playing thousands of CPU-only rounds
+against each other: in a 4-player Thirteen table, a HARD CPU against three
+MEDIUMs goes out first about 37% of the time (an even share is 25%), and a
+MEDIUM against three EASYs about 50%. In Muushig, a HARD CPU against four
+MEDIUMs wins about 26% of matches (an even share is 20%), and a MEDIUM against
+four EASYs about 62%. At a free poker table, a HARD CPU against MEDIUMs wins
+about 19 big blinds per 100 hands, and against the previous HARD about 31.
 
 ### Credits
 
@@ -531,12 +586,15 @@ password hashes. So the schema shuts that door itself:
 
 `server/tests/db/lockdown.test.js` checks all three against the test database.
 
-**Randomness.** Every deal — Thirteen solo and online, and Muushig — shuffles
-with Fisher–Yates driven by `crypto.getRandomValues`. The server never exposes
+**Randomness.** Every deal, in all three games, practice and online, shuffles
+a fresh deck with Fisher–Yates driven by `crypto.getRandomValues` (a 32-bit
+value per draw, so any bias is below one in 80 million). The server never exposes
 `Math.random` output: table codes use `crypto.randomInt` and chat ids
 `crypto.randomUUID`, because V8's `Math.random` state can be recovered from a
 few outputs and would let a player predict the next shuffle. Tests pass a
 seeded `rng` instead (`shuffleDeck(deck, rng)`, `new ThirteenGame({ rng })`).
+`tests/unit/deckUtils.test.js` checks that every order of the deck comes from
+exactly one sequence of draws, and that the shuffle uses the secure generator.
 
 **Accounts.** Passwords are bcrypt-hashed (cost 10). Sessions are HS256 JWTs
 signed with `JWT_SECRET`, valid 30 days, stored in `localStorage` and sent as
@@ -719,5 +777,4 @@ Roughly in dependency order:
 2. **Password reset and email confirmation** — needs an email-sending
    service; would also let a Google-linked account set a password again.
 3. **Shop and economy** — `coins` already accrues; nothing spends it.
-4. **Progression** — the third menu slot is gated behind "Rank V" in the UI with
-   no rank system behind it yet.
+4. **A fourth game** — the main menu's fourth slot is a locked placeholder.

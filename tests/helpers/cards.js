@@ -7,15 +7,19 @@ import * as clientDeck from "../../src/utils/deckUtils.js";
 import * as clientEval from "../../src/utils/handEvaluator.js";
 import * as clientLogic from "../../src/utils/gameLogic.js";
 import * as clientAI from "../../src/utils/aiPlayer.js";
+import * as clientCombos from "../../src/utils/aiCombos.js";
+import * as clientSearch from "../../src/utils/aiSearch.js";
 import * as serverConstants from "../../server/game/constants.js";
 import * as serverDeck from "../../server/game/deckUtils.js";
 import * as serverEval from "../../server/game/handEvaluator.js";
 import * as serverLogic from "../../server/game/gameLogic.js";
 import * as serverAI from "../../server/game/aiPlayer.js";
+import * as serverCombos from "../../server/game/aiCombos.js";
+import * as serverSearch from "../../server/game/aiSearch.js";
 
 export const COPIES = [
-  ["client", { constants: clientConstants, deck: clientDeck, evaluator: clientEval, logic: clientLogic, ai: clientAI }],
-  ["server", { constants: serverConstants, deck: serverDeck, evaluator: serverEval, logic: serverLogic, ai: serverAI }],
+  ["client", { constants: clientConstants, deck: clientDeck, evaluator: clientEval, logic: clientLogic, ai: clientAI, combos: clientCombos, search: clientSearch }],
+  ["server", { constants: serverConstants, deck: serverDeck, evaluator: serverEval, logic: serverLogic, ai: serverAI, combos: serverCombos, search: serverSearch }],
 ];
 
 const DECK = new Map(clientDeck.createDeck().map((c) => [c.id, c]));

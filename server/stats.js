@@ -131,13 +131,48 @@ const pokerFigures = (r = {}) => {
   };
 };
 
-/** Poker figures from player_poker_stats, free and credit play apart: zeros for someone who hasn't played. */
+const STAKES = "case when gs.poker_tier is null then 'free' else 'credits' end";
+
+/**
+ * Poker figures from player_poker_stats, free and credit play apart: zeros
+ * for someone who hasn't played. Each also lists the latest tables played
+ * (each opens its table page) and, from the hands logged since tables kept
+ * them, how often each hand rank was shown and won at a showdown.
+ */
 async function pokerStatsFor(playerId) {
-  const { rows } = await pool.query("select * from player_poker_stats where player_id = $1", [playerId]);
-  return {
-    free: pokerFigures(rows.find((r) => r.stakes === "free")),
-    credits: pokerFigures(rows.find((r) => r.stakes === "credits")),
-  };
+  const [figures, tables, ranks] = await Promise.all([
+    pool.query("select * from player_poker_stats where player_id = $1", [playerId]),
+    pool.query(
+      `select gs.id, ${STAKES} as stakes, gs.poker_tier, gs.name as table_name, gs.finished_at, gp.final_score,
+              coalesce((gp.stats ->> 'hands_played')::int, 0) as hands,
+              extract(epoch from (coalesce(gp.left_at, gs.finished_at) - coalesce(gp.joined_at, gs.started_at)))::integer as seconds
+         from game_players gp
+         join game_sessions gs on gs.id = gp.session_id
+        where gs.game_type = 'poker' and gs.status = 'finished' and gp.player_id = $1
+          and coalesce((gp.stats ->> 'hands_played')::int, 0) > 0
+        order by gs.finished_at desc
+        limit $2`,
+      [playerId, RECENT * 2],
+    ),
+    pool.query(
+      `select ${STAKES} as stakes, r.key as rank, sum((r.value ->> 'shown')::int) as shown, sum((r.value ->> 'won')::int) as won
+         from game_players gp
+         join game_sessions gs on gs.id = gp.session_id
+         cross join lateral jsonb_each(coalesce(gp.stats -> 'showdown_ranks', '{}'::jsonb)) r
+        where gs.game_type = 'poker' and gs.status = 'finished' and gp.player_id = $1
+        group by 1, 2`,
+      [playerId],
+    ),
+  ]);
+  const forStakes = (stakes) => ({
+    ...pokerFigures(figures.rows.find((r) => r.stakes === stakes)),
+    recent: tables.rows
+      .filter((r) => r.stakes === stakes)
+      .slice(0, RECENT)
+      .map((r) => ({ id: r.id, tier: r.poker_tier, table: r.table_name, net: int(r.final_score), hands: int(r.hands), seconds: int(r.seconds), finishedAt: r.finished_at })),
+    showdownRanks: Object.fromEntries(ranks.rows.filter((r) => r.stakes === stakes).map((r) => [r.rank, { shown: int(r.shown), won: int(r.won) }])),
+  });
+  return { free: forStakes("free"), credits: forStakes("credits") };
 }
 
 /** { overall, thirteen, muushig, poker } for one signed-in player. */

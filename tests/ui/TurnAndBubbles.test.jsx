@@ -31,6 +31,25 @@ describe("a seat's chat bubble", () => {
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
+  it.each([
+    ["top", "full", "right", "start"],
+    ["left", "full", "above", "start"],
+    ["right", "full", "above", "end"],
+    ["left", "strip", "below", "start"],
+    ["top", "strip", "below", "center"],
+    ["right", "strip", "below", "end"],
+  ])("a %s seat (%s layout) opens its bubble %s, lined up with its %s edge", (position, layout, side, align) => {
+    render(<OpponentSection player={player()} position={position} layout={layout} bubble={["hi"]} />);
+    const bubble = screen.getByRole("note");
+    expect(bubble.dataset.side).toBe(side);
+    expect(bubble.dataset.align).toBe(align);
+  });
+
+  it("a table can place a seat's bubble elsewhere", () => {
+    render(<OpponentSection player={player()} position="left" bubble={["hi"]} bubbleAt={{ side: "right", align: "start" }} />);
+    expect(screen.getByRole("note").dataset.side).toBe("right");
+  });
+
   it("a long message is cut short in the bubble", () => {
     render(<ChatBubble name="ANN" lines={["x".repeat(200)]} />);
     expect(screen.getByRole("note").textContent.length).toBeLessThan(120);

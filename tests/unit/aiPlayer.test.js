@@ -3,7 +3,10 @@ import { COPIES, cards, ids, stateWith, seededRandom } from "../helpers/cards.js
 
 const DIFFICULTIES = ["EASY", "MEDIUM", "HARD"];
 
-describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, logic: L }) => {
+// EASY's slips (leading a pair, grabbing any winning play) roll under this, so it never slips.
+const steady = () => 0.99;
+
+describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, logic: L, search: S }) => {
   const combo = (s) => E.identifyCombination(cards(s));
 
   /** Asserts the rulebook's hard limits on any CPU decision. */
@@ -19,30 +22,108 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
     expect(v.valid, `${ids(decision.cards)} on ${currentPlay ? ids(currentPlay.cards) : "empty table"}`).toBe(true);
   };
 
-  const decide = (difficulty, hand, currentPlay, extra = {}) => {
+  const decide = (difficulty, hand, currentPlay, { rng = seededRandom(7), ...extra } = {}) => {
     const s = stateWith(L, { hands: [hand, "3♠ 4♠ 5♠ 6♠", "3♥ 4♥ 5♥ 6♥", "3♣ 4♣ 5♣ 6♣"], current: 0, currentPlay, aiDifficulty: difficulty, ...extra });
-    return { decision: A.makeAIDecision(s.players[0], currentPlay, s), state: s };
+    return { decision: A.makeAIDecision(s.players[0], currentPlay, s, rng), state: s };
   };
+  const played = (ids_) => cards(ids_).map((c, i) => ({ type: "PLAY", playerIndex: 1 + (i % 3), cards: [c] }));
   /** With an opponent two cards from going out, every level plays whatever beats the table. */
   const decideUnderPressure = (difficulty, hand, currentPlay) =>
     decide(difficulty, hand, currentPlay, { hands: [hand, "3♠ 4♠", "3♥ 4♥ 5♥ 6♥", "3♣ 4♣ 5♣ 6♣"] });
 
   it("a CPU plays at its own level, not the table's", () => {
-    // EASY always leads its lowest single; MEDIUM leads its lowest pair first.
+    // EASY leads its lowest single; MEDIUM leads its lowest pair first.
     const s = stateWith(L, { hands: ["5♦ 5♣ 9♠ K♥", "3♠", "3♥", "3♣"], current: 0, aiDifficulty: "EASY" });
-    expect(A.makeAIDecision(s.players[0], null, s).cards).toEqual(cards("5♦"));
-    expect(A.makeAIDecision({ ...s.players[0], level: "MEDIUM" }, null, s).cards).toEqual(cards("5♦ 5♣"));
+    expect(A.makeAIDecision(s.players[0], null, s, steady).cards).toEqual(cards("5♦"));
+    expect(A.makeAIDecision({ ...s.players[0], level: "MEDIUM" }, null, s, steady).cards).toEqual(cards("5♦ 5♣"));
   });
 
-  it("HARD counts the cards played: with every 2 gone its ace is boss, so it spends a pair", () => {
-    // Only a pair beats the table, and it's one HARD would rather keep. It
-    // spends it when it holds a card nobody can beat to take the lead back.
-    const table = combo("5♦ 5♣");
-    const hand = "7♣ 7♥ A♠ 9♦";
-    const twosGone = cards("2♦ 2♣ 2♥ 2♠").map((c, i) => ({ type: "PLAY", playerIndex: 1 + (i % 3), cards: [c] }));
-    expect(decide("HARD", hand, table, { moveHistory: twosGone }).decision).toEqual({ action: "play", cards: cards("7♣ 7♥") });
-    // With the 2s still out there, the ace isn't safe: it keeps the pair.
-    expect(decide("HARD", hand, table).decision.action).toBe("pass");
+  describe("someone on their last card", () => {
+    const opponents = ["J♦", "3♥ 5♥ 6♥ 10♥ 8♣", "3♠ 5♠ 6♠ 10♠ 8♦"];
+    // EASY without its slips; the others with real random deals for HARD's search.
+    const rngFor = (level) => (level === "EASY" ? steady : seededRandom(7));
+
+    it("MEDIUM and HARD answer a single with their highest; EASY with its lowest", () => {
+      const table = combo("5♠");
+      const answer = (level) => decide(level, "4♦ 7♣ 9♥ 2♠", table, { hands: ["4♦ 7♣ 9♥ 2♠", ...opponents], lastPlayedBy: 3, rng: rngFor(level) }).decision.cards;
+      expect(ids(answer("HARD"))).toEqual(["2♠"]);
+      expect(ids(answer("MEDIUM"))).toEqual(["2♠"]);
+      expect(ids(answer("EASY"))).toEqual(["7♣"]);
+    });
+
+    it("MEDIUM and HARD lead a pair they can't answer, not a single", () => {
+      const lead = (level) => decide(level, "4♦ 4♣ 9♥ K♠", null, { hands: ["4♦ 4♣ 9♥ K♠", ...opponents], rng: rngFor(level) }).decision.cards;
+      expect(ids(lead("HARD"))).toEqual(["4♦", "4♣"]);
+      expect(ids(lead("MEDIUM"))).toEqual(["4♦", "4♣"]);
+      expect(ids(lead("EASY"))).toEqual(["4♦"]);
+    });
+  });
+
+  it("MEDIUM and HARD lead the 2♠ first, keeping the lead to go out with their last card", () => {
+    const hands = ["2♠ 3♦", "J♦ Q♦ K♦", "3♥ 5♥ 6♥ 7♥ 8♣", "3♣ 5♣ 6♣ 7♣ 8♦"];
+    expect(ids(decide("HARD", "2♠ 3♦", null, { hands }).decision.cards)).toEqual(["2♠"]);
+    expect(ids(decide("MEDIUM", "2♠ 3♦", null, { hands }).decision.cards)).toEqual(["2♠"]);
+    expect(ids(decide("EASY", "2♠ 3♦", null, { hands, rng: steady }).decision.cards)).toEqual(["3♦"]);
+  });
+
+  it("HARD counts this round's cards: with every 2 played, its ace is the highest left", () => {
+    const hands = ["A♠ 4♦", "5♠ 6♠", "5♥ 6♥", "5♣ 6♣"];
+    const twosGone = played("2♦ 2♣ 2♥ 2♠");
+    expect(ids(decide("HARD", "A♠ 4♦", null, { hands, moveHistory: twosGone }).decision.cards)).toEqual(["A♠"]);
+    // MEDIUM doesn't remember the 2s, so to it the ace isn't safe.
+    expect(ids(decide("MEDIUM", "A♠ 4♦", null, { hands, moveHistory: twosGone }).decision.cards)).toEqual(["4♦"]);
+  });
+
+  describe("what a seat knows", () => {
+    it("this round's plays, not the last round's", () => {
+      const s = stateWith(L, { hands: ["A♠ 4♦", "5♠ 6♠", "5♥ 6♥", "5♣ 6♣"] });
+      s.moveHistory = [...played("2♦ 2♣"), { type: "ROUND_END", winnerIndex: 1 }, { type: "NEW_ROUND", roundNumber: 2 }, ...played("2♥")];
+      const view = S.readTable(s, 0);
+      expect(view.unseen).toContain(cards("2♦")[0].rankValue * 4);
+      expect(view.unseen).not.toContain(cards("2♥")[0].rankValue * 4 + 2);
+      // Without memory, every card it can't see is unseen.
+      expect(S.readTable(s, 0, { memory: false }).unseen).toHaveLength(50);
+    });
+
+    it("a pass on one card: that card is under what they passed", () => {
+      const s = stateWith(L, { hands: ["9♥ 5♣", "J♦", "", ""], eliminated: [false, false, true, true], current: 0 });
+      s.moveHistory = [{ type: "PLAY", playerIndex: 0, cards: cards("8♦") }, { type: "PASS", playerIndex: 1 }, { type: "ROUND_RESET", leadPlayer: 0 }];
+      expect(S.readTable(s, 0).opps).toEqual([{ seat: 1, count: 1, limit: 5 * 4 }]);
+      // So HARD's 9 is safe: it leads it, then goes out with the 5.
+      expect(ids(A.makeAIDecision(s.players[0], null, { ...s, aiDifficulty: "HARD" }, seededRandom(3)).cards)).toEqual(["9♥"]);
+    });
+
+    it.each(DIFFICULTIES)("%s decides the same whatever the hidden cards are", (level) => {
+      // Same hand, table, counts and history, different cards behind the opponents' backs.
+      const rand = seededRandom(level.length);
+      const shuffle = (arr) => {
+        const a = [...arr];
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(rand() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      };
+      for (let n = 0; n < 30; n++) {
+        const deck = shuffle(D.createDeck());
+        const hand = D.sortHand(deck.slice(0, 2 + Math.floor(rand() * 11)));
+        const counts = [1, 2, 3].map(() => 1 + Math.floor(rand() * 13));
+        const table = rand() < 0.5 ? E.identifyCombination([deck[13]]) : null;
+        const rest = deck.slice(14);
+        const runWith = (pool) => {
+          const s = stateWith(L, { current: 0, currentPlay: table, lastPlayedBy: table ? 2 : null });
+          s.players[0].hand = hand;
+          let at = 0;
+          counts.forEach((c, i) => {
+            s.players[i + 1].hand = pool.slice(at, at + c);
+            at += c;
+          });
+          const d = A.makeAIDecision({ ...s.players[0], level }, table, s, seededRandom(n));
+          return d.cards ? ids(d.cards) : "pass";
+        };
+        expect(runWith(shuffle(rest))).toEqual(runWith(shuffle(rest)));
+      }
+    });
   });
 
   describe.each(DIFFICULTIES)("%s", (difficulty) => {
@@ -70,8 +151,7 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
       });
     });
 
-    // EASY always leads its lowest single, whatever else it holds.
-    it.skipIf(difficulty === "EASY")("goes out with a wraparound straight", () => {
+    it("goes out with a wraparound straight", () => {
       const { decision } = decide(difficulty, "A♦ 2♣ 3♥ 4♠ 5♦", null);
       expect(decision.action).toBe("play");
       expect(ids(decision.cards).sort()).toEqual(ids(cards("A♦ 2♣ 3♥ 4♠ 5♦")).sort());
@@ -118,7 +198,9 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
       expect(JSON.stringify(state)).toBe(before);
     });
 
-    it("is always legal across 1,500 random positions", () => {
+    // HARD thinks for up to ~50ms a move, so it gets fewer positions.
+    const positions = difficulty === "HARD" ? 300 : 1500;
+    it(`is always legal across ${positions} random positions`, () => {
       const rand = seededRandom(difficulty.length * 101);
       const shuffle = (arr) => {
         const a = [...arr];
@@ -128,7 +210,7 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
         }
         return a;
       };
-      for (let n = 0; n < 1500; n++) {
+      for (let n = 0; n < positions; n++) {
         const deck = shuffle(D.createDeck());
         const hand = D.sortHand(deck.slice(0, 1 + Math.floor(rand() * 13)));
         const pool = deck.slice(13);
@@ -150,12 +232,23 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
 
   describe("EASY", () => {
     it("leads its lowest single", () => {
-      expect(ids(decide("EASY", "5♣ 3♠ 3♦ 2♠", null).decision.cards)).toEqual(["3♦"]);
+      expect(ids(decide("EASY", "5♣ 3♠ 3♦ 2♠", null, { rng: steady }).decision.cards)).toEqual(["3♦"]);
+    });
+
+    it("now and then leads its lowest card with the ones that pair it", () => {
+      expect(ids(decide("EASY", "5♣ 3♠ 3♦ 2♠", null, { rng: () => 0 }).decision.cards)).toEqual(["3♦", "3♠"]);
     });
 
     it("answers with the lowest play that wins", () => {
-      expect(ids(decide("EASY", "4♦ 9♣ K♠ 2♦", combo("8♠")).decision.cards)).toEqual(["9♣"]);
-      expect(ids(decide("EASY", "4♦ 4♣ 9♣ 9♠ K♥ K♠", combo("5♦ 5♠")).decision.cards)).toEqual(["9♣", "9♠"]);
+      expect(ids(decide("EASY", "4♦ 9♣ K♠ 2♦", combo("8♠"), { rng: steady }).decision.cards)).toEqual(["9♣"]);
+      expect(ids(decide("EASY", "4♦ 4♣ 9♣ 9♠ K♥ K♠", combo("5♦ 5♠"), { rng: steady }).decision.cards)).toEqual(["9♣", "9♠"]);
+    });
+
+    it("sometimes grabs any winning play, 2s and all", () => {
+      // Under a quarter: it slips, and picks the last of the three that win.
+      const rolls = [0.1, 0.99];
+      const rng = () => rolls.shift();
+      expect(ids(decide("EASY", "4♦ 9♣ K♠ 2♦", combo("8♠"), { rng }).decision.cards)).toEqual(["2♦"]);
     });
 
     it("always plays when it can, even a 2", () => {
@@ -173,12 +266,18 @@ describe.each(COPIES)("aiPlayer (%s)", (_name, { ai: A, evaluator: E, deck: D, l
       expect(ids(decision.cards)).toEqual(["9♠"]);
     });
 
-    it("keeps aces and 2s back while it has a big hand", () => {
-      expect(decide("MEDIUM", "3♦ 4♣ 6♥ 7♠ A♦ 2♠", combo("K♠")).decision.action).toBe("pass");
+    it("keeps aces and 2s back while it holds more than 7 cards", () => {
+      expect(decide("MEDIUM", "3♦ 4♣ 6♥ 7♠ 9♦ J♣ A♦ 2♠", combo("K♠")).decision.action).toBe("pass");
+      expect(ids(decide("MEDIUM", "3♦ 4♣ 6♥ 7♠ A♦ 2♠", combo("K♠")).decision.cards)).toEqual(["A♦"]);
+    });
+
+    it("would rather break a pair than sit on its cards", () => {
+      // Only the 10s beat the 9: it splits them, big hand or not.
+      expect(ids(decide("MEDIUM", "3♦ 4♣ 6♥ 6♠ 8♦ 8♣ 10♥ 10♠", combo("9♠")).decision.cards)).toEqual(["10♥"]);
     });
 
     describe("spends aces and 2s to stop an opponent close to going out", () => {
-      const hand = "3♦ 4♣ 6♥ 7♠ A♦ 2♠";
+      const hand = "3♦ 4♣ 6♥ 7♠ 9♦ J♣ A♦ 2♠";
       const table = () => combo("K♠");
       const withSeat1 = (seat1, extra = {}) =>
         decide("MEDIUM", hand, table(), { hands: [hand, seat1, "3♥ 4♥ 5♥ 6♥", "3♣ 4♣ 5♣ 6♣"], ...extra }).decision;

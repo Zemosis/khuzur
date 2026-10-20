@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Btn } from "../PixelUI";
 import { INK, TONES } from "../pixelTokens";
 import { fmt } from "../../utils/poker/tiers";
+import PixelLoader from "../PixelLoader";
 
 /** 51_600_000 -> "14h 20m" (rounded up to the minute). */
 function untilText(ms) {
@@ -24,8 +25,18 @@ export default function ClaimButton({ claim, onClaim, busy = false }) {
   const due = claim.state === "wait" && Date.parse(claim.nextAt) <= now;
   if (claim.state === "ready" || due) {
     return (
-      <Btn tone={TONES.poison} onClick={onClaim} disabled={busy} className="w-full">
-        {claim.state === "ready" ? `Claim +${fmt(claim.amount)}` : "Claim"}
+      <Btn tone={TONES.poison} onClick={onClaim} disabled={busy} className={`w-full ${busy ? "is-busy" : ""}`}>
+        {busy ? (
+          <span className="flex items-center justify-center gap-2">
+            {/* The pixel loader, while the claim goes through. */}
+            <PixelLoader label={null} on="#1a3a0e" off="rgba(26,58,14,0.2)" />
+            Claiming
+          </span>
+        ) : claim.state === "ready" ? (
+          `Claim +${fmt(claim.amount)}`
+        ) : (
+          "Claim"
+        )}
       </Btn>
     );
   }

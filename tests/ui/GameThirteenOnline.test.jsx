@@ -141,6 +141,22 @@ describe("GameThirteen online", () => {
     expect(seatsShown()).toEqual(["left", "right"]);
   }, 20000);
 
+  it("the cards a short table isn't dealt wait in the deck's spot; at four it's an empty spot", async () => {
+    const s = stateWith(logic, { hands: ["3♦ 7♥", "4♣ 6♣", "8♦ 10♦"], current: 0 });
+    const { unmount } = open();
+    await act(async () => {});
+    serverSends("game_state_update", view(s));
+    await yourTurn();
+    expect(screen.getByRole("img", { name: "13 cards not dealt" })).toBeInTheDocument();
+    unmount();
+
+    open();
+    await act(async () => {});
+    serverSends("game_state_update", view(stateWith(logic, { hands: ["3♦ 7♥", "4♣ 6♣", "8♦ 10♦", "9♠ J♠"], current: 0 })));
+    await yourTurn();
+    expect(screen.getByRole("img", { name: "0 cards not dealt" })).toBeInTheDocument();
+  }, 20000);
+
   it("someone who joins a full two-player table watches it", async () => {
     const s = stateWith(logic, { hands: ["3♦ 7♥", "4♣ 6♣"], current: 0 });
     const watched = { ...view(s), players: view(s).players.map((p, i) => ({ ...p, name: ["ANN #0005", "BOB #0006"][i], socketId: null })) };
@@ -200,7 +216,7 @@ describe("GameThirteen online", () => {
     expect(plateOf("top").style.opacity).toBe("0.6");
   }, 20000);
 
-  it("a chat message pops up over its sender's seat, but never yours", async () => {
+  it("a chat message pops up over its sender's seat, and yours beside your hand", async () => {
     const s = stateWith(logic, { hands: ["3♦ 7♥ 9♣ K♠", "4♣ 6♣", "8♦ 10♦", "5♠ J♣"], current: 0 });
     open();
     await act(async () => {});
@@ -209,7 +225,8 @@ describe("GameThirteen online", () => {
     serverSends("receive_chat", { id: "c1", type: "CHAT", sender: "FRIEND #0002", text: "your go!", timestamp: "10:00" });
     expect(screen.getByRole("note", { name: "FRIEND says" })).toHaveTextContent("your go!");
     serverSends("receive_chat", { id: "c2", type: "CHAT", sender: "ME #0001", text: "thinking", timestamp: "10:00" });
-    expect(screen.getByText("thinking")).toBeInTheDocument(); // in the chat panel
+    expect(screen.getAllByText("thinking")).toHaveLength(2); // in the chat panel and your bubble
+    expect(screen.getByRole("note", { name: "You says" })).toHaveTextContent("thinking");
     expect(screen.queryByRole("note", { name: "ME says" })).not.toBeInTheDocument();
   }, 20000);
 });

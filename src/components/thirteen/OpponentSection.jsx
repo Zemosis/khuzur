@@ -51,6 +51,19 @@ function StatusChip({ label, bg, fg = "#1a1024", blink, side = "right", hidden =
   return side === "bottom" ? <span className="absolute -bottom-3 inset-x-0 flex justify-center pointer-events-none">{chip}</span> : chip;
 }
 
+const EDGE = { left: "start", top: "center", right: "end" };
+
+/** Where a seat's chat bubble goes: { side, align, gap }. */
+function bubblePlace(at, position, strip) {
+  const { side, align } = at ?? (strip
+    ? { side: "below", align: EDGE[position] }
+    : position === "top"
+      ? { side: "right", align: "start" }
+      : { side: "above", align: EDGE[position] });
+  // Above a seat it clears the TURN tag and arrow.
+  return { side, align, gap: side === "above" ? 40 : 14 };
+}
+
 // Card backs held as a fan facing the table. Past SHOWN cards, the last back
 // is blurred and carries the rest as "+N".
 function HandPreview({ count, position }) {
@@ -122,7 +135,11 @@ const SIDE_PLATE_W = 124;
 // and announce a decision over the avatar (`callout`: { id, label, bg, fg };
 // each new id plays once, and the chip stays hidden until it lands).
 // The player on turn gets a big TURN tag and a bobbing arrow; the others can
-// be `dimmed` meanwhile. `bubble` (lines) shows what they just said.
+// be `dimmed` meanwhile. `bubble` (lines) shows what they just said, by
+// default where Thirteen has room for it: the top seat's to its right (its
+// cards and the felt are below), the side seats' above, lined up with the
+// seat's outer edge; on a phone below, under the strip. `bubbleAt`
+// ({ side, align }, see ChatBubble) places it elsewhere.
 const OpponentSection = ({
   player,
   isActive = false,
@@ -137,6 +154,7 @@ const OpponentSection = ({
   layout = "full",
   dimmed = false,
   bubble = null,
+  bubbleAt,
 }) => {
   const { name, hand, isEliminated } = player;
   const count = hand.length;
@@ -168,7 +186,9 @@ const OpponentSection = ({
   );
 
   return (
-    <div className={`flex items-center ${arrangement}`} data-seat={position} style={strip ? { maxWidth: 132 } : undefined}>
+    <div className={`relative flex items-center ${arrangement}`} data-seat={position} style={strip ? { maxWidth: 132 } : undefined}>
+      {/* Beside the seat, not in its plate: a dimmed seat still says it clearly. */}
+      {bubble && <ChatBubble name={name.split(" #")[0]} lines={bubble} {...bubblePlace(bubbleAt, position, strip)} />}
       <div
         data-plate={dealSeat ?? position}
         className={`relative flex items-center ${
@@ -195,10 +215,6 @@ const OpponentSection = ({
         }}
       >
         {announcing && <Callout key={callout.id} {...callout} targetRef={chipRef} onDone={() => land(callout.id)} />}
-        {bubble && (
-          // Above the seat it clears the TURN tag and arrow.
-          <ChatBubble name={name.split(" #")[0]} lines={bubble} tail={position === "top" || strip ? "up" : "down"} gap={position === "top" || strip ? 14 : 40} />
-        )}
         {isActive && (
           <span data-testid="turn-arrow" className="turn-arrow absolute left-1/2 -top-8 z-30 pointer-events-none" style={{ color: "#f4c430", filter: "drop-shadow(2px 2px 0 #0a0712)" }}>
             <PixelIcon name="down" size={18} />

@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import RulesModal from "../../src/components/thirteen/RulesModal";
 
-const SECTIONS = ["The goal", "Card order", "Playing a round", "Combinations", "5-card hands", "Breaking ties", "Scoring", "Controls"];
+const SECTIONS = ["The goal", "Card order", "Playing a round", "Combinations", "5-card hands", "Breaking ties", "Scoring", "CPU levels", "Controls"];
 
 describe("RulesModal", () => {
   it("is a labelled dialog with every section in the nav and the body", () => {
@@ -22,6 +22,13 @@ describe("RulesModal", () => {
     expect(screen.getByText(/can't play until your turn comes around again/)).toBeInTheDocument();
     expect(screen.getByText(/leader of a trick can't pass/)).toBeInTheDocument();
     expect(screen.queryByText(/until the trick ends/)).not.toBeInTheDocument();
+  });
+
+  it("describes the three CPU levels, and that they never see your cards", () => {
+    render(<RulesModal onClose={() => {}} />);
+    const section = screen.getByRole("heading", { name: /CPU levels/ }).closest("section");
+    ["EASY", "MEDIUM", "HARD"].forEach((level) => expect(within(section).getAllByText(level).length).toBeGreaterThan(0));
+    expect(within(section).getByText("NO PEEKING")).toBeInTheDocument();
   });
 
   it("states the scoring thresholds from GAME_SETTINGS", () => {

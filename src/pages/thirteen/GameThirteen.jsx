@@ -41,7 +41,7 @@ import { makeAIDecision } from "../../utils/aiPlayer";
 
 import { soundManager } from "../../utils/SoundManager";
 import PixelIcon from "../../components/PixelIcon";
-import { MotionToggle } from "../../components/SettingsModal";
+import { BubblesToggle, MotionToggle } from "../../components/SettingsModal";
 import { TableHeader, TableSidebar, ConnectionSignal } from "../../components/TableChrome";
 import { useUnread } from "../../hooks/useUnread";
 import { positionOf, seatPositions } from "../../utils/seatPosition";
@@ -95,6 +95,8 @@ const GameThirteen = () => {
   const [roundEndData, setRoundEndData] = useState(null);
   const [isDealing, setIsDealing] = useState(true);
   const [dealCounts, setDealCounts] = useState([0, 0, 0, 0]);
+  // Cards nobody was dealt this round (fewer than 4 players), kept for the round.
+  const [undealt, setUndealt] = useState({ round: null, count: 0 });
   // Online: when the deal ends, at every seat (see DealAnimation's endsAt).
   const [dealEndsAt, setDealEndsAt] = useState(null);
 
@@ -636,6 +638,11 @@ const GameThirteen = () => {
     });
   }
 
+  const roundKey = `${gameState.matchNumber || 1}-${gameState.roundNumber}`;
+  if (undealt.round !== roundKey) {
+    setUndealt({ round: roundKey, count: 52 - 13 * playersList.filter((p) => !p.isEliminated).length });
+  }
+
   const visiblePlayers = isDealing
     ? playersList.map((p, idx) => {
         const count = dealCounts[idx] || 0;
@@ -743,6 +750,8 @@ const GameThirteen = () => {
         roundNumber={gameState.roundNumber}
         isDealing={isDealing}
         cardWidth={deckW}
+        undealt={undealt.count}
+        pileWidth={Math.round(deckW * 0.6)}
         showRound={!compact}
         // Your hand carries its own mark on your turn.
         turnSide={playing && !myTurnNow ? positionOf(gameState.currentPlayerIndex, viewIndex, playersList.length) : null}
@@ -755,6 +764,7 @@ const GameThirteen = () => {
           deckWidth={deckW}
           seats={seatPositions(playersList.length)}
           seatsIn={playersList.map((p) => !p.isEliminated)}
+          leftover={undealt.count}
           endsAt={isSoloGame ? null : dealEndsAt}
           onDealProgress={handleDealProgress}
           onComplete={handleDealComplete}
@@ -834,6 +844,7 @@ const GameThirteen = () => {
               <span className="flex items-center justify-center gap-2"><PixelIcon name={isMuted ? "mute" : "speaker"} size={12} />{isMuted ? "SOUND OFF" : "SOUND ON"}</span>
             </button>
             <MotionToggle className="text-[9px] px-3 py-2" />
+            <BubblesToggle className="text-[9px] px-3 py-2" />
             <div>
               <label className="font-pixel-display text-[9px] text-bone/60">
                 MASTER: {volumes.master}%
@@ -933,6 +944,7 @@ const GameThirteen = () => {
             order={handOrder.order}
             onReorder={handOrder.reorder}
             isEliminated={bottomPlayer.isEliminated}
+            bubble={bubbles.mine}
           />
           </div>
           <GameControls

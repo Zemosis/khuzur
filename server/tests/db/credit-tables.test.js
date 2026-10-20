@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from "vitest";
 import { TEST_DATABASE_URL, loadDb, truncateAll, makePlayer } from "./setup.js";
 
-const DELAYS = { thinkMin: 1, thinkMax: 2, runout: 1, handGap: 5, firstHand: 5, turn: null, saveRetry: 20, slowSave: 30 };
+const DELAYS = { thinkMin: 1, thinkMax: 2, deal: 1, runout: 1, handGap: 5, firstHand: 5, turn: null, saveRetry: 20, slowSave: 30 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 describe.skipIf(!TEST_DATABASE_URL)("credit tables (Postgres)", () => {

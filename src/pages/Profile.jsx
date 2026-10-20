@@ -12,6 +12,7 @@ import { Panel, Btn, HeaderBtn, TopBar } from "../components/PixelUI";
 import { INK, TONES, inputStyle } from "../components/pixelTokens";
 import PlacementGraph from "../components/profile/PlacementGraph";
 import HandsPlayed from "../components/profile/HandsPlayed";
+import ShowdownHands from "../components/profile/ShowdownHands";
 import { ordinal } from "../components/profile/ordinal";
 import PlacementBars from "../components/profile/PlacementBars";
 import SettingsModal from "../components/SettingsModal";
@@ -259,14 +260,19 @@ function Facts({ rows }) {
   );
 }
 
+// Online matches open their match page; solo ones (vs CPU) keep only this line.
 function RecentList({ matches }) {
+  const navigate = useNavigate();
   if (!matches.length) return <p className="font-pixel-body text-[20px] text-bone/70 px-3">No matches yet</p>;
   return (
     <div className="flex flex-col">
-      {matches.map((m, i) => (
-        <div
+      {matches.map((m, i) => {
+        const Row = m.solo ? "div" : "button";
+        return (
+        <Row
           key={m.id}
-          className="grid items-center gap-3 px-3 font-pixel-body text-[20px]"
+          {...(m.solo ? {} : { onClick: () => navigate(`/match/${m.id}`), title: "See how this match went" })}
+          className={`grid items-center gap-3 px-3 font-pixel-body text-[20px] text-left w-full ${m.solo ? "" : "pixel-hbtn cursor-pointer"}`}
           style={{ gridTemplateColumns: "96px minmax(0,1fr) 80px 80px 70px 110px", minHeight: 44, backgroundColor: i % 2 ? "#181432" : "transparent" }}
         >
           <span
@@ -280,8 +286,9 @@ function RecentList({ matches }) {
           <span className="text-bone text-right tabular-nums">{m.score ?? "-"} pts</span>
           <span className="text-bone/80 text-right tabular-nums">{formatDuration(m.seconds)}</span>
           <span className="text-bone/70 text-right">{new Date(m.finishedAt).toLocaleDateString()}</span>
-        </div>
-      ))}
+        </Row>
+        );
+      })}
     </div>
   );
 }
@@ -318,9 +325,45 @@ const STAKES = [
   ["free", "Free"],
   ["credits", "Credits"],
 ];
+const TIER_TONE = { LOW: "#9bd14f", MID: "#f4c430", HIGH: "#e85a7a" };
+const signed = (n) => (n > 0 ? `+${n}` : String(n));
+
+// The poker tables played, latest first: each opens its table page.
+function PokerTables({ tables }) {
+  const navigate = useNavigate();
+  if (!tables.length) return <p className="font-pixel-body text-[20px] text-bone/70 px-3">No tables yet</p>;
+  return (
+    <div className="flex flex-col">
+      {tables.map((t, i) => (
+        <button
+          key={t.id}
+          onClick={() => navigate(`/match/${t.id}`)}
+          title="See your hands at this table"
+          className="pixel-hbtn grid items-center gap-3 px-3 font-pixel-body text-[20px] text-left w-full cursor-pointer"
+          style={{ gridTemplateColumns: "72px minmax(0,1fr) 90px 80px 70px 110px", minHeight: 44, backgroundColor: i % 2 ? "#181432" : "transparent" }}
+        >
+          <span
+            className="font-pixel-display text-[10px] text-center py-1"
+            style={{ backgroundColor: t.tier ? TIER_TONE[t.tier] : INK, color: t.tier ? INK : "#ead8b1", boxShadow: "0 0 0 2px #2a234d" }}
+          >
+            {t.tier ?? "FREE"}
+          </span>
+          <span className="text-parchment truncate">{t.table || "Poker table"}</span>
+          <span className="text-bone/80 text-right tabular-nums">{t.hands} hands</span>
+          <span className="text-right tabular-nums" style={{ color: t.net > 0 ? "#9bd14f" : t.net < 0 ? "#e85a7a" : "#ead8b1" }}>
+            {signed(t.net)}
+          </span>
+          <span className="text-bone/80 text-right tabular-nums">{formatDuration(t.seconds)}</span>
+          <span className="text-bone/70 text-right">{new Date(t.finishedAt).toLocaleDateString()}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function PokerSheet({ poker }) {
   const [stakes, setStakes] = useState("free");
+  const [ranksSort, setRanksSort] = useState("rank");
   const v = poker[stakes];
   const net = v.net > 0 ? `+${v.net}` : String(v.net);
   return (
@@ -350,6 +393,25 @@ function PokerSheet({ poker }) {
           />
         </Section>
       </div>
+      <Section
+        title="Showdown hands"
+        right={
+          <Toggle
+            label="Sort showdown hands"
+            options={[
+              ["rank", "By rank"],
+              ["shown", "Most shown"],
+            ]}
+            value={ranksSort}
+            onChange={setRanksSort}
+          />
+        }
+      >
+        <ShowdownHands ranks={v.showdownRanks ?? {}} sort={ranksSort} />
+      </Section>
+      <Section title="Recent tables">
+        <PokerTables tables={v.recent ?? []} />
+      </Section>
     </>
   );
 }
@@ -359,6 +421,7 @@ function PokerSheet({ poker }) {
 function StatsSheet({ data }) {
   const [filter, setFilter] = useState("overall");
   const [recentView, setRecentView] = useState("list");
+  const [handsSort, setHandsSort] = useState("rank");
   if (filter === "poker") {
     return (
       <div className="flex-1 flex flex-col gap-6 p-4 overflow-y-auto min-h-0">
@@ -415,8 +478,21 @@ function StatsSheet({ data }) {
           <Section title="Thirteen">
             <ThirteenFacts extras={v.extras || {}} />
           </Section>
-          <Section title="Hands played">
-            <HandsPlayed hands={v.hands || {}} />
+          <Section
+            title="Hands played"
+            right={
+              <Toggle
+                label="Sort hands"
+                options={[
+                  ["rank", "By rank"],
+                  ["played", "Most played"],
+                ]}
+                value={handsSort}
+                onChange={setHandsSort}
+              />
+            }
+          >
+            <HandsPlayed hands={v.hands || {}} sort={handsSort} />
           </Section>
         </div>
       )}

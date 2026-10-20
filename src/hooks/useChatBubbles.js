@@ -1,18 +1,22 @@
 // CHAT BUBBLES — a chat message pops up over its sender's seat for a few
-// seconds, as well as going in the chat panel.
+// seconds, as well as going in the chat panel. Yours pops up over your own
+// spot (`mine`).
 //
 // A bubble stays 4s, plus a little for a long message, at most 8s. Messages
 // in a row from one player stack in the same bubble (the last 3, newest at
 // the bottom) and each one restarts its clock, so a quick back-and-forth
-// stays readable. Your own messages, chat that was already there when the
-// table opened, and the move log never pop up.
+// stays readable. Chat that was already there when the table opened, the
+// move log, and players you've muted never pop up; with bubbles turned off in
+// Settings, nothing does (see utils/chatPrefs).
 
 import { useEffect, useRef, useState } from "react";
+import { useChatPrefs } from "../utils/chatPrefs";
 
 const MIN_MS = 4000;
 const PER_CHAR_MS = 60; // past the first 10 characters
 const MAX_MS = 8000;
 const KEEP = 3;
+const ME = "\u0000me"; // your own bubble's key: never a player's name
 
 /** How long a bubble showing `text` (as its newest line) stays up. */
 export const bubbleMs = (text = "") => Math.min(MAX_MS, MIN_MS + Math.max(0, text.length - 10) * PER_CHAR_MS);
@@ -20,9 +24,10 @@ export const bubbleMs = (text = "") => Math.min(MAX_MS, MIN_MS + Math.max(0, tex
 const baseName = (name = "") => name.split(" #")[0];
 
 export function useChatBubbles(messages = []) {
+  const { bubbles: on, muted } = useChatPrefs();
   // Messages there when the table opened are history, not news.
   const seenRef = useRef(null);
-  const [bubbles, setBubbles] = useState({}); // sender -> { lines, until }
+  const [bubbles, setBubbles] = useState({}); // sender (or ME) -> { lines, until }
 
   useEffect(() => {
     if (!seenRef.current) {
@@ -32,14 +37,14 @@ export function useChatBubbles(messages = []) {
     const seen = seenRef.current;
     const fresh = messages.filter((m) => m.type !== "SYSTEM" && !seen.has(m.id));
     fresh.forEach((m) => seen.add(m.id));
-    const theirs = fresh.filter((m) => !m.isMe);
-    if (!theirs.length) return;
+    if (!fresh.length) return;
     const now = Date.now();
     setBubbles((prev) => {
       const next = { ...prev };
-      for (const m of theirs) {
-        const lines = [...(next[m.sender]?.lines || []), m.text].slice(-KEEP);
-        next[m.sender] = { lines, until: now + bubbleMs(m.text) };
+      for (const m of fresh) {
+        const key = m.isMe ? ME : m.sender;
+        const lines = [...(next[key]?.lines || []), m.text].slice(-KEEP);
+        next[key] = { lines, until: now + bubbleMs(m.text) };
       }
       return next;
     });
@@ -58,10 +63,10 @@ export function useChatBubbles(messages = []) {
 
   /** The lines over a seat (by its player's name), or null. */
   const bubbleFor = (name) => {
-    if (bubbles[name]) return bubbles[name].lines;
-    const match = Object.keys(bubbles).find((key) => baseName(key) === baseName(name));
-    return match ? bubbles[match].lines : null;
+    if (!on) return null;
+    const key = bubbles[name] ? name : Object.keys(bubbles).find((k) => k !== ME && baseName(k) === baseName(name));
+    return key && !muted.includes(key) ? bubbles[key].lines : null;
   };
 
-  return { bubbleFor };
+  return { bubbleFor, mine: on ? (bubbles[ME]?.lines ?? null) : null };
 }

@@ -56,6 +56,39 @@ describe("poker table", () => {
     expect(table.state.phase).toBe(PHASES.BETTING);
   });
 
+  it("counts down to the next hand: the first after START, then each after a hand ends", () => {
+    make();
+    human();
+    cpu();
+    expect(table.nextHandMsLeft()).toBeNull(); // not started
+    table.start();
+    expect(table.nextHandMsLeft()).toBe(D.firstHand);
+    vi.advanceTimersByTime(1000);
+    expect(table.nextHandMsLeft()).toBe(D.firstHand - 1000);
+    vi.advanceTimersByTime(D.firstHand - 1000);
+    expect(table.state.phase).toBe(PHASES.BETTING);
+    expect(table.nextHandMsLeft()).toBeNull();
+    untilHandOver();
+    expect(table.nextHandMsLeft()).toBe(D.handGap);
+  });
+
+  it("a new hand's first CPU waits for the deal before thinking; later turns don't", () => {
+    make({ thinkMin: 1000, thinkMax: 1000 });
+    cpu("A");
+    cpu("B");
+    table.start();
+    vi.advanceTimersByTime(D.firstHand);
+    const acted = () => table.state.events.filter((e) => e.type === "act").length;
+    vi.advanceTimersByTime(1000 + D.deal - 1);
+    expect(acted()).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(acted()).toBe(1);
+    if (table.state.phase === PHASES.BETTING) {
+      vi.advanceTimersByTime(1000);
+      expect(acted()).toBe(2);
+    }
+  });
+
   it("seats people in the first empty seat until the table is full", () => {
     make();
     for (let i = 0; i < 6; i++) expect(human(`P${i}`)).toEqual({ ok: true, seat: i });
@@ -68,6 +101,20 @@ describe("poker table", () => {
     table.start();
     vi.advanceTimersByTime(10 * 60_000);
     expect(hands.length).toBeGreaterThan(10);
+  });
+
+  it("keeps a read on every player, hand after hand, for the CPUs", () => {
+    make();
+    human();
+    cpu();
+    table.start();
+    vi.advanceTimersByTime(D.firstHand);
+    untilHandOver();
+    expect(table.reads[0]).toMatchObject({ name: "ME", hands: 1 });
+    expect(table.reads[1]).toMatchObject({ name: "BOT", hands: 1 });
+    vi.advanceTimersByTime(D.handGap);
+    untilHandOver();
+    expect(table.reads[0].hands).toBe(2);
   });
 
   it("the turn clock checks or folds for you, and twice in a row sits you out", () => {

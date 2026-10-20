@@ -11,6 +11,7 @@ import {
 } from "./gameLogic.js";
 import { makeAIDecision } from "./aiPlayer.js";
 import { GAME_STATES } from "./constants.js";
+import { thirteenHighlights } from "./highlights.js";
 
 const AI_TURN_DELAY = 1500;
 // Clients leave the winning play up for 2.5s, then show the round-end overlay
@@ -224,6 +225,7 @@ export class ThirteenGame {
         score_after: p.score,
         eliminated: !!p.isEliminated,
       })),
+      highlights: thirteenHighlights(next.moveHistory),
     };
   }
 
@@ -255,7 +257,8 @@ export class ThirteenGame {
 
     let next = null;
     try {
-      const decision = makeAIDecision(current, s.currentPlay, s);
+      // The table's random source: seeded tests replay CPU choices too.
+      const decision = makeAIDecision(current, s.currentPlay, s, this.rng);
       if (decision.action === "play" && decision.cards?.length) {
         const result = playCards(s, decision.cards);
         next = result.success ? result.newState : null;

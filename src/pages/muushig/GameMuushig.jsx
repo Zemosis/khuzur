@@ -22,7 +22,7 @@ import YourTurnMark from "../../components/YourTurnMark";
 import { socket, connectSocket } from "../../utils/socket";
 import { seatAvatar } from "../../utils/avatarConstants";
 import WaitingTable from "../../components/thirteen/WaitingTable";
-import { useTableMetrics } from "../../hooks/useTableMetrics";
+import { useTableMetrics, useViewport } from "../../hooks/useTableMetrics";
 import { reducedMotion } from "../../utils/motion";
 import PlayerHand from "../../components/thirteen/PlayerHand";
 import OpponentSection from "../../components/thirteen/OpponentSection";
@@ -41,7 +41,7 @@ import MuushigScoreBoard from "../../components/muushig/MuushigScoreBoard";
 import MuushigControls from "../../components/muushig/MuushigControls";
 import MuushigRules from "../../components/muushig/MuushigRules";
 import PixelIcon from "../../components/PixelIcon";
-import { MotionToggle } from "../../components/SettingsModal";
+import { BubblesToggle, MotionToggle } from "../../components/SettingsModal";
 import { TableHeader, TableSidebar, ConnectionSignal } from "../../components/TableChrome";
 import { useUnread } from "../../hooks/useUnread";
 import {
@@ -75,6 +75,18 @@ const CPUS = [
 ];
 // Seats clockwise from yours: bottom, bottom-left, top-left, top-right, bottom-right.
 const SEAT_POSITIONS = ["bottom", "bottomLeft", "topLeft", "topRight", "bottomRight"];
+// Two full seats stacked in a column need a window at least this tall; below
+// it the top seats ran under the header, so the slim "row" seats take over.
+const FULL_SEATS_MIN_H = 640;
+// Chat bubbles beside the seat columns: the top seats' face the felt (only its
+// rim is under them), the bottom seats' open below, toward your hand. On a
+// phone they all sit under the strip (OpponentSection's default).
+const BUBBLE_AT = {
+  topLeft: { side: "right", align: "start" },
+  topRight: { side: "left", align: "start" },
+  bottomLeft: { side: "below", align: "center" },
+  bottomRight: { side: "below", align: "center" },
+};
 // The deal animation: each seat's fan faces the felt, and all 5 seats get cards.
 const DEAL_ROTATION = { bottomLeft: 90, topLeft: 90, topRight: 270, bottomRight: 270 };
 const ALL_SEATS_IN = [true, true, true, true, true];
@@ -378,7 +390,10 @@ function OnlineMuushig({ lobbyId, playerName }) {
 function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, messages, setMessages }) {
   const navigate = useNavigate();
   const { identity } = useAuth();
-  const { handW, deckW, compact, narrow, seats } = useTableMetrics();
+  const metrics = useTableMetrics();
+  const { handW, deckW, compact, narrow } = metrics;
+  const { vh } = useViewport();
+  const seats = metrics.seats === "full" && vh < FULL_SEATS_MIN_H ? "row" : metrics.seats;
   const { connected, ping } = useServerStats({ enabled: !!online });
   const [panelOpen, setPanelOpen] = useState(false);
   const closePanel = useCallback(() => setPanelOpen(false), []);
@@ -822,6 +837,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
         // While it's someone's turn, everyone else's seat dims a little.
         dimmed={turnSeat !== null && !active}
         bubble={bubbles.bubbleFor(p.name)}
+        bubbleAt={seats === "strip" ? undefined : BUBBLE_AT[posOf(index)]}
         position={position}
         face={faceFor(index)}
         dealSeat={posOf(index)}
@@ -939,6 +955,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
               </span>
             </button>
             <MotionToggle className="text-[9px] px-3 py-2" />
+            <BubblesToggle className="text-[9px] px-3 py-2" />
             {[
               ["master", "MASTER"],
               ["sfx", "SFX"],
@@ -1066,6 +1083,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
               isPlayable={allowed ? (c) => allowed.has(c.id) : undefined}
               // An empty hand never means a win here: you folded, or the round's cards are all out.
               emptyMessage={me.status === "fold" ? "YOU FOLDED — SITTING OUT THIS ROUND" : "ALL CARDS PLAYED"}
+              bubble={bubbles.mine}
               arrival={
                 flight?.seat === mySeat && incomingLeg >= 0
                   ? {

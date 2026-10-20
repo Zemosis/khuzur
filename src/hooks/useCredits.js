@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "./useAuth";
+import { LOADER_MIN_MS, atLeast } from "../components/PixelLoader";
 
 const CREDITS = { base: "/api/credits" };
 
@@ -28,13 +29,19 @@ export function useCredits({ enabled = true } = {}) {
     if (enabled && !loading) refresh();
   }, [enabled, loading, refresh]);
 
+  /**
+   * True once the claim went through. busy holds for at least LOADER_MIN_MS,
+   * so the buttons' pixel loader shows instead of flashing.
+   */
   const claim = useCallback(async () => {
     setBusy(true);
     try {
-      setCredits(await api("/claim", { method: "POST", ...CREDITS }));
+      setCredits(await atLeast(LOADER_MIN_MS, api("/claim", { method: "POST", ...CREDITS })));
       setError("");
+      return true;
     } catch (err) {
       setError(err.message);
+      return false;
     } finally {
       setBusy(false);
     }

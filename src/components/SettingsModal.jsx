@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { soundManager } from "../utils/SoundManager";
 import { reducedMotion, setReducedMotion } from "../utils/motion";
+import { setBubblesOn, useChatPrefs } from "../utils/chatPrefs";
 import PixelIcon from "./PixelIcon";
 
 /** FULL / REDUCED animations (see utils/motion.js); the game tables use it too. */
@@ -25,6 +26,27 @@ export const MotionToggle = ({ className = "text-[10px] px-3 py-2.5" }) => {
       <span className="flex items-center justify-center gap-2">
         <PixelIcon name="cards" size={12} />
         {reduced ? "ANIMATIONS: REDUCED" : "ANIMATIONS: FULL"}
+      </span>
+    </button>
+  );
+};
+
+/** Speech bubbles over the seats ON / OFF (see utils/chatPrefs); the tables use it too. */
+export const BubblesToggle = ({ className = "text-[10px] px-3 py-2.5" }) => {
+  const { bubbles } = useChatPrefs();
+  return (
+    <button
+      onClick={() => setBubblesOn(!bubbles)}
+      className={`pixel-btn font-pixel-display ${className}`}
+      style={{
+        backgroundColor: bubbles ? "#463a78" : "#2a234d",
+        borderColor: bubbles ? "#2a234d" : "#1a1530",
+        color: "#ead8b1",
+      }}
+    >
+      <span className="flex items-center justify-center gap-2">
+        <PixelIcon name="chat" size={12} />
+        {bubbles ? "CHAT BUBBLES: ON" : "CHAT BUBBLES: OFF"}
       </span>
     </button>
   );
@@ -94,6 +116,7 @@ const SettingsModal = ({ onClose, account = null }) => {
             <span className="flex items-center justify-center gap-2"><PixelIcon name={isMuted ? "mute" : "speaker"} size={12} />{isMuted ? "SOUND OFF" : "SOUND ON"}</span>
           </button>
           <MotionToggle />
+          <BubblesToggle />
 
           <div>
             <label className="font-pixel-display text-[9px] text-bone/60">

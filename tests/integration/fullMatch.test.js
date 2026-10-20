@@ -5,7 +5,8 @@
 import { describe, it, expect } from "vitest";
 import { COPIES, seededRandom } from "../helpers/cards.js";
 
-const MATCHES_PER_DIFFICULTY = 60;
+// HARD plays every move out in its head (a few ms each), so it plays fewer.
+const MATCHES = { EASY: 60, MEDIUM: 60, HARD: 4 };
 const MOVE_CAP = 20000;
 
 describe.each(COPIES)("full matches (%s)", (_name, { logic: L, deck: D, evaluator: E, ai: A, constants: C }) => {
@@ -47,7 +48,8 @@ describe.each(COPIES)("full matches (%s)", (_name, { logic: L, deck: D, evaluato
       expect(player.hasPassed, `seed ${seed}: seat ${seat} was asked after passing with no play since`).toBe(false);
 
       const table = s.currentPlay;
-      const decision = A.makeAIDecision(player, table, s);
+      // The deal's own random source, so a seed replays the CPUs' choices too.
+      const decision = A.makeAIDecision(player, table, s, rng);
       let next;
       if (decision.action === "play") {
         const r = L.playCards(s, decision.cards);
@@ -92,15 +94,15 @@ describe.each(COPIES)("full matches (%s)", (_name, { logic: L, deck: D, evaluato
     return stats;
   };
 
-  it.each(["EASY", "MEDIUM", "HARD"])(`%s CPUs finish ${MATCHES_PER_DIFFICULTY} matches with every rule holding`, (difficulty) => {
+  it.each(Object.entries(MATCHES))("%s CPUs finish %i matches with every rule holding", (difficulty, matches) => {
     let rounds = 0;
     let tricks = 0;
-    for (let seed = 1; seed <= MATCHES_PER_DIFFICULTY; seed++) {
+    for (let seed = 1; seed <= matches; seed++) {
       const stats = playMatch(seed * 7919 + difficulty.length, difficulty);
       rounds += stats.rounds;
       tricks += stats.tricks;
     }
-    expect(rounds).toBeGreaterThan(MATCHES_PER_DIFFICULTY * 2);
+    expect(rounds).toBeGreaterThan(matches * 2);
     expect(tricks).toBeGreaterThan(rounds);
-  });
+  }, 30000);
 });

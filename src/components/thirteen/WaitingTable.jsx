@@ -33,7 +33,28 @@ function seatFace(seat, index) {
   return seat.kind === "cpu" ? { variant: (index % 5) + 1, customAvatarData: null } : seatAvatar(seat, index);
 }
 
-function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, face, small = false, bubble = null, bubbleTail = "down" }) {
+// Where each seat's chat bubble opens (see ChatBubble), into space no other
+// seat uses: along the top, outward; the side seats', above; yours, to the
+// right. In the phone strip they open below, the end seats' lined up with
+// their outer edge so nothing runs off screen; yours sits above your seat.
+const BUBBLE_AT = {
+  top: { side: "right", align: "start" },
+  topLeft: { side: "left", align: "start" },
+  topRight: { side: "right", align: "start" },
+  left: { side: "above", align: "start" },
+  bottomLeft: { side: "above", align: "start" },
+  right: { side: "above", align: "end" },
+  bottomRight: { side: "above", align: "end" },
+  bottom: { side: "right", align: "center" },
+};
+const STRIP_ALIGN = { left: "start", bottomLeft: "start", right: "end", bottomRight: "end" };
+
+function bubbleAt(pos, small) {
+  if (pos === "bottom") return small ? { side: "above", align: "center" } : BUBBLE_AT.bottom;
+  return small ? { side: "below", align: STRIP_ALIGN[pos] ?? "center" } : BUBBLE_AT[pos];
+}
+
+function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, face, small = false, bubble = null, bubblePlace }) {
   const base = `relative flex flex-col items-center justify-center gap-2 py-3 text-center ${small ? "flex-1 min-w-0 px-1.5" : "px-3"}`;
   const size = small ? { maxWidth: 132, minHeight: 112 } : { width: 184, minHeight: 124 };
 
@@ -79,7 +100,7 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
         opacity: !isCpu && !seat.connected ? 0.55 : 1,
       }}
     >
-      {bubble && <ChatBubble name={shortName(seat.name)} lines={bubble} tail={bubbleTail} />}
+      {bubble && <ChatBubble name={shortName(seat.name)} lines={bubble} {...bubblePlace} />}
       {seat.isHost && (
         <span
           className="absolute -top-3 left-2 font-pixel-display text-[9px] px-1.5 py-1 flex items-center gap-1"
@@ -250,11 +271,13 @@ export default function WaitingTable({
       face={pos === "bottom" ? myFace : undefined}
       small={small}
       bubble={
-        // Yours never pops up: you know what you said.
-        at[pos].seat?.kind !== "human" || at[pos].index === table.mySeat ? null : bubbles.bubbleFor(at[pos].seat.name)
+        at[pos].index === table.mySeat
+          ? bubbles.mine
+          : at[pos].seat?.kind === "human"
+            ? bubbles.bubbleFor(at[pos].seat.name)
+            : null
       }
-      // Seats along the top (and the phone strip) say it below, not off-screen.
-      bubbleTail={small || pos.startsWith("top") ? "up" : "down"}
+      bubblePlace={bubbleAt(pos, small)}
     />
   );
   const seatedCount = table.seats.filter(Boolean).length;

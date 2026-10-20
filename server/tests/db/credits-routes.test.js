@@ -94,10 +94,49 @@ describe.skipIf(!TEST_DATABASE_URL)("credits routes (Postgres)", () => {
     expect(res.body.me).toMatchObject({ rank: 105, total: 100_000 - 1040 });
     expect(res.body.me.around.map((r) => r.rank)).toEqual([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110]);
     expect(res.body.me.around.find((r) => r.me).rank).toBe(105);
+    // Your standing shows inside the top 100 too: the 5 above and below.
     const inTop = await request(app).get("/api/credits/leaderboard").set(bearer(ids[3]));
-    expect(inTop.body.me).toMatchObject({ rank: 4, around: null });
+    expect(inTop.body.me).toMatchObject({ rank: 4 });
+    expect(inTop.body.me.around.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(inTop.body.top[3].me).toBe(true);
     expect((await request(app).get("/api/credits/me").set(bearer(me))).body.rank).toBe(105);
+  });
+
+  it("every row says where its credits came from, and the parts add up to the total", async () => {
+    const hand = (n, results) => ({
+      roundNumber: n,
+      board: [],
+      seatResults: results.map(([userId, before, after]) => ({ seat_index: 0, player_key: userId, stack_before: before, stack_after: after, net: after - before, won: 0, committed: 0, folded_street: null, shown_hand: null, hole: [] })),
+    });
+    const ann = await makePlayer(m.pool, "ANN");
+    const bob = await makePlayer(m.pool, "BOB");
+    await A.buyIn(ann, { tableId: T1, tableName: "Felt", tier: "LOW", amount: 500 });
+    await A.buyIn(bob, { tableId: T1, tableName: "Felt", tier: "LOW", amount: 500 });
+    // ANN wins 300 off BOB, then both go home.
+    await A.saveHand({
+      tableId: T1, tier: "LOW", isPrivate: false, sessionId: null, events: [],
+      summary: hand(1, [[ann, 500, 800], [bob, 500, 200]]),
+      seats: [{ userId: ann, stack: 800, pending: 0, leaving: true }, { userId: bob, stack: 200, pending: 0, leaving: true }],
+    });
+    // BOB, at 700, claims back up to 1,000.
+    await m.pool.query("update credit_accounts set last_claim_at = now() - interval '25 hours' where user_id = $1", [bob]);
+    await A.claim(bob, 0);
+    // An admin moves 50 from ANN to BOB.
+    await A.reverse({ adminId: ann, fromId: ann, toId: bob, amount: 50, note: "test" });
+    // CAT is sitting at a table: what's there still counts as hers, not as a loss.
+    const cat = await makePlayer(m.pool, "CAT");
+    await A.buyIn(cat, { tableId: "00000000-0000-4000-8000-000000000002", tableName: "Rail", tier: "LOW", amount: 400 });
+    await m.pool.query("update credit_accounts set first_hand_at = now() where user_id = $1", [cat]);
+
+    const { top } = (await request(app).get("/api/credits/leaderboard")).body;
+    const row = (name) => top.find((r) => r.name === name);
+    expect(row("ANN")).toMatchObject({ total: 1250, sources: { start: 1000, claimed: 0, poker: 300, admin: -50 } });
+    expect(row("BOB")).toMatchObject({ total: 1050, sources: { start: 1000, claimed: 300, poker: -300, admin: 50 } });
+    expect(row("CAT")).toMatchObject({ total: 1000, atTable: true, sources: { start: 1000, claimed: 0, poker: 0, admin: 0 } });
+    for (const r of top) {
+      const { start, claimed, poker, admin } = r.sources;
+      expect(start + claimed + poker + admin).toBe(r.total);
+    }
   });
 
   it("createSession records a credit table's tier", async () => {

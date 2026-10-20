@@ -9,6 +9,7 @@ import {
 import { useAuth } from "../hooks/useAuth";
 import { useCredits } from "../hooks/useCredits";
 import RestartNotice from "../components/credits/RestartNotice";
+import MenuClaim from "../components/credits/MenuClaim";
 import { useServerStats } from "../hooks/useServerStats";
 import { connectSocket } from "../utils/socket";
 import LoginModal from "../components/auth/LoginModal";
@@ -24,7 +25,7 @@ const MainMenu = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const { identity, isGuest, needsProfileSetup, signOut, updateProfile } = useAuth();
-  const { credits, dismissNotice } = useCredits({ enabled: !isGuest });
+  const { credits, dismissNotice, claim, busy: claiming, error: creditsError } = useCredits({ enabled: !isGuest });
   const stats = useServerStats();
 
   useEffect(() => {
@@ -54,7 +55,8 @@ const MainMenu = () => {
       <Mountains />
 
       {/* TOP BAR */}
-      <div className="relative flex flex-wrap items-center justify-between gap-3 px-4 sm:px-8 py-3">
+      {/* Top-aligned: the claim strip under the buttons makes that column taller. */}
+      <div className="relative flex flex-wrap items-start justify-between gap-3 px-4 sm:px-8 py-3">
         <div className="flex items-center gap-3 mr-auto">
           <div
             style={{
@@ -86,15 +88,29 @@ const MainMenu = () => {
           identity={identity}
           isGuest={isGuest}
           credits={isGuest ? null : (credits?.balance ?? null)}
+          rank={isGuest ? null : (credits?.rank ?? null)}
           onSelectAvatar={(v) => updateProfile({ avatar: v }).catch(console.error)}
           onPaint={() => navigate("/avatar-paint")}
           onViewProfile={() => navigate("/profile")}
           onSignIn={() => setShowLogin(true)}
           onSignOut={signOut}
         />
-        {/* Signing in and out lives in the player menu and in Settings. */}
-        <div className="flex items-center gap-2 sm:gap-3 max-sm:w-full max-sm:justify-between">
+        {/* Signing in and out lives in the player menu and in Settings. The
+            claim strip hangs under the buttons, as wide as they are. */}
+        <div className="flex flex-col gap-3 max-sm:w-full">
+        <div className="flex items-center gap-2 sm:gap-3 max-sm:justify-between">
           <RulebookPicker />
+          {/* Credits are the ranking: everyone's balance, best first. */}
+          <button
+            onClick={() => navigate("/leaderboard")}
+            aria-label="Leaderboard"
+            title="Leaderboard: everyone's credits"
+            className="pixel-btn font-pixel-display text-xs px-4 py-2.5 uppercase flex items-center gap-2 max-sm:px-3"
+            style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}
+          >
+            <PixelIcon name="crown" size={12} />
+            <span className="max-sm:hidden">Ranks</span>
+          </button>
           <button
             className="pixel-btn font-pixel-display text-xs px-4 py-2.5 uppercase relative max-sm:px-3 max-[359px]:hidden"
             style={{
@@ -139,6 +155,8 @@ const MainMenu = () => {
             <PixelIcon name="gear" size={16} className="mx-auto" />
           </button>
         </div>
+        {!isGuest && <MenuClaim claim={credits?.claim} onClaim={claim} busy={claiming} error={creditsError} />}
+        </div>
       </div>
 
       {/* HERO */}
@@ -166,7 +184,7 @@ const MainMenu = () => {
         <GameTile
           id="13"
           title="THIRTEEN"
-          tag="4 PLAYERS"
+          tag="2-4 PLAYERS"
           desc="Be the first to empty your hand. Beat the last play with a higher single, pair, triple or 5-card hand."
           accent="gold"
           cards={[
@@ -242,7 +260,7 @@ const MainMenu = () => {
         <div className="checker-strip h-2" />
         <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 gap-y-1 px-4 sm:px-8 py-2 bg-void">
           <div className="font-pixel-body text-bone/60 text-sm">
-            v1.1.0 — patch{" "}
+            v1.2.0 — patch{" "}
             <span className="text-parchment">"CUTE RAY"</span>
             <span className="text-mist mx-2">|</span>
             <Link to="/privacy" className="underline hover:text-parchment">

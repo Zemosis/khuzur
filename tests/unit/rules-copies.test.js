@@ -10,6 +10,8 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const COPIES = [
+  // Thirteen's CPU sits at the top of each folder.
+  [".", ["aiPlayer.js", "aiCombos.js", "aiSearch.js"]],
   ["muushig", ["engine.js", "ai.js"]],
   ["poker", ["hands.js", "pots.js", "engine.js", "ai.js", "table.js", "tiers.js"]],
 ].flatMap(([game, files]) => files.map((file) => [game, file]));

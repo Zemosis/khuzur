@@ -13,6 +13,7 @@ const GamePoker = lazy(() => import("./pages/poker/GamePoker"));
 const LobbyPoker = lazy(() => import("./pages/poker/LobbyPoker"));
 const AvatarPaint = lazy(() => import("./pages/AvatarPaint"));
 const Profile = lazy(() => import("./pages/Profile"));
+const MatchDetail = lazy(() => import("./pages/MatchDetail"));
 const JoinTable = lazy(() => import("./pages/JoinTable"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const Privacy = lazy(() => import("./pages/Privacy"));
@@ -35,6 +36,7 @@ function App() {
               <Route path="/game-poker" element={<GamePoker />} />
               <Route path="/avatar-paint" element={<AvatarPaint />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/match/:id" element={<MatchDetail />} />
               <Route path="/join/:code" element={<JoinTable />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/privacy" element={<Privacy />} />

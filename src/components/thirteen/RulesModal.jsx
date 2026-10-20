@@ -20,7 +20,45 @@ const SECTIONS = [
   ["five", "5-card hands"],
   ["ties", "Breaking ties"],
   ["scoring", "Scoring"],
+  ["cpus", "CPU levels"],
   ["controls", "Controls"],
+];
+
+// How each CPU level plays (utils/aiPlayer.js).
+const LEVELS = [
+  {
+    id: "EASY",
+    color: "#9bd14f",
+    who: "A beginner",
+    traits: [
+      "Always plays when it can, with its lowest card that wins.",
+      "Leads its lowest card, now and then with the cards that pair it.",
+      "Sometimes grabs any winning play, 2s and all.",
+      "Never notices who's about to go out.",
+    ],
+  },
+  {
+    id: "MEDIUM",
+    color: "#f4c430",
+    who: "A decent club player",
+    traits: [
+      "Plans its hand into pairs, straights and other sets, and sheds the low ones first.",
+      "Keeps its aces and 2s while it holds more than 7 cards.",
+      "Blocks: against a last card it answers with its highest and leads sets, not singles.",
+      "Doesn't remember what's been played.",
+    ],
+  },
+  {
+    id: "HARD",
+    color: "#e85a7a",
+    who: "A strong player",
+    traits: [
+      "Counts the round's cards: once the 2s are gone, it knows its ace is the highest left.",
+      "Reads passes: a pass on the 8 with one card left means that card is under the 8.",
+      "Plays every move out in its head, many times over, and keeps the one that costs it least.",
+      "Knows 10 or more cards count double, and saves its 2s for when they win the round.",
+    ],
+  },
 ];
 
 // "10♥ J♥" → card objects for PixelCard.
@@ -386,7 +424,7 @@ export default function RulesModal({ onClose }) {
                       ["3", "3"],
                       ["9", "9"],
                       ["10", "20"],
-                      ["13 (never played)", "26 — out"],
+                      ["13 (never played)", "26"],
                     ].map(([left, pts]) => (
                       <tr key={left} style={{ backgroundColor: "#14102a" }}>
                         <td className="px-3 py-1.5">{left}</td>
@@ -398,11 +436,38 @@ export default function RulesModal({ onClose }) {
               </div>
               <p>
                 Points add up across rounds. At <Key>{OUT_AT} or more</Key> you're <Hi color="#e85a7a">eliminated</Hi> and sit
-                out the rest of the match. When only one player is left, <Key>they win the match</Key> and a rematch can start.
+                out the rest of the match: a round with all 13 cards still in hand (26) puts you out if you already had 4. When only
+                one player is left, <Key>they win the match</Key> and a rematch can start.
               </p>
             </Section>
 
-            <Section id="controls" n={8} title="Controls">
+            <Section id="cpus" n={8} title="CPU levels">
+              <p>
+                CPUs come in three levels. Pick one for a practice table; online, the host picks each CPU seat's level, and empty seats
+                fill with <Key>MEDIUM</Key> CPUs when the game starts.
+              </p>
+              <div className="grid gap-3 lg:grid-cols-3">
+                {LEVELS.map((l) => (
+                  <div key={l.id} className="px-4 py-3" style={{ backgroundColor: "#14102a", boxShadow: `0 0 0 2px #1f1a3d, inset 0 4px 0 ${l.color}` }}>
+                    <div className="font-pixel-display text-[12px] mb-1" style={{ color: l.color }}>
+                      {l.id}
+                    </div>
+                    <div className="font-pixel-body text-[19px] text-bone/70 mb-2 leading-none">{l.who}</div>
+                    <ul className="flex flex-col gap-1.5 font-pixel-body text-[19px] leading-snug text-parchment/90 list-disc pl-5">
+                      {l.traits.map((t) => (
+                        <li key={t}>{t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <Callout tone="rule" title="NO PEEKING">
+                CPUs never see anyone's cards. They know only what you could know at the table: their own hand, how many cards each
+                player holds, who passed, and what's been played.
+              </Callout>
+            </Section>
+
+            <Section id="controls" n={9} title="Controls">
               <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
                 {[
                   [<>Click a card</>, "Select or deselect it"],

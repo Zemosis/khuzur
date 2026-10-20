@@ -139,7 +139,10 @@ describe("the CREDITS tab", () => {
     await openCredits({ ...ME, balance: 340, claim: { state: "ready", amount: 660 } });
     await userEvent.click(screen.getByRole("button", { name: "Claim +660" }));
     expect(apiMock).toHaveBeenCalledWith("/claim", { method: "POST", base: "/api/credits" });
+    // The pixel loader shows while it goes through.
+    expect(screen.getByRole("button", { name: "Claiming" })).toBeInTheDocument();
     expect(await screen.findByText("Next claim in 24h 0m")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Claiming" })).toBeNull();
   });
 
   it("a guest is asked to sign in, and can't host", async () => {

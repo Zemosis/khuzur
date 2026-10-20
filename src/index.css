@@ -137,6 +137,11 @@ html, body, #root { height: 100%; }
   cursor: not-allowed;
   transform: none;
 }
+/* Working, not unavailable (a claim going through): full color, its loader readable. */
+.pixel-btn.is-busy:disabled {
+  opacity: 1;
+  cursor: progress;
+}
 
 /* Small buttons inside panel header bars (Edit, Refresh, Sign in). */
 .pixel-hbtn {
@@ -449,6 +454,66 @@ input[type="range"].pixel-range {
 }
 .pulse-gold { animation: pulse-glow 1.6s ease-in-out infinite; }
 
+/* The main menu's CLAIM glows while it waits to be pressed. A filter, so the
+   pixel button keeps its own box-shadow. */
+@keyframes claim-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(155, 209, 79, 0)); }
+  50% { filter: drop-shadow(0 0 8px rgba(155, 209, 79, 0.85)); }
+}
+.claim-pulse { animation: claim-pulse 1.8s ease-in-out infinite; }
+
+/* The claim strip: a pixel shine sweeps across a ready CLAIM every few
+   seconds; a state change fades in; a claimed amount floats up toward the
+   balance badge, which glows gold as its count-up lands. */
+@keyframes claim-shine {
+  0%, 70% { transform: translateX(-120%) skewX(-20deg); }
+  100% { transform: translateX(520%) skewX(-20deg); }
+}
+.claim-shine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 18%;
+  background: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+  animation: claim-shine 4s steps(16, end) infinite;
+}
+@keyframes claim-swap {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.claim-swap { animation: claim-swap 220ms ease-out; }
+/* Up and to the left: toward the balance badge beside the buttons. */
+@keyframes claim-float {
+  0% { opacity: 0; transform: translate(0, 6px) scale(0.9); }
+  20% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-56px, -40px) scale(0.95); }
+}
+.claim-float { animation: claim-float 900ms ease-out forwards; }
+@keyframes badge-landed {
+  0% { box-shadow: 0 0 0 0 rgba(244, 196, 48, 0); }
+  30% { box-shadow: 0 0 0 3px #f4c430, 0 0 18px rgba(244, 196, 48, 0.7); }
+  100% { box-shadow: 0 0 0 0 rgba(244, 196, 48, 0); }
+}
+.badge-landed { animation: badge-landed 900ms ease-out; }
+/* Still, the shine would just be a white bar on the button. */
+html[data-motion="reduced"] .claim-shine { display: none; }
+
+/* PixelLoader: each cell lights at its own delay, holds while the rest light
+   (the last lights at 640ms, + 160ms: 800ms), then goes out in the same order.
+   step-end keeps every change a hard snap. Unlit until its delay comes up. */
+@keyframes pixel-loader {
+  0% { background-color: var(--on); box-shadow: 1px 1px 0 #0a0712; }
+  50%, 100% { background-color: var(--off); box-shadow: none; }
+}
+.pixel-loader-cell {
+  background-color: var(--off);
+  animation: pixel-loader 1600ms step-end infinite;
+}
+html[data-motion="reduced"] .pixel-loader-cell { animation: none; }
+html[data-motion="reduced"] .pixel-loader-cell[data-still-on] { background-color: var(--on); }
+
 @keyframes blink {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
@@ -508,8 +573,8 @@ button:focus, input:focus { outline: none; }
 /* Chat bubbles pop in over a seat; the YOUR TURN banner drops in and out;
    the arrow over the player on turn bobs. */
 @keyframes bubble-pop {
-  from { opacity: 0; transform: translateX(-50%) scale(0.7); }
-  to { opacity: 1; transform: translateX(-50%) scale(1); }
+  from { opacity: 0; scale: 0.7; }
+  to { opacity: 1; scale: 1; }
 }
 .chat-bubble { animation: bubble-pop 160ms ease-out; }
 @keyframes turn-banner {
@@ -536,6 +601,11 @@ button:focus, input:focus { outline: none; }
 .your-turn-mark { animation: your-turn-in 250ms ease-out; }
 html[data-motion="reduced"] .your-turn-mark,
 html[data-motion="reduced"] .chat-bubble,
+html[data-motion="reduced"] .claim-pulse,
+html[data-motion="reduced"] .claim-shine,
+html[data-motion="reduced"] .claim-swap,
+html[data-motion="reduced"] .claim-float,
+html[data-motion="reduced"] .badge-landed,
 html[data-motion="reduced"] .turn-arrow,
 html[data-motion="reduced"] .turn-edge { animation: none; }
 html[data-motion="reduced"] .turn-banner { animation: none; }
@@ -547,6 +617,23 @@ html[data-motion="reduced"] .turn-banner { animation: none; }
 }
 .poker-clock { transform-origin: left; animation: poker-clock linear forwards; }
 html[data-motion="reduced"] .poker-clock { animation: none; }
+
+/* Poker: each second of the countdown to the first hand pops in. */
+@keyframes countdown-tick {
+  from { transform: scale(1.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.countdown-tick { animation: countdown-tick 260ms ease-out; }
+html[data-motion="reduced"] .countdown-tick { animation: none; }
+
+/* Poker: a hand's result springs up under the board. */
+@keyframes result-pop {
+  0% { transform: translateY(8px) scale(0.6); opacity: 0; }
+  70% { transform: translateY(0) scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.result-pop { animation: result-pop 380ms ease-out; }
+html[data-motion="reduced"] .result-pop { animation: none; }
 
 /* Poker: the pixel slider. A chunky dark track filled in gold up to the
    amount (--fill, set by BetControls) and a square gold handle. */

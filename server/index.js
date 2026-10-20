@@ -12,11 +12,13 @@ import { ThirteenGame, redactState, DEFAULT_DELAYS } from "./game/engine.js";
 import { MuushigGame, muushigView, DEFAULT_MUUSHIG_DELAYS } from "./game/muushigGame.js";
 import { PokerTable, DEFAULT_POKER_DELAYS } from "./game/poker/table.js";
 import { viewFor } from "./game/poker/engine.js";
+import { tallyHand } from "./game/pokerTally.js";
 import { BOT_NAMES } from "./game/constants.js";
 import { createSession, finishSession, closeOrphanedSessions } from "./persistence.js";
 import { authRouter, socketIdentity } from "./auth.js";
 import { oauthRouter } from "./oauth.js";
-import { createChatGuard } from "./chatGuard.js";
+import { createChatGuard, cleanChat } from "./chatGuard.js";
+import { matchesRouter } from "./matches.js";
 import { migrate, pool } from "./db/index.js";
 import { CreditTable, returnSeatsAfterRestart } from "./credits/tables.js";
 import { creditsRouter } from "./credits/routes.js";
@@ -51,16 +53,17 @@ const MUUSHIG_DELAYS = process.env.MUUSHIG_DELAY_MS
 // clock and the sit-out kick on their own.
 const POKER_DELAYS = {
   ...(process.env.POKER_DELAY_MS
-    ? Object.fromEntries(["thinkMin", "thinkMax", "runout", "handGap", "firstHand"].map((k) => [k, envMs("POKER_DELAY_MS", 0)]))
+    ? Object.fromEntries(["thinkMin", "thinkMax", "deal", "runout", "handGap", "firstHand"].map((k) => [k, envMs("POKER_DELAY_MS", 0)]))
     : {}),
   turn: envMs("POKER_TURN_MS", DEFAULT_POKER_DELAYS.turn),
   sitOutKick: envMs("POKER_KICK_MS", DEFAULT_POKER_DELAYS.sitOutKick),
 };
 
-/** A poker table as one seat sees it: its turn clock, whether START was pressed, and a credit table's tier and save / close state. */
+/** A poker table as one seat sees it: its turn clock and the countdown to the next hand, whether START was pressed, and a credit table's tier and save / close state. */
 const pokerView = (state, seat, table) => ({
   ...viewFor(state, seat),
   turnMsLeft: table?.turnMsLeft() ?? null,
+  nextHandMsLeft: table?.nextHandMsLeft() ?? null,
   started: !!table?.started,
   tier: table?.info?.tier ?? null,
   saving: !!table?.saving,
@@ -102,6 +105,7 @@ app.use("/api/auth/oauth", oauthRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/credits", creditsRouter({ onTableFor }));
 app.use("/api/admin", adminRouter({ standUp: standUpCreditPlayer }));
+app.use("/api/matches", matchesRouter());
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -401,10 +405,22 @@ function beginSession(lobby) {
     playerCount: lobby.roster.size,
     startedAt: lobby.game?.startedAt,
     pokerTier: lobby.tier ?? null,
+    seats: seatsOf(lobby.game?.state),
   }).catch((err) => {
     console.error("[db] createSession failed:", err);
     return null;
   });
+}
+
+/** Who sat where as a Thirteen or Muushig match starts, for its match page. Poker tables change seats as they go: null. */
+function seatsOf(state) {
+  if (!Array.isArray(state?.players)) return null;
+  return state.players.map((p, seat) => ({
+    seat,
+    name: p.name,
+    kind: p.type === "AI" ? "cpu" : "human",
+    level: p.type === "AI" ? p.level || "MEDIUM" : null,
+  }));
 }
 
 function startGame(lobby) {
@@ -542,25 +558,20 @@ function sitAtPoker(lobby, member) {
   return result.ok;
 }
 
-/** A poker hand is over: keep it for the record, and add it to each player's tally. */
+/**
+ * A poker hand is over: keep it for the record, and add it to each player's
+ * tally at this table (see pokerTally.js).
+ */
 function recordHand(lobby, hand) {
   if (!lobby.sessionPromise) return;
   lobby.rounds.push({
     ...hand,
-    // Player keys stay in the roster, not in every round row.
+    // Player keys stay in the roster, and hole cards with their own player.
     seatResults: hand.seatResults.map(({ player_key: _key, hole: _hole, ...result }) => result),
   });
   for (const r of hand.seatResults) {
     const entry = r.player_key && lobby.roster.get(r.player_key);
-    if (!entry) continue;
-    const t = (entry.poker ||= { hands_played: 0, hands_won: 0, net: 0, biggest_pot: 0, vpip_hands: 0, showdowns: 0, showdowns_won: 0 });
-    t.hands_played += 1;
-    t.net += r.net;
-    t.biggest_pot = Math.max(t.biggest_pot, r.won);
-    if (r.won > 0) t.hands_won += 1;
-    if (r.vpip) t.vpip_hands += 1;
-    if (r.showdown) t.showdowns += 1;
-    if (r.showdown && r.won > 0) t.showdowns_won += 1;
+    if (entry) entry.poker = tallyHand(entry.poker, hand, r);
   }
 }
 
@@ -1025,8 +1036,8 @@ io.on("connection", (socket) => {
   socket.on("send_chat", ({ lobbyId, message } = {}) => {
     const lobby = lobbies.get(lobbyId);
     if (!lobby || !lobby.members.has(socket.data.playerKey)) return;
-    const text = String(message || "").slice(0, 300);
-    if (!text.trim()) return;
+    const text = cleanChat(message);
+    if (!text) return;
     const verdict = chatGuard.check(socket.data.playerKey, text);
     if (!verdict.ok) {
       socket.emit("chat_rejected", { reason: verdict.reason, retryInMs: verdict.retryInMs });

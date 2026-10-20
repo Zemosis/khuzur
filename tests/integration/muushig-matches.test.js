@@ -23,7 +23,8 @@ import {
 import { aiAction, applyAction } from "../../src/utils/muushig/ai.js";
 import { seededRandom } from "../helpers/cards.js";
 
-const MATCHES_PER_LEVEL = 25;
+// HARD plays every choice out hundreds of times, so it gets fewer matches.
+const MATCHES_PER_LEVEL = { EASY: 25, MEDIUM: 25, HARD: 5 };
 const MOVE_CAP = 20000;
 const DECK_SIZE = 32;
 
@@ -151,14 +152,14 @@ function checkRoundEnd(s, where, roundEats, scoresBefore, foldRuns, stats) {
 }
 
 describe.each(["EASY", "MEDIUM", "HARD"])("whole Muushig matches, CPUs at %s", (level) => {
-  it(`${MATCHES_PER_LEVEL} seeded matches keep every rule after every move`, () => {
+  it(`${MATCHES_PER_LEVEL[level]} seeded matches keep every rule after every move`, () => {
     const totals = { rounds: 0, folds: 0, sweeps: 0 };
-    for (let seed = 1; seed <= MATCHES_PER_LEVEL; seed++) {
+    for (let seed = 1; seed <= MATCHES_PER_LEVEL[level]; seed++) {
       const { stats } = playMatch(seed * 7919 + level.length, level);
       for (const k of Object.keys(totals)) totals[k] += stats[k];
     }
     // The run actually exercised the rules it checks.
-    expect(totals.rounds).toBeGreaterThan(MATCHES_PER_LEVEL);
+    expect(totals.rounds).toBeGreaterThan(MATCHES_PER_LEVEL[level]);
     expect(totals.folds).toBeGreaterThan(0);
   }, 60_000);
 });

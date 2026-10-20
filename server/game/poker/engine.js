@@ -517,8 +517,10 @@ const VOLUNTARY = new Set(["call", "bet", "raise", "allin"]);
 /**
  * A finished hand, one entry per seat dealt in, for the match record:
  * { roundNumber, winnerSeat, board, seatResults: [{ seat_index, player_key,
- * stack_before, stack_after, net, won, folded_street, shown_hand, committed,
- * hole, vpip, showdown }] }. `board` and `hole` are card ids.
+ * name, cpu, stack_before, stack_after, net, won, folded_street, shown_hand,
+ * shown_rank, committed, hole, vpip, showdown }] }. `board` and `hole` are
+ * card ids; shown_hand is the hand's name at a showdown ("Two pair, queens
+ * and fours") and shown_rank its rank ("TWO PAIR").
  */
 export function handSummary(state) {
   if (state.phase !== PHASES.HAND_OVER) throw new Error("The hand isn't over");
@@ -532,12 +534,15 @@ export function handSummary(state) {
       {
         seat_index: i,
         player_key: p.key,
+        name: p.name,
+        cpu: p.type === "AI",
         stack_before: before,
         stack_after: p.stack,
         net: p.stack - before,
         won: won[i],
         folded_street: foldedOn,
         shown_hand: hands[i]?.name ?? null,
+        shown_rank: hands[i]?.label ?? null,
         committed: p.committed,
         hole: p.hole.map((c) => c.id),
         vpip: state.events.some((e) => e.type === "act" && e.seat === i && e.street === "PREFLOP" && VOLUNTARY.has(e.action)),

@@ -86,4 +86,27 @@ describe.skipIf(!TEST_DATABASE_URL)("poker tables (Postgres)", () => {
     expect(body.poker.free.time.totalSeconds).toBeGreaterThan(0);
     expect(body.poker.credits.hands).toBe(0);
   });
+
+  it("/stats lists the tables you played and the hand ranks you showed down, by stakes", async () => {
+    const first = await recordTable();
+    // A second table with ranks logged: two pairs shown (one won), a flush won.
+    const sessionId = await m.createSession({ gameType: "poker", lobbyId: "PUB-PK0002", lobbyName: "Felt II", hostDisplayName: "HOST #0001", maxPlayers: 6, playerCount: 1, startedAt: new Date(Date.now() - 300_000) });
+    const ranks = { PAIR: { shown: 2, won: 1 }, FLUSH: { shown: 1, won: 1 } };
+    await m.finishSession({
+      sessionId,
+      gameType: "poker",
+      completed: true,
+      endedReason: "completed",
+      roster: [entry(0, { playerKey: userId, userId, poker: tally({ net: -50, showdown_ranks: ranks }) })],
+      rounds: [],
+      state: { handNumber: 10 },
+    });
+    const free = (await request(app).get("/api/auth/stats").set({ Authorization: `Bearer ${token}` })).body.poker.free;
+    expect(free.recent.map((t) => [t.id, t.table, t.net, t.hands])).toEqual([
+      [sessionId, "Felt II", -50, 10],
+      [first, "Felt", 250, 10],
+    ]);
+    expect(free.recent[0].seconds).toBeGreaterThan(0);
+    expect(free.showdownRanks).toEqual(ranks);
+  });
 });

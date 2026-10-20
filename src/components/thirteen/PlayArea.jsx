@@ -5,11 +5,17 @@
 // only the play to beat reads clearly. The newest play flies in from the seat
 // that played it. When a trick is won the whole pile dims and the felt names
 // the next leader; the pile clears when a new round is dealt.
+//
+// The deck rests in the felt's corner (data-undealt). With fewer than 4
+// players some cards are never dealt, and they wait there all round; with 4
+// it's an empty dashed spot. While dealing, the deck is out in the middle
+// (DealAnimation).
 
 import React, { useLayoutEffect, useRef } from "react";
 import gsap from "gsap";
 import { PixelCard } from "../PixelCard";
 import { COMBO_NAMES } from "../../utils/constants";
+import { CARD_RATIO } from "../../hooks/useTableMetrics";
 
 const MAX_PILE = 16; // older plays are fully covered anyway
 const ENTRY = {
@@ -57,6 +63,32 @@ function PlayGroup({ cards, cardWidth }) {
   );
 }
 
+/** The deck's spot: `count` undealt cards, or null while it's out dealing. */
+function Undealt({ count, cardWidth }) {
+  const layers = Math.min(count ?? 0, 3);
+  const label = count == null ? "Deck" : `${count} cards not dealt`;
+  return (
+    <div className="absolute flex flex-col items-start gap-1.5 pointer-events-none" style={{ left: 12, bottom: 12 }} title={label} aria-label={label} role="img">
+      {count != null && (
+        <span className="font-pixel-display text-[8px] leading-none whitespace-nowrap" style={{ color: "rgba(234,216,177,0.6)" }}>
+          UNDEALT <span className={count ? "text-glow-cyan" : ""}>{count}</span>
+        </span>
+      )}
+      <div data-undealt className="relative" style={{ width: cardWidth, height: Math.round(cardWidth * CARD_RATIO) }}>
+        {layers === 0 ? (
+          <div className="absolute inset-0" style={{ border: "3px dashed rgba(234,216,177,0.2)" }} />
+        ) : (
+          Array.from({ length: layers }, (_, i) => (
+            <div key={i} className="absolute inset-0" style={{ transform: `translate(${-i * 2}px, ${-i * 2}px)` }}>
+              <PixelCard faceDown width={cardWidth} />
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // A glowing gold bar along the felt's edge on the side of the player on turn.
 const EDGE = {
   top: { top: -8, left: "12%", right: "12%", height: 8 },
@@ -85,6 +117,8 @@ const PlayArea = ({
   cardWidth = 80,
   showRound = true, // the compact header shows the round instead
   turnSide = null, // bottom | left | top | right: the felt edge facing the player on turn glows
+  undealt = 0, // cards nobody was dealt this round
+  pileWidth = 40,
 }) => {
   const topRef = useRef(null);
   const prevTopKeyRef = useRef(null);
@@ -120,6 +154,7 @@ const PlayArea = ({
           }}
         >
           {turnSide && <TurnEdge side={turnSide} />}
+          <Undealt count={isDealing ? null : undealt} cardWidth={pileWidth} />
           {showRound && (
             <div
               className="absolute -top-3 -left-3 font-pixel-display text-[10px] px-3 py-1.5"

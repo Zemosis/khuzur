@@ -9,6 +9,10 @@
 // Defaults are Thirteen's (4 seats, 13 cards each); Muushig passes its own
 // seat layout and 5 cards.
 //
+// Thirteen's deck rests on the felt (data-undealt, in PlayArea): the deal
+// picks it up from there, and with fewer than 4 players the `leftover` cards
+// nobody was dealt go back to it.
+//
 // Online, `endsAt` (a performance.now() time, from the server's dealMsLeft)
 // is when the deal ends at every seat, and the server takes no move before
 // it. The deal plays faster if it has less time than it needs (you're behind,
@@ -50,6 +54,7 @@ const DealAnimation = ({
   seats = SEATS, // data-deal-seat names, clockwise from the player
   seatRotation = SEAT_ROTATION, // landing rotation per seat name
   cardsPerSeat = 13,
+  leftover = 0, // cards left in the deck once everyone has theirs
   endsAt = null,
   onDealProgress,
   onComplete,
@@ -94,17 +99,35 @@ const DealAnimation = ({
     // Explicit values everywhere: StrictMode runs this effect twice, and a
     // from() tween would pick up the half-run first pass as its end state.
     order.forEach((el, k) => gsap.set(el, { x: 0, y: stackY(k), rotation: 0, zIndex: k, autoAlpha: 1 }));
-    gsap.set(deckRef.current, { y: 0 });
+    gsap.set(deckRef.current, { x: 0, y: 0, scale: 1 });
     gsap.set(pool, { autoAlpha: 0 });
+
+    // Where the deck rests, as an offset from the table center.
+    const restEl = container.parentElement?.querySelector("[data-undealt]");
+    const rest = (() => {
+      if (!restEl) return null;
+      const c = container.getBoundingClientRect();
+      const r = restEl.getBoundingClientRect();
+      return {
+        x: r.left + r.width / 2 - (c.left + c.width / 2),
+        y: r.top + r.height / 2 - (c.top + c.height / 2),
+        scale: r.width / deckWidth,
+      };
+    })();
 
     const tl = gsap.timeline();
 
     if (!reduce) {
-      tl.fromTo(
-        layers,
-        { y: (k) => stackY(k) - 36, autoAlpha: 0 },
-        { y: (k) => stackY(k), autoAlpha: 1, duration: 0.24, stagger: 0.015, ease: "power2.out" },
-      );
+      if (rest) {
+        // Picked up from its spot and brought to the middle.
+        tl.fromTo(deckRef.current, rest, { x: 0, y: 0, scale: 1, duration: 0.36, ease: "power2.inOut" });
+      } else {
+        tl.fromTo(
+          layers,
+          { y: (k) => stackY(k) - 36, autoAlpha: 0 },
+          { y: (k) => stackY(k), autoAlpha: 1, duration: 0.24, stagger: 0.015, ease: "power2.out" },
+        );
+      }
 
       // Riffle: bottom half left, top half right, then drop them back one
       // card at a time, alternating sides, each new card landing on top.
@@ -156,6 +179,7 @@ const DealAnimation = ({
       if (seatsKey[seat] !== "0") dealSeats.push(seat);
     }
     const total = dealSeats.length * cardsPerSeat;
+    const deckSize = total + leftover;
     const counts = Array(n).fill(0);
     const land = (seat) => {
       counts[seat]++;
@@ -169,7 +193,7 @@ const DealAnimation = ({
       tl.call(
         () => {
           // The deck thins as it deals.
-          const visible = Math.ceil(((total - i - 1) / total) * DECK_LAYERS);
+          const visible = Math.ceil(((deckSize - i - 1) / deckSize) * DECK_LAYERS);
           order.forEach((el, k) => gsap.set(el, { autoAlpha: k < visible ? 1 : 0 }));
           if (i % 2 === 0 && !quiet) safeSound("playDeal");
 
@@ -201,6 +225,13 @@ const DealAnimation = ({
       );
     }
 
+    // What nobody was dealt goes back to the deck's spot.
+    const dealtAt = tl.duration();
+    if (leftover > 0 && rest && !reduce) {
+      tl.to(deckRef.current, { ...rest, duration: 0.36, ease: "power2.inOut" }, dealtAt + 0.1);
+    }
+    const end = Math.max(dealtAt + fly + 0.2, tl.duration());
+
     let done = false;
     const finish = () => {
       if (done) return;
@@ -208,11 +239,11 @@ const DealAnimation = ({
       completeRef.current?.();
     };
     if (synced) {
-      speed = Math.max(1, (tl.duration() + fly + 0.2) / Math.max(budget, 0.001));
+      speed = Math.max(1, end / Math.max(budget, 0.001));
       quiet = speed > 1.5;
       tl.timeScale(speed);
     } else {
-      tl.call(finish, null, `>${fly + 0.2}`);
+      tl.call(finish, null, end);
     }
 
     // Without animation frames the timeline stalls and holds the game (your
@@ -251,7 +282,7 @@ const DealAnimation = ({
       tl.kill();
       gsap.killTweensOf(pool);
     };
-  }, [dealerIndex, viewIndex, deckWidth, seatsKey, layoutKey, cardsPerSeat, endsAt]);
+  }, [dealerIndex, viewIndex, deckWidth, seatsKey, layoutKey, cardsPerSeat, leftover, endsAt]);
 
   const cardBox = { position: "absolute", marginLeft: -deckWidth / 2, marginTop: -deckH / 2 };
 

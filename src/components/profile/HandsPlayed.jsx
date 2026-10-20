@@ -1,6 +1,7 @@
 // HANDS PLAYED — how many times the player led or beat with each Thirteen hand
-// type, like a run's hand list in Balatro. Every type is listed, strongest
-// last, so a never-played Royal Flush still shows as 0.
+// type, like a run's hand list in Balatro. Every type is listed, so a
+// never-played Royal Flush still shows as 0: by rank (strongest last), or by
+// how often it was played (most first; ties keep rank order).
 //
 // One measure across categories: one hue, the count printed beside each bar.
 
@@ -21,12 +22,16 @@ const ORDER = [
 ];
 const BAR = "#5fd4d6";
 
-/** hands: { SINGLE: n, PAIR: n, … } (types never played may be missing). */
-export default function HandsPlayed({ hands }) {
+/**
+ * hands: { SINGLE: n, PAIR: n, … } (types never played may be missing).
+ * sort: "rank" (the default) or "played".
+ */
+export default function HandsPlayed({ hands, sort = "rank" }) {
   const max = Math.max(1, ...ORDER.map((t) => hands[t] || 0));
+  const order = sort === "played" ? [...ORDER].sort((a, b) => (hands[b] || 0) - (hands[a] || 0)) : ORDER;
   return (
     <ul className="flex flex-col gap-2" aria-label="Hands played">
-      {ORDER.map((type) => {
+      {order.map((type) => {
         const n = hands[type] || 0;
         return (
           <li key={type} className="grid items-center gap-3" style={{ gridTemplateColumns: "140px minmax(0,1fr) 56px" }}>

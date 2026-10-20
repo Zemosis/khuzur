@@ -720,7 +720,16 @@ describe("a running match", () => {
     const fromReader = next(socks[2], "receive_chat", (m) => m.text === "calm down");
     reader.emit("send_chat", { lobbyId, message: "calm down" });
     await fromReader;
-    expect(received.filter((t) => t.startsWith("spam"))).toEqual(["spam 0", "spam 1", "spam 2", "spam 3", "spam 4", "spam 5"]);
+    expect(received.filter((t) => t.startsWith("spam"))).toEqual(["spam 0", "spam 1", "spam 2", "spam 3", "spam 4"]);
+  });
+
+  it("chat is cleaned up before the table sees it: spaces collapsed, cut at 120 characters", async () => {
+    const { socks, lobbyId } = await fourHumans();
+    const got = next(socks[2], "receive_chat");
+    socks[1].emit("send_chat", { lobbyId, message: `  well \n\n played‮ ${"!".repeat(300)}` });
+    const m = await got;
+    expect(m.text.startsWith("well played !!!")).toBe(true);
+    expect(m.text).toHaveLength(120);
   });
 
   it("only the host can ask for a rematch, and only after game over", async () => {
