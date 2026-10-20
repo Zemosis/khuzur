@@ -9,7 +9,7 @@ import RoundResults from "../../src/components/muushig/RoundResults";
 import MuushigScoreBoard from "../../src/components/muushig/MuushigScoreBoard";
 import { MAX_DRAW_DEPTH, MAX_FOLDS_IN_A_ROW, MIN_PLAYING, START_SCORE, ZERO_PILES_PENALTY } from "../../src/utils/muushig/engine";
 
-const SECTIONS = ["The goal", "Cards", "Dealer, deal, trump", "Go in or fold", "Swapping cards", "Playing tricks", "Scoring", "Controls"];
+const SECTIONS = ["The goal", "Cards", "Dealer, deal, trump", "Go in or fold", "Swapping cards", "Playing tricks", "Scoring", "CPU levels", "Controls"];
 const NAMES = ["You", "Bot Saturn", "Bot Venus", "Bot Mars", "Bot Jupiter"];
 const players = (over = []) => NAMES.map((name, id) => ({ id, name, score: 15, eaten: 0, ...over[id] }));
 const face = () => ({ variant: 1, customAvatarData: null });
@@ -33,6 +33,14 @@ describe("MuushigRules", () => {
     expect(screen.getByText(`NO ${MAX_FOLDS_IN_A_ROW + 1} FOLDS IN A ROW`)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(`from 1 to ${MAX_DRAW_DEPTH} cards down`))).toBeInTheDocument();
     expect(screen.getByText(/whoever ate more piles in that last round/)).toBeInTheDocument();
+  });
+
+  it("describes the three CPU levels, and that they never see your cards", () => {
+    render(<MuushigRules onClose={() => {}} />);
+    const section = screen.getByRole("heading", { name: /CPU levels/ }).closest("section");
+    ["EASY", "MEDIUM", "HARD"].forEach((level) => expect(within(section).getAllByText(level).length).toBeGreaterThan(0));
+    expect(within(section).getByText("NO PEEKING")).toBeInTheDocument();
+    expect(within(section).getByText(/an ace there is a pile in the bag/)).toBeInTheDocument();
   });
 
   it("closes from the button and with Escape", async () => {

@@ -9,7 +9,7 @@ No-limit Texas Hold'em, as Khuzur plays it. Make the best 5-card hand from your 
 | **Players** | 2 to 6 per table |
 | **Game** | No-limit Texas Hold'em |
 | **Free tables** | Everyone sits down with 1000 chips; blinds 5/10. The chips are free and count for nothing outside the table. |
-| **Credit tables** | Played for credits that stay with your account (see [§9](#9-credit-tables)) |
+| **Credit tables** | Played for credits that stay with your account (see [§10](#10-credit-tables)) |
 | **Turn clock** | 20 seconds online; none in practice |
 
 ## Contents
@@ -21,10 +21,11 @@ No-limit Texas Hold'em, as Khuzur plays it. Make the best 5-card hand from your 
 5. [Showdown and pots](#5-showdown-and-pots)
 6. [Seats](#6-seats)
 7. [Chips](#7-chips)
-8. [Controls](#8-controls)
-9. [Credit tables](#9-credit-tables)
+8. [CPU levels](#8-cpu-levels)
+9. [Controls](#9-controls)
+10. [Credit tables](#10-credit-tables)
 
-Sections 1–8 are the game as every table plays it. Section 9 adds what changes at credit tables.
+Sections 1–9 are the game as every table plays it. Section 10 adds what changes at credit tables.
 
 ---
 
@@ -121,7 +122,21 @@ A stack is drawn with the fewest chips that make its amount, biggest value first
 
 ---
 
-## 8. Controls
+## 8. CPU levels
+
+CPU players come in three levels. Practice seats you with five CPUs at the level you pick. At a free table online, the host adds each CPU at its own level. Credit tables are for people only.
+
+| Level | Plays like | How it plays |
+| --- | --- | --- |
+| 🟢 **Easy** | A beginner | Plays too many hands, and calls with any pair or draw. Raises only with a big hand, and never bluffs. Folds a hand with nothing as soon as someone bets. |
+| 🟡 **Medium** | A solid regular | Plays its starting hands by position, and wants a better one the bigger the raise. Works out its chance of winning and calls only when the price is right; every bet it faces makes it more careful. Bets its good hands, and follows up a preflop raise with a bet on the flop now and then. |
+| 🔴 **Hard** | A strong player | Reads hands: every raise, call and check makes some cards likelier than others, and it plays the hand out in its head against them, a few hundred times. Remembers how everyone at the table plays: a raise from someone who raises every hand says little. Sizes its bets to its hand, bluffs where a bluff works, and bluffs less into players who never fold. Steals the blinds late, and goes all-in or folds when its stack is short. |
+
+> **No peeking.** CPUs never see a card before it's shown. They know only what you could know in their seat: their own two cards, the board, the bets, and how each player has played at this table.
+
+---
+
+## 9. Controls
 
 | Key or button | Does |
 | --- | --- |
@@ -134,7 +149,7 @@ A stack is drawn with the fewest chips that make its amount, biggest value first
 
 ---
 
-## 9. Credit tables
+## 10. Credit tables
 
 Signed-in players with a linked **Google** or **Discord** login can also play for **credits**, which stay with your account.
 
@@ -163,4 +178,4 @@ The host picks the stakes. Credit tables are for people only: no CPUs.
 
 ---
 
-<sub>**For contributors:** the engine (`src/utils/poker/engine.js`) and the in-game rulebook (`src/components/poker/PokerRules.jsx`) follow this document section by section; the server runs a copy of the engine in `server/game/poker/`. Change all of them together.</sub>
+<sub>**For contributors:** the engine (`src/utils/poker/engine.js`) and the in-game rulebook (`src/components/poker/PokerRules.jsx`) follow this document section by section, and the CPU players live in `src/utils/poker/ai.js`; the server runs copies of the engine and the CPUs in `server/game/poker/`. Change all of them together.</sub>

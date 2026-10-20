@@ -2,7 +2,8 @@
 // with a section nav that follows the reader, plus inline highlights,
 // callouts and card examples drawn with real PixelCards.
 //
-// Same look as Thirteen's RulesModal; Muushig's rules are built on this.
+// Same look as Thirteen's RulesModal; Muushig's and Poker's rules are built on
+// this, and every game's CPU levels show through CpuLevels.
 
 import React, { useEffect, useRef, useState } from "react";
 import { PixelCard } from "./PixelCard";
@@ -106,6 +107,30 @@ export function CardRow({ name, spec, text, extra }) {
         <div className="font-pixel-body text-[20px] leading-tight text-bone/80">{text}</div>
         {extra && <div className="font-pixel-body text-[18px] leading-tight text-bone/60 mt-1">{extra}</div>}
       </div>
+    </div>
+  );
+}
+
+// The three CPU levels' colors, everywhere they're shown.
+const LEVEL_COLORS = { EASY: "#9bd14f", MEDIUM: "#f4c430", HARD: "#e85a7a" };
+
+/** The CPU levels side by side. levels: [{ id: "EASY", who: "A beginner", traits: [text] }]. */
+export function CpuLevels({ levels }) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-3">
+      {levels.map((l) => (
+        <div key={l.id} className="px-4 py-3" style={{ backgroundColor: "#14102a", boxShadow: `0 0 0 2px #1f1a3d, inset 0 4px 0 ${LEVEL_COLORS[l.id]}` }}>
+          <div className="font-pixel-display text-[12px] mb-1" style={{ color: LEVEL_COLORS[l.id] }}>
+            {l.id}
+          </div>
+          <div className="font-pixel-body text-[19px] text-bone/70 mb-2 leading-none">{l.who}</div>
+          <ul className="flex flex-col gap-1.5 font-pixel-body text-[19px] leading-snug text-parchment/90 list-disc pl-5">
+            {l.traits.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

@@ -15,6 +15,16 @@ describe("poker rules", () => {
     expect(within(dialog).getByText("HIGH: blinds 100/200, buy in 4,000–20,000. People only, no CPUs.")).toBeInTheDocument();
   });
 
+  it("describes the three CPU levels, and that they never see your cards", () => {
+    render(<PokerRules onClose={() => {}} />);
+    const dialog = screen.getByRole("dialog", { name: "HOW TO PLAY POKER" });
+    const nav = within(dialog).getByRole("navigation", { name: "Rule sections" });
+    expect(within(nav).getByRole("button", { name: /CPU levels/ })).toBeInTheDocument();
+    const section = within(dialog).getByRole("heading", { name: /CPU levels/ }).closest("section");
+    ["EASY", "MEDIUM", "HARD"].forEach((level) => expect(within(section).getAllByText(level).length).toBeGreaterThan(0));
+    expect(within(section).getByText("NO PEEKING")).toBeInTheDocument();
+  });
+
   it("has a Chips section showing every chip, drawn as on the table, with its value", () => {
     render(<PokerRules onClose={() => {}} />);
     const dialog = screen.getByRole("dialog", { name: "HOW TO PLAY POKER" });

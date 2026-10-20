@@ -27,6 +27,7 @@ In Muushig, winning a trick is called **eating** it: you eat the pile.
 6. [Playing tricks](#6-playing-tricks)
 7. [Scoring](#7-scoring)
 8. [Winning the match](#8-winning-the-match)
+9. [CPU levels](#9-cpu-levels)
 
 ---
 
@@ -138,4 +139,18 @@ The match ends after the first round in which someone reaches **0 or less**. The
 
 ---
 
-<sub>**For contributors:** the engine in `src/utils/muushig/` implements exactly these rules, and the server runs a copy in `server/game/muushig/`. The in-game rulebook is `src/components/muushig/MuushigRules.jsx`. Change all of them together.</sub>
+## 9. CPU levels
+
+CPU players come in three levels. Pick one for a practice table. Online, the host picks each CPU seat's level, and any empty seats fill with **Medium** CPUs when the game starts. Every level goes in with a trump nobody can beat, the face-up one included when it deals.
+
+| Level | Plays like | How it plays |
+| --- | --- | --- |
+| 🟢 **Easy** | A beginner | Reads its hand roughly, and often goes in or folds when it shouldn't. Swaps away a random few of its dead cards. Doesn't count the cards played, and about one card in three it throws without thinking. |
+| 🟡 **Medium** | A club player | Weighs each card's chance to eat a pile and goes in when that beats the risk of the +5. Dealing, it counts the face-up trump: an ace there is a pile in the bag. Swaps the cards a fresh draw would likely beat. Counts every card played: leads the trumps nobody can beat, and eats with the cheapest card that holds. Fights hardest for its first pile: that one is worth 6 points. |
+| 🔴 **Hard** | A strong player | Plays each choice out in its head against hundreds of deals of the cards it can't see, dealt to fit what the table has shown: who couldn't follow suit, who couldn't go higher, who swapped few cards and so kept good ones. Plays to win the match, not the round: a point counts most near the finish, and it goes after whoever is about to win. |
+
+> **No peeking.** CPUs never see anyone's cards. They know only what you could know in their seat: their own hand and the cards they swapped away, the face-up trump, how many cards each player swapped, and what's been played.
+
+---
+
+<sub>**For contributors:** the engine in `src/utils/muushig/` implements exactly these rules, and the server runs a copy in `server/game/muushig/`. The CPU players are `src/utils/muushig/ai.js` (copied to the server too), and the in-game rulebook is `src/components/muushig/MuushigRules.jsx`. Change all of them together.</sub>

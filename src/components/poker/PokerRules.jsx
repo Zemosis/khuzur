@@ -6,7 +6,7 @@
 // all three. Examples are drawn with real PixelCards.
 
 import React from "react";
-import Rulebook, { Callout, CardRow, Hi, Kbd, Key, Section, Steps } from "../Rulebook";
+import Rulebook, { Callout, CardRow, CpuLevels, Hi, Kbd, Key, Section, Steps } from "../Rulebook";
 import { BIG_BLIND, BUY_IN, MAX_SEATS, SMALL_BLIND } from "../../utils/poker/engine";
 import { DEFAULT_POKER_DELAYS, MAX_TIMEOUTS } from "../../utils/poker/table";
 import { TIERS, fmt } from "../../utils/poker/tiers";
@@ -25,8 +25,41 @@ const SECTIONS = [
   ["showdown", "Showdown and pots"],
   ["table", "Seats"],
   ["chips", "Chips"],
+  ["cpus", "CPU levels"],
   ["controls", "Controls"],
   ["credits", "Credit tables"],
+];
+
+// How each CPU level plays (utils/poker/ai.js).
+const LEVELS = [
+  {
+    id: "EASY",
+    who: "A beginner",
+    traits: [
+      "Plays too many hands, and calls with any pair or draw.",
+      "Raises only with a big hand, and never bluffs.",
+      "Folds a hand with nothing as soon as someone bets.",
+    ],
+  },
+  {
+    id: "MEDIUM",
+    who: "A solid regular",
+    traits: [
+      "Plays its starting hands by position, and wants a better one the bigger the raise.",
+      "Works out its chance of winning and calls only when the price is right. Every bet it faces makes it more careful.",
+      "Bets its good hands, and follows up a preflop raise with a bet on the flop now and then.",
+    ],
+  },
+  {
+    id: "HARD",
+    who: "A strong player",
+    traits: [
+      "Reads hands: every raise, call and check makes some cards likelier than others, and it plays the hand out in its head against them.",
+      "Remembers how everyone at the table plays: a raise from someone who raises every hand says little.",
+      "Sizes its bets to its hand, bluffs where a bluff works, and bluffs less into players who never fold.",
+      "Steals the blinds late, and goes all-in or folds when its stack is short.",
+    ],
+  },
 ];
 
 export default function PokerRules({ onClose }) {
@@ -160,14 +193,26 @@ export default function PokerRules({ onClose }) {
         </div>
       </Section>
 
-      <Section id="controls" n={8} title="Controls">
+      <Section id="cpus" n={8} title="CPU levels">
+        <p>
+          CPUs come in three levels. Practice seats you with five CPUs at the level you pick; at a free table online, the host
+          adds each CPU at its own level. Credit tables are for people only.
+        </p>
+        <CpuLevels levels={LEVELS} />
+        <Callout tone="rule" title="NO PEEKING">
+          CPUs never see a card before it's shown. They know only what you could know in their seat: their own two cards, the
+          board, the bets, and how each player has played at this table.
+        </Callout>
+      </Section>
+
+      <Section id="controls" n={9} title="Controls">
         <p>
           <Kbd>F</Kbd> fold · <Kbd>C</Kbd> check or call · <Kbd>R</Kbd> raise by the amount set. ½ POT, POT and ALL-IN set the amount; the slider
           and the box fine-tune it, and <Kbd>Enter</Kbd> in the box raises.
         </p>
       </Section>
 
-      <Section id="credits" n={9} title="Credit tables">
+      <Section id="credits" n={10} title="Credit tables">
         <p>
           Signed in with Google or Discord, you can also play for <Key>credits</Key>, which stay with your account. You start with <Key>1,000</Key>; once a day, if your balance
           plus what's at a table is under 1,000, <Hi>CLAIM</Hi> tops you back up to exactly 1,000.

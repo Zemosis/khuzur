@@ -7,6 +7,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PixelCard } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
+import { CpuLevels } from "../Rulebook";
 import { GAME_SETTINGS } from "../../utils/constants";
 
 const OUT_AT = GAME_SETTINGS.ELIMINATION_SCORE;
@@ -28,7 +29,6 @@ const SECTIONS = [
 const LEVELS = [
   {
     id: "EASY",
-    color: "#9bd14f",
     who: "A beginner",
     traits: [
       "Always plays when it can, with its lowest card that wins.",
@@ -39,7 +39,6 @@ const LEVELS = [
   },
   {
     id: "MEDIUM",
-    color: "#f4c430",
     who: "A decent club player",
     traits: [
       "Plans its hand into pairs, straights and other sets, and sheds the low ones first.",
@@ -50,7 +49,6 @@ const LEVELS = [
   },
   {
     id: "HARD",
-    color: "#e85a7a",
     who: "A strong player",
     traits: [
       "Counts the round's cards: once the 2s are gone, it knows its ace is the highest left.",
@@ -446,21 +444,7 @@ export default function RulesModal({ onClose }) {
                 CPUs come in three levels. Pick one for a practice table; online, the host picks each CPU seat's level, and empty seats
                 fill with <Key>MEDIUM</Key> CPUs when the game starts.
               </p>
-              <div className="grid gap-3 lg:grid-cols-3">
-                {LEVELS.map((l) => (
-                  <div key={l.id} className="px-4 py-3" style={{ backgroundColor: "#14102a", boxShadow: `0 0 0 2px #1f1a3d, inset 0 4px 0 ${l.color}` }}>
-                    <div className="font-pixel-display text-[12px] mb-1" style={{ color: l.color }}>
-                      {l.id}
-                    </div>
-                    <div className="font-pixel-body text-[19px] text-bone/70 mb-2 leading-none">{l.who}</div>
-                    <ul className="flex flex-col gap-1.5 font-pixel-body text-[19px] leading-snug text-parchment/90 list-disc pl-5">
-                      {l.traits.map((t) => (
-                        <li key={t}>{t}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
+              <CpuLevels levels={LEVELS} />
               <Callout tone="rule" title="NO PEEKING">
                 CPUs never see anyone's cards. They know only what you could know at the table: their own hand, how many cards each
                 player holds, who passed, and what's been played.

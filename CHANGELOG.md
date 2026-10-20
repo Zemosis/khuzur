@@ -4,6 +4,11 @@ Every version of Khuzur Card Hall, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
+## 1.2.2 — 20 October 2026
+
+- **Rulebooks:** Muushig and Poker now have a **CPU levels** section, like Thirteen: who picks the levels, how Easy, Medium and Hard each play, and what a CPU can and can't see.
+- Behind the scenes: Thirteen's table runs on a simpler game loop. Nothing changes at the table.
+
 ## 1.2.1 — 20 October 2026
 
 - **Patch notes.** This page: see what changed in every version. Open it from **Patch notes** at the bottom of the main menu.

@@ -1,10 +1,10 @@
 // GAME THIRTEEN - Multiplayer Version with Pixel Retro UI
-
-// The game loop runs on effects that answer each new state (start a solo
-// game, show the round's end, log the plays). It predates React Compiler's
-// checks, so two of them are off here rather than rebuilt around.
-/* eslint-disable react-hooks/set-state-in-effect, react-hooks/preserve-manual-memoization */
-import React, { useState, useEffect, useRef, useCallback } from "react";
+//
+// Every new game state, from the server, your move, a practice CPU or the
+// next practice round, goes through applyState(): it deals the round in,
+// reveals the round's scores, deals practice's next round and writes the log,
+// in the same step that sets the state.
+import React, { useState, useEffect, useEffectEvent, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { socket, connectSocket } from "../../utils/socket";
 import { useAuth } from "../../hooks/useAuth";
@@ -67,8 +67,75 @@ function shuffledIndices(n) {
   return indices;
 }
 
+/** For each player, the order their cards fly in as `state` is dealt. */
+const dealOrdersFor = (state) => state.players.map((p) => shuffledIndices(p.hand.length));
+
 const ROUND_REVEAL_MS = 2500;
 const SOLO_NEXT_ROUND_MS = ROUND_REVEAL_MS + 4000;
+
+/** When an online deal ends, on this page's clock: `ms` from now (null: no deadline, as in practice). */
+const dealEndsIn = (ms) => (ms == null ? null : performance.now() + ms);
+
+const isOver = (s) => s.gameState === GAME_STATES.ROUND_END || s.gameState === GAME_STATES.GAME_OVER;
+
+/** A practice match, freshly dealt: you in seat 0, the 3♦ leads. matchMeta and seats carry over a rematch. */
+function newPracticeMatch(aiDifficulty, playerName, { matchMeta, seats } = {}) {
+  const { hands } = initializeGame();
+  const startingPlayer = findPlayerWithCard(hands, "3", "♦");
+  const state = createGameState(hands, startingPlayer >= 0 ? startingPlayer : 0, aiDifficulty, matchMeta);
+  if (seats) state.players = state.players.map((p, i) => ({ ...p, name: seats[i].name, type: seats[i].type }));
+  else if (state.players[0]) {
+    state.players[0].name = playerName || "You";
+    state.players[0].type = "HUMAN";
+  }
+  return state;
+}
+
+/** A finished round as the scores overlay shows it. */
+function roundEndOf(s) {
+  return {
+    roundNumber: s.roundNumber,
+    players: s.players.map((p, idx) => ({
+      name: p.name,
+      score: p.score,
+      isEliminated: p.isEliminated,
+      matchWins: (s.matchWins || [0, 0, 0, 0])[idx],
+    })),
+    roundWinnerName: s.winnerIndex !== undefined ? s.players[s.winnerIndex]?.name : undefined,
+    isGameOver: s.gameState === GAME_STATES.GAME_OVER,
+  };
+}
+
+/** The log's fields for one move (null: nothing to log). */
+function logFields(move, nameOf) {
+  switch (move.type) {
+    case "PLAY":
+      return {
+        kind: "play",
+        playerIndex: move.playerIndex,
+        name: nameOf(move.playerIndex),
+        cards: move.cards,
+        combo: COMBO_NAMES[move.combination?.type] || "Cards",
+      };
+    case "PASS":
+      return { kind: "pass", playerIndex: move.playerIndex, name: nameOf(move.playerIndex) };
+    case "ROUND_RESET":
+      return { kind: "trick", playerIndex: move.leadPlayer, name: nameOf(move.leadPlayer) };
+    case "ROUND_END":
+      return { kind: "roundEnd", playerIndex: move.winnerIndex, name: nameOf(move.winnerIndex) };
+    case "NEW_ROUND":
+      return { kind: "round", round: move.roundNumber };
+    default:
+      return null;
+  }
+}
+
+const logEntry = (fields) => ({
+  id: `sys-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  type: "SYSTEM",
+  timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  ...fields,
+});
 
 const GameThirteen = () => {
   const navigate = useNavigate();
@@ -82,8 +149,10 @@ const GameThirteen = () => {
   } = location.state || {};
 
   const { identity } = useAuth();
+  const isSoloGame = lobbyId?.startsWith("SOLO-");
 
-  const [gameState, setGameState] = useState(null);
+  // Practice is dealt right here; online, the server's first state arrives.
+  const [gameState, setGameState] = useState(() => (isSoloGame ? newPracticeMatch(aiDifficulty, playerName) : null));
   // The waiting table before the deal (server `table_update`); null once dealt.
   const [table, setTable] = useState(null);
   // Selection and errors belong to one turn: any move, a new round or a new
@@ -106,7 +175,7 @@ const GameThirteen = () => {
   };
   const [messages, setMessages] = useState([]);
   const [showRoundEnd, setShowRoundEnd] = useState(false);
-  const [roundEndData, setRoundEndData] = useState(null);
+  const roundEndData = gameState && isOver(gameState) ? roundEndOf(gameState) : null;
   const [isDealing, setIsDealing] = useState(true);
   const [dealCounts, setDealCounts] = useState([0, 0, 0, 0]);
   // Cards nobody was dealt this round (fewer than 4 players), kept for the round.
@@ -129,25 +198,25 @@ const GameThirteen = () => {
 
   const { handW, deckW, compact, narrow, seats } = useTableMetrics();
   const [panelOpen, setPanelOpen] = useState(false);
-  const closePanel = useCallback(() => setPanelOpen(false), []);
+  const closePanel = useCallback(() => setPanelOpen(false), [setPanelOpen]);
   const unread = useUnread(messages, panelOpen);
   const tableCenterRef = useRef(null);
   const lastHistoryLengthRef = useRef(0);
-  // Whether this page has taken in the state it opened on (see LOGS & SFX).
-  const caughtUpRef = useRef(false);
+  // Whether this page has taken in the state it opened on (see logMoves).
+  // Practice opens on a fresh deal: nothing to catch up on.
+  const caughtUpRef = useRef(isSoloGame);
   const gameStateRef = useRef(gameState);
-  const [dealOrders, setDealOrders] = useState(null); // per player, the order their cards fly in
+  const roundTimersRef = useRef([]); // the round's scores reveal, and practice's next deal
+  // Per player, the order their cards fly in while a round is dealt.
+  const [dealOrders, setDealOrders] = useState(() => gameState && dealOrdersFor(gameState));
 
   const handleDealProgress = useCallback((counts) => setDealCounts(counts), []);
   const handleDealComplete = useCallback(() => {
     setDealCounts([13, 13, 13, 13]);
     setDealOrders(null);
     setIsDealing(false);
-  }, []);
+  }, [setDealCounts, setDealOrders, setIsDealing]);
 
-  useEffect(() => {
-    gameStateRef.current = gameState;
-  }, [gameState]);
   useEffect(() => {
     turnKeyRef.current = turnKey;
   }, [turnKey]);
@@ -172,7 +241,6 @@ const GameThirteen = () => {
     }
   };
 
-  const isSoloGame = lobbyId?.startsWith("SOLO-");
   // The server says who hosts (it moves when a host leaves); router state is
   // only what was true when this page was opened.
   const amHost = gameState?.amHost ?? table?.isHost ?? !!isHost;
@@ -206,88 +274,135 @@ const GameThirteen = () => {
     !gameState.players[gameState.currentPlayerIndex]?.isEliminated;
   useTurnTitle(myTurnNow);
 
+  // --- APPLYING A STATE ---
+  const clearRoundTimers = () => {
+    roundTimersRef.current.forEach(clearTimeout);
+    roundTimersRef.current = [];
+  };
+  // Leaving the page drops a pending reveal or practice deal.
+  useEffect(() => () => roundTimersRef.current.forEach(clearTimeout), []);
+
+  // The log stores structured entries (who, what, which cards); GameChat
+  // renders them as rows with card chips. The first state a page gets (a
+  // reload, or joining mid-match) holds the whole match so far: that catches
+  // up at once and silently, logging only the current round. Replaying it
+  // used to rattle off every past move's sound in quick succession.
+  const logMoves = (state) => {
+    const history = state.moveHistory;
+    const catchingUp = !caughtUpRef.current;
+    caughtUpRef.current = true;
+    if (catchingUp) {
+      const roundStart = history.findLastIndex((m) => m.type === "NEW_ROUND");
+      lastHistoryLengthRef.current = Math.max(0, roundStart);
+    }
+    if (history.length <= lastHistoryLengthRef.current) return;
+    const firstBatch = catchingUp || lastHistoryLengthRef.current === 0;
+    const newMoves = history.slice(lastHistoryLengthRef.current);
+    lastHistoryLengthRef.current = history.length;
+    const nameOf = (i) => (state.players[i]?.name || "").split(" #")[0];
+
+    if (firstBatch) setMessages((prev) => [...prev, logEntry({ kind: "round", round: state.roundNumber })]);
+    newMoves.forEach((move, index) => {
+      setTimeout(() => {
+        if (!catchingUp && move.type === "PLAY") safePlay("playSnap");
+        if (!catchingUp && move.type === "NEW_ROUND") safePlay("playDeal");
+        const fields = logFields(move, nameOf);
+        if (fields) setMessages((prev) => [...prev, logEntry(fields)]);
+      }, catchingUp ? 0 : index * 100);
+    });
+  };
+
+  /**
+   * Takes in a new game state. A new round (or match) deals in. A round that
+   * ends in front of you leaves the winning play on the felt for a moment
+   * before the scores cover it; one you load into shows them at once. In
+   * practice the next round then deals by itself (online, the server does).
+   */
+  const applyState = (next) => {
+    const prev = gameStateRef.current;
+    gameStateRef.current = next;
+    setGameState(next);
+
+    const playing = next.gameState === GAME_STATES.PLAYING;
+    if (playing && (!prev || prev.roundNumber !== next.roundNumber || prev.matchNumber !== next.matchNumber)) {
+      setDealOrders(dealOrdersFor(next));
+      setDealCounts([0, 0, 0, 0]);
+      setDealEndsAt(dealEndsIn(next.dealMsLeft));
+      setIsDealing(true);
+    }
+
+    if (next.gameState !== prev?.gameState) {
+      clearRoundTimers();
+      if (!isOver(next)) setShowRoundEnd(false);
+      else {
+        if (prev?.gameState === GAME_STATES.PLAYING) {
+          roundTimersRef.current.push(setTimeout(() => setShowRoundEnd(true), ROUND_REVEAL_MS));
+        } else setShowRoundEnd(true);
+        if (isSoloGame && next.gameState === GAME_STATES.ROUND_END) {
+          roundTimersRef.current.push(
+            setTimeout(() => {
+              const { hands } = initializeGame();
+              applyState(startNextRound(next, hands));
+            }, SOLO_NEXT_ROUND_MS),
+          );
+        }
+      }
+    }
+
+    logMoves(next);
+  };
+
   // --- GAME SETUP ---
   // Solo runs entirely locally. Multiplayer is server-authoritative: the
   // server deals, validates moves, and runs CPU seats — we render its state.
+  // The page's answers to the server, with this render's values: the
+  // listeners stay on for the whole visit, so they call these.
+  const goHome = useEffectEvent(() => navigate("/"));
+  const connect = useEffectEvent(() => connectSocket(identity));
+  const joinGame = useEffectEvent(() => {
+    socket.emit("join_lobby", { lobbyId, playerName });
+    socket.emit("check_game_status", { lobbyId });
+  });
+  const onServerState = useEffectEvent((newState) => {
+    applyState(newState);
+    if (newState.currentPlayerIndex === getMyPlayerIndex(newState)) safePlay("playTurnAlert");
+  });
+  const onChat = useEffectEvent((msg) => {
+    const isMe = msg.sender === (playerName || "Host");
+    setMessages((prev) => [...prev, { ...msg, isMe }]);
+    if (!isMe) safePlay("playClick");
+  });
+  const onRejected = useEffectEvent(({ reason }) => {
+    setErrorMessage(reason || "Move rejected");
+    safePlay("playError");
+  });
+
   useEffect(() => {
     if (!lobbyId) {
-      navigate("/");
+      goHome();
       return;
     }
 
     if (soundManager && soundManager.init) soundManager.init();
+    if (isSoloGame) return;
 
-    if (isSoloGame) {
-      if (!gameStateRef.current) {
-        const { hands } = initializeGame();
-        const startingPlayer = findPlayerWithCard(hands, "3", "♦");
-        const initialState = createGameState(
-          hands,
-          startingPlayer >= 0 ? startingPlayer : 0,
-          aiDifficulty,
-        );
-        if (initialState.players[0]) {
-          initialState.players[0].name = playerName || "You";
-          initialState.players[0].type = "HUMAN";
-        }
-        setGameState(initialState);
-      }
-      return;
-    }
+    const handleConnect = () => joinGame();
+    const handleStateUpdate = (newState) => onServerState(newState);
+    const handleReceiveChat = (msg) => onChat(msg);
+    const handleMoveRejected = (rejection) => onRejected(rejection);
 
-    const joinGame = () => {
-      socket.emit("join_lobby", { lobbyId, playerName });
-      socket.emit("check_game_status", { lobbyId });
-    };
-
-    connectSocket(identity).then(() => {
+    connect().then(() => {
       if (socket.connected) joinGame();
     });
 
-    const handleStateUpdate = (newState) => {
-      const prev = gameStateRef.current;
-      const isNewRoundOrMatch =
-        newState.gameState === GAME_STATES.PLAYING &&
-        (!prev ||
-          prev.roundNumber !== newState.roundNumber ||
-          prev.matchNumber !== newState.matchNumber);
-      setGameState(newState);
-      if (newState.gameState === GAME_STATES.PLAYING) {
-        setShowRoundEnd(false);
-        setRoundEndData(null);
-        if (isNewRoundOrMatch) {
-          setDealOrders(null);
-          setDealCounts([0, 0, 0, 0]);
-          setDealEndsAt(newState.dealMsLeft == null ? null : performance.now() + newState.dealMsLeft);
-          setIsDealing(true);
-        }
-      }
-      const myIdx = getMyPlayerIndex(newState);
-      if (newState.currentPlayerIndex === myIdx) {
-        safePlay("playTurnAlert");
-      }
-    };
-
-    const handleReceiveChat = (msg) => {
-      const isMe = msg.sender === (playerName || "Host");
-      const formattedMsg = { ...msg, isMe };
-      setMessages((prev) => [...prev, formattedMsg]);
-      if (!isMe) safePlay("playClick");
-    };
-
-    const handleMoveRejected = ({ reason }) => {
-      setErrorMessage(reason || "Move rejected");
-      safePlay("playError");
-    };
-
-    socket.on("connect", joinGame);
+    socket.on("connect", handleConnect);
     socket.on("game_state_update", handleStateUpdate);
     socket.on("receive_chat", handleReceiveChat);
     socket.on("move_rejected", handleMoveRejected);
     socket.on("table_update", setTable);
 
     return () => {
-      socket.off("connect", joinGame);
+      socket.off("connect", handleConnect);
       socket.off("game_state_update", handleStateUpdate);
       socket.off("receive_chat", handleReceiveChat);
       socket.off("move_rejected", handleMoveRejected);
@@ -296,9 +411,10 @@ const GameThirteen = () => {
       // grace period; coming back re-joins and reclaims it.
       socket.emit("leave_page", { lobbyId });
     };
-  }, [lobbyId]);
+  }, [lobbyId, isSoloGame]);
 
   // --- AI LOGIC (SOLO ONLY — multiplayer CPUs run on the server) ---
+  const onCpuMove = useEffectEvent((next) => applyState(next));
   useEffect(() => {
     if (
       !isSoloGame ||
@@ -328,68 +444,11 @@ const GameThirteen = () => {
           result = passAction(gameState);
         }
 
-        if (result) setGameState(result);
+        if (result) onCpuMove(result);
       }, 1500);
       return () => clearTimeout(timer);
     }
   }, [gameState, isSoloGame, isDealing]);
-
-  // --- AUTO-CONTINUE: ROUND_END → next round ---
-  // A round that ends in front of you leaves the winning play on the felt for
-  // a moment before the scores cover it; one you load into shows them at once.
-  const prevPhaseRef = useRef(null);
-  useEffect(() => {
-    const prevPhase = prevPhaseRef.current;
-    prevPhaseRef.current = gameState?.gameState ?? null;
-    if (!gameState) return;
-    const over =
-      gameState.gameState === GAME_STATES.ROUND_END ||
-      gameState.gameState === GAME_STATES.GAME_OVER;
-    if (!over) return;
-
-    const roundWinner =
-      gameState.winnerIndex !== undefined
-        ? gameState.players[gameState.winnerIndex]
-        : null;
-
-    setRoundEndData({
-      roundNumber: gameState.roundNumber,
-      players: gameState.players.map((p, idx) => ({
-        name: p.name,
-        score: p.score,
-        isEliminated: p.isEliminated,
-        matchWins: (gameState.matchWins || [0, 0, 0, 0])[idx],
-      })),
-      roundWinnerName: roundWinner?.name,
-      isGameOver: gameState.gameState === GAME_STATES.GAME_OVER,
-    });
-
-    const timers = [];
-    if (prevPhase === GAME_STATES.PLAYING) {
-      timers.push(setTimeout(() => setShowRoundEnd(true), ROUND_REVEAL_MS));
-    } else {
-      setShowRoundEnd(true);
-    }
-
-    // Multiplayer: the server starts the next round itself.
-    if (isSoloGame && gameState.gameState === GAME_STATES.ROUND_END) {
-      timers.push(
-        setTimeout(() => {
-          const { hands } = initializeGame();
-          const nextState = startNextRound(gameState, hands);
-
-          setShowRoundEnd(false);
-          setRoundEndData(null);
-          setDealOrders(null);
-          setDealCounts([0, 0, 0, 0]);
-          setIsDealing(true);
-          setGameState(nextState);
-        }, SOLO_NEXT_ROUND_MS),
-      );
-    }
-
-    return () => timers.forEach(clearTimeout);
-  }, [gameState?.gameState]);
 
   // --- STATS: a finished practice match is recorded for your profile (online
   // matches are recorded by the server) ---
@@ -424,7 +483,7 @@ const GameThirteen = () => {
       const result = playCards(gameState, selectedCards);
       if (result.success) {
         setSelectedCards([]);
-        setGameState(result.newState);
+        applyState(result.newState);
       }
     } else {
       socket.emit("request_move", {
@@ -441,7 +500,7 @@ const GameThirteen = () => {
     if (myIndex === -1) return;
 
     if (isSoloGame) {
-      setGameState(passAction(gameState));
+      applyState(passAction(gameState));
     } else {
       socket.emit("request_move", { lobbyId, action: "pass", data: {} });
     }
@@ -512,95 +571,15 @@ const GameThirteen = () => {
       return;
     }
 
-    const { hands } = initializeGame();
-    const startingPlayer = findPlayerWithCard(hands, "3", "♦");
-    const matchMeta = {
-      matchNumber: (gameState.matchNumber || 1) + 1,
-      matchWins: gameState.matchWins || [0, 0, 0, 0],
-    };
-    const freshState = createGameState(
-      hands,
-      startingPlayer >= 0 ? startingPlayer : 0,
-      gameState.aiDifficulty,
-      matchMeta,
-    );
-
-    freshState.players = freshState.players.map((p, idx) => ({
-      ...p,
-      name: gameState.players[idx].name,
-      type: gameState.players[idx].type,
-    }));
-
-    setShowRoundEnd(false);
-    setRoundEndData(null);
-    setDealOrders(null);
-    setDealCounts([0, 0, 0, 0]);
-    setIsDealing(true);
+    const freshState = newPracticeMatch(gameState.aiDifficulty, playerName, {
+      matchMeta: { matchNumber: (gameState.matchNumber || 1) + 1, matchWins: gameState.matchWins || [0, 0, 0, 0] },
+      seats: gameState.players,
+    });
     setSelectedCards([]);
     lastHistoryLengthRef.current = 0;
     setMessages([]);
-    setGameState(freshState);
+    applyState(freshState);
   };
-
-  // --- LOGS & SFX ---
-  // The log stores structured entries (who, what, which cards); GameChat
-  // renders them as rows with card chips.
-  // The first state a page gets (a reload, or joining mid-match) holds the
-  // whole match so far. That catches up at once and silently, logging only
-  // the current round; replaying it used to rattle off every past move's
-  // sound in quick succession.
-  useEffect(() => {
-    if (!gameState) return;
-    const history = gameState.moveHistory;
-    const catchingUp = !caughtUpRef.current;
-    caughtUpRef.current = true;
-    if (catchingUp) {
-      const roundStart = history.findLastIndex((m) => m.type === "NEW_ROUND");
-      lastHistoryLengthRef.current = Math.max(0, roundStart);
-    }
-    if (history.length <= lastHistoryLengthRef.current) return;
-    const firstBatch = catchingUp || lastHistoryLengthRef.current === 0;
-    const newMoves = history.slice(lastHistoryLengthRef.current);
-    lastHistoryLengthRef.current = history.length;
-    const nameOf = (i) => (gameState.players[i]?.name || "").split(" #")[0];
-    const entry = (fields) => ({
-      id: `sys-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      type: "SYSTEM",
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      ...fields,
-    });
-
-    if (firstBatch) {
-      setMessages((prev) => [...prev, entry({ kind: "round", round: gameState.roundNumber })]);
-    }
-
-    newMoves.forEach((move, index) => {
-      setTimeout(() => {
-        if (!catchingUp && move.type === "PLAY") safePlay("playSnap");
-        if (!catchingUp && move.type === "NEW_ROUND") safePlay("playDeal");
-
-        let fields = null;
-        if (move.type === "PLAY") {
-          fields = {
-            kind: "play",
-            playerIndex: move.playerIndex,
-            name: nameOf(move.playerIndex),
-            cards: move.cards,
-            combo: COMBO_NAMES[move.combination?.type] || "Cards",
-          };
-        } else if (move.type === "PASS") {
-          fields = { kind: "pass", playerIndex: move.playerIndex, name: nameOf(move.playerIndex) };
-        } else if (move.type === "ROUND_RESET") {
-          fields = { kind: "trick", playerIndex: move.leadPlayer, name: nameOf(move.leadPlayer) };
-        } else if (move.type === "ROUND_END") {
-          fields = { kind: "roundEnd", playerIndex: move.winnerIndex, name: nameOf(move.winnerIndex) };
-        } else if (move.type === "NEW_ROUND") {
-          fields = { kind: "round", round: move.roundNumber };
-        }
-        if (fields) setMessages((prev) => [...prev, entry(fields)]);
-      }, catchingUp ? 0 : index * 100);
-    });
-  }, [gameState?.moveHistory]);
 
   // --- RENDER ---
   if (!gameState && table)
@@ -641,11 +620,6 @@ const GameThirteen = () => {
       </div>
     );
 
-  let orders = dealOrders;
-  if (isDealing && !orders && playersList[0]?.hand.length > 0) {
-    orders = playersList.map((p) => shuffledIndices(p.hand.length));
-    setDealOrders(orders);
-  }
 
   const roundKey = `${gameState.matchNumber || 1}-${gameState.roundNumber}`;
   if (undealt.round !== roundKey) {
@@ -655,7 +629,7 @@ const GameThirteen = () => {
   const visiblePlayers = isDealing
     ? playersList.map((p, idx) => {
         const count = dealCounts[idx] || 0;
-        const order = orders?.[idx];
+        const order = dealOrders?.[idx];
         if (!order) return { ...p, hand: [] };
         const shown = order.slice(0, count).map((i) => p.hand[i]);
         return { ...p, hand: shown };
