@@ -172,7 +172,9 @@ export function loadCustomColors() {
   try {
     const raw = localStorage.getItem(CUSTOM_COLORS_KEY);
     if (raw) return JSON.parse(raw);
-  } catch {}
+  } catch {
+    // Unreadable: start with no custom colors.
+  }
   return [];
 }
 

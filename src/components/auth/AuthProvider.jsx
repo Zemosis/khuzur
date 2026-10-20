@@ -1,11 +1,14 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { api, getToken, setToken, oauthStartUrl } from "../lib/api";
-import { getGuestIdentity, clearGuestIdentity } from "../lib/guestIdentity";
-import { deserializeAvatar } from "../utils/avatarConstants";
+// AUTH PROVIDER — who the player is: a signed-in account (restored from a
+// saved token on load) or this browser's guest identity. Read it anywhere
+// below with useAuth() (hooks/useAuth.js).
 
-const AuthContext = createContext(null);
+import React, { useState, useEffect } from "react";
+import { api, getToken, setToken, oauthStartUrl } from "../../lib/api";
+import { getGuestIdentity } from "../../lib/guestIdentity";
+import { deserializeAvatar } from "../../utils/avatarConstants";
+import { AuthContext } from "../../hooks/useAuth";
 
-export function AuthProvider({ children }) {
+export default function AuthProvider({ children }) {
   // { token, user: { id, email } } while signed in, null for guests.
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -138,10 +141,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
 }

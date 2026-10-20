@@ -58,15 +58,14 @@ const AvatarPaint = () => {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  useEffect(() => {
-    if (!loading && !initialized) {
-      if (identity.customAvatar?.pixels) {
-        setPixels(identity.customAvatar.pixels.map((row) => [...row]));
-      }
-      setCustomColors(identity.customColors || []);
-      setInitialized(true);
+  // Once the profile has loaded, start from the saved avatar.
+  if (!loading && !initialized) {
+    if (identity.customAvatar?.pixels) {
+      setPixels(identity.customAvatar.pixels.map((row) => [...row]));
     }
-  }, [loading, initialized, identity.customAvatar, identity.customColors]);
+    setCustomColors(identity.customColors || []);
+    setInitialized(true);
+  }
 
   useEffect(() => {
     if (!loading && isGuest) navigate("/", { replace: true });

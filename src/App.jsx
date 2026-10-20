@@ -2,7 +2,7 @@
 
 import React, { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "./hooks/useAuth";
+import AuthProvider from "./components/auth/AuthProvider";
 import MainMenu from "./pages/MainMenu";
 
 const GameThirteen = lazy(() => import("./pages/thirteen/GameThirteen"));
@@ -17,6 +17,7 @@ const MatchDetail = lazy(() => import("./pages/MatchDetail"));
 const JoinTable = lazy(() => import("./pages/JoinTable"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const Privacy = lazy(() => import("./pages/Privacy"));
+const PatchNotes = lazy(() => import("./pages/PatchNotes"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const Admin = lazy(() => import("./pages/Admin"));
 
@@ -40,6 +41,7 @@ function App() {
               <Route path="/join/:code" element={<JoinTable />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="/patch-notes" element={<PatchNotes />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/admin" element={<Admin />} />
             </Routes>

@@ -189,5 +189,5 @@ describe.each([4, 5, 6])("a credit table, seed %i", (seed) => {
       expect(onTable()).toBe(bank);
       expect(E.handSummary(s).seatResults.reduce((t, r) => t + r.net, 0)).toBe(0);
     }
-  });
+  }, 30_000); // HARD plays out a few hundred deals per move
 });

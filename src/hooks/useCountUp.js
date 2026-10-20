@@ -11,15 +11,19 @@ const LANDED_MS = 900;
 export function useCountUp(value, ms = 700) {
   const [shown, setShown] = useState(value);
   const [landed, setLanded] = useState(false);
+  const [seen, setSeen] = useState(value); // the value at the last render
   const from = useRef(value);
+
+  // Nothing to roll from (or REDUCED animations): show the new value at once.
+  if (value !== seen) {
+    setSeen(value);
+    if (value == null || seen == null || reducedMotion()) setShown(value);
+  }
 
   useEffect(() => {
     const start = from.current;
     from.current = value;
-    if (value == null || start == null || start === value || reducedMotion()) {
-      setShown(value);
-      return;
-    }
+    if (value == null || start == null || start === value || reducedMotion()) return;
     const t0 = performance.now();
     let frame;
     const step = (t) => {

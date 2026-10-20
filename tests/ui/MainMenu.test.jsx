@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import MainMenu from "../../src/pages/MainMenu";
+import { VERSION } from "../../src/utils/changelog";
 
 let stats;
 const { auth } = vi.hoisted(() => ({ auth: { isGuest: true, updateProfile: null, signOut: null } }));
@@ -40,6 +41,12 @@ beforeEach(() => {
 });
 
 describe("MainMenu", () => {
+  it("shows the version from the patch notes, and links to them", () => {
+    renderMenu();
+    expect(screen.getByText(new RegExp(`v${VERSION.replace(/\./g, "\\.")} — patch`))).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Patch notes" })).toHaveAttribute("href", "/patch-notes");
+  });
+
   it("is branded Khuzur, with a Card Hall kicker and no per-game kickers", () => {
     renderMenu();
     expect(screen.getByText("KHUZUR")).toBeInTheDocument();

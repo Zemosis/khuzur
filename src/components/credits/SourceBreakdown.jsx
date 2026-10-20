@@ -9,6 +9,7 @@
 
 import React from "react";
 import { fmt } from "../../utils/poker/tiers";
+import { signed } from "./signed";
 
 const GAIN = "#179fa2";
 const LOSS = "#e15474";
@@ -20,7 +21,6 @@ const SOURCES = [
   ["admin", "Admin"],
 ];
 
-export const signed = (v) => (v > 0 ? `+${fmt(v)}` : v < 0 ? `−${fmt(-v)}` : "0");
 
 const GRID = { gridTemplateColumns: "110px minmax(0,1fr) 72px", columnGap: 12 };
 

@@ -6,12 +6,6 @@
 
 import React from "react";
 
-/** `promise`'s value, but not before `ms` have passed: a quick answer would only flash the loader. */
-export const atLeast = (ms, promise) => Promise.all([promise, new Promise((r) => setTimeout(r, ms))]).then(([v]) => v);
-
-/** How long a claim's loader shows at the least. */
-export const LOADER_MIN_MS = 600;
-
 // When each cell (left to right, top to bottom) lights, in ms: the snake
 // winds along the top row, back along the middle, and out along the bottom.
 const SNAKE = [0, 80, 160, 400, 320, 240, 480, 560, 640];

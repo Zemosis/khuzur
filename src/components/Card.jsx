@@ -32,9 +32,6 @@ const SUIT_WORD = {
   "♠": "spades", "♥": "hearts", "♦": "diamonds", "♣": "clubs",
 };
 
-/** Available card back colours (matches the asset pack filenames). */
-export const CARD_BACKS = ["blue", "green", "grey", "pink", "purple", "red", "yellow"];
-
 // ─── URL helpers ──────────────────────────────────────────────────────────────
 
 const getCardSrc = (rank, suit) =>

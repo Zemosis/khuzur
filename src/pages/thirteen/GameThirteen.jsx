@@ -1,5 +1,9 @@
 // GAME THIRTEEN - Multiplayer Version with Pixel Retro UI
 
+// The game loop runs on effects that answer each new state (start a solo
+// game, show the round's end, log the plays). It predates React Compiler's
+// checks, so two of them are off here rather than rebuilt around.
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/preserve-manual-memoization */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { socket, connectSocket } from "../../utils/socket";
@@ -53,6 +57,16 @@ const SIDE_SEAT_W = 224;
 const ROW_SEAT_W = 150; // slim seats on a short screen
 // How long the winning play stays on the felt before the round's scores cover
 // it (the server's round-end delay leaves room for this).
+/** 0…n-1 in a random order: which card of a hand flies in when, in the deal animation (not the deal itself). */
+function shuffledIndices(n) {
+  const indices = Array.from({ length: n }, (_, i) => i);
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return indices;
+}
+
 const ROUND_REVEAL_MS = 2500;
 const SOLO_NEXT_ROUND_MS = ROUND_REVEAL_MS + 4000;
 
@@ -122,12 +136,12 @@ const GameThirteen = () => {
   // Whether this page has taken in the state it opened on (see LOGS & SFX).
   const caughtUpRef = useRef(false);
   const gameStateRef = useRef(gameState);
-  const dealOrderRef = useRef(null);
+  const [dealOrders, setDealOrders] = useState(null); // per player, the order their cards fly in
 
   const handleDealProgress = useCallback((counts) => setDealCounts(counts), []);
   const handleDealComplete = useCallback(() => {
     setDealCounts([13, 13, 13, 13]);
-    dealOrderRef.current = null;
+    setDealOrders(null);
     setIsDealing(false);
   }, []);
 
@@ -242,7 +256,7 @@ const GameThirteen = () => {
         setShowRoundEnd(false);
         setRoundEndData(null);
         if (isNewRoundOrMatch) {
-          dealOrderRef.current = null;
+          setDealOrders(null);
           setDealCounts([0, 0, 0, 0]);
           setDealEndsAt(newState.dealMsLeft == null ? null : performance.now() + newState.dealMsLeft);
           setIsDealing(true);
@@ -366,7 +380,7 @@ const GameThirteen = () => {
 
           setShowRoundEnd(false);
           setRoundEndData(null);
-          dealOrderRef.current = null;
+          setDealOrders(null);
           setDealCounts([0, 0, 0, 0]);
           setIsDealing(true);
           setGameState(nextState);
@@ -519,7 +533,7 @@ const GameThirteen = () => {
 
     setShowRoundEnd(false);
     setRoundEndData(null);
-    dealOrderRef.current = null;
+    setDealOrders(null);
     setDealCounts([0, 0, 0, 0]);
     setIsDealing(true);
     setSelectedCards([]);
@@ -627,15 +641,10 @@ const GameThirteen = () => {
       </div>
     );
 
-  if (isDealing && !dealOrderRef.current && playersList[0]?.hand.length > 0) {
-    dealOrderRef.current = playersList.map((p) => {
-      const indices = p.hand.map((_, i) => i);
-      for (let i = indices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [indices[i], indices[j]] = [indices[j], indices[i]];
-      }
-      return indices;
-    });
+  let orders = dealOrders;
+  if (isDealing && !orders && playersList[0]?.hand.length > 0) {
+    orders = playersList.map((p) => shuffledIndices(p.hand.length));
+    setDealOrders(orders);
   }
 
   const roundKey = `${gameState.matchNumber || 1}-${gameState.roundNumber}`;
@@ -646,7 +655,7 @@ const GameThirteen = () => {
   const visiblePlayers = isDealing
     ? playersList.map((p, idx) => {
         const count = dealCounts[idx] || 0;
-        const order = dealOrderRef.current?.[idx];
+        const order = orders?.[idx];
         if (!order) return { ...p, hand: [] };
         const shown = order.slice(0, count).map((i) => p.hand[i]);
         return { ...p, hand: shown };

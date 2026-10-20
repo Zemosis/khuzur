@@ -3,7 +3,6 @@
 import { COMBO_TYPES, POKER_COMBO_STRENGTH, RANK_VALUES } from "./constants.js";
 import {
   groupByRank,
-  groupBySuit,
   sortHand,
   compareCards,
 } from "./deckUtils.js";

@@ -41,7 +41,9 @@ export function getGuestIdentity() {
         return { ...parsed, isGuest: true };
       }
     }
-  } catch {}
+  } catch {
+    // Nothing saved, or it's unreadable: a new guest it is.
+  }
   const identity = createGuestIdentity();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(identity));
   return identity;

@@ -55,10 +55,16 @@ export default function MatchDetail() {
     connectSocket(identity);
   }, [identity.name, identity.tag]);
 
-  useEffect(() => {
-    let live = true;
+  // Another match: clear the last one before it loads.
+  const [shownId, setShownId] = useState(id);
+  if (id !== shownId) {
+    setShownId(id);
     setMatch(null);
     setError("");
+  }
+
+  useEffect(() => {
+    let live = true;
     api(`/${encodeURIComponent(id)}`, { base: "/api/matches" })
       .then((m) => {
         if (!live) return;

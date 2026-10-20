@@ -5,9 +5,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "./useAuth";
-import { LOADER_MIN_MS, atLeast } from "../components/PixelLoader";
 
 const CREDITS = { base: "/api/credits" };
+
+/** How long a claim's loader (PixelLoader) shows at the least. */
+export const LOADER_MIN_MS = 600;
+
+/** `promise`'s value, but not before `ms` have passed: a quick answer would only flash the loader. */
+const atLeast = (ms, promise) => Promise.all([promise, new Promise((r) => setTimeout(r, ms))]).then(([v]) => v);
 
 export function useCredits({ enabled = true } = {}) {
   const { isGuest, loading } = useAuth();

@@ -10,6 +10,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useCredits } from "../hooks/useCredits";
 import RestartNotice from "../components/credits/RestartNotice";
 import MenuClaim from "../components/credits/MenuClaim";
+import { VERSION } from "../utils/changelog";
 import { useServerStats } from "../hooks/useServerStats";
 import { connectSocket } from "../utils/socket";
 import LoginModal from "../components/auth/LoginModal";
@@ -260,8 +261,12 @@ const MainMenu = () => {
         <div className="checker-strip h-2" />
         <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 gap-y-1 px-4 sm:px-8 py-2 bg-void">
           <div className="font-pixel-body text-bone/60 text-sm">
-            v1.2.0 — patch{" "}
+            v{VERSION} — patch{" "}
             <span className="text-parchment">"CUTE RAY"</span>
+            <span className="text-mist mx-2">|</span>
+            <Link to="/patch-notes" className="underline hover:text-parchment">
+              Patch notes
+            </Link>
             <span className="text-mist mx-2">|</span>
             <Link to="/privacy" className="underline hover:text-parchment">
               Privacy
