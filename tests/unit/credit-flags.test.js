@@ -18,6 +18,20 @@ describe("pair flows", () => {
   });
 });
 
+describe("credit Muushig matches", () => {
+  it("count as flows: each loser's stake to the winner, CPU seats and a pot lost to a CPU count for nobody", () => {
+    const match = (id, seats) => ({ id, playedAt: new Date(id * 60_000), isPrivate: true, seats });
+    const staked = (user_id, net) => ({ user_id, net, stack_before: 500, committed: 500, folded_street: null });
+    const cpu = { user_id: null, cpu: true };
+    const won = Array.from({ length: 3 }, (_, i) => match(i + 1, [staked("A", -500), staked("B", 500), cpu, cpu, cpu]));
+    const lostToCpu = match(9, [staked("A", -500), staked("B", -500), cpu, cpu, cpu]);
+    const { pairs, lost } = pairFlows([...won, lostToCpu]);
+    expect(pairs.get("A>B")).toMatchObject({ flow: 1500, hands: 3, privateHands: 3, bigFolds: 0 });
+    expect(lost.get("A")).toBe(2000);
+    expect(flagPairs({ pairs, lost })[0]).toMatchObject({ loser: "A", winner: "B", share: 0.75 });
+  });
+});
+
 describe("flagging", () => {
   const dump = (n, extra = []) =>
     Array.from({ length: n }, (_, i) => hand(i + 1, [["A", -250, 1000, 600, i === 0 ? "RIVER" : null], ["B", 250], ...extra], { isPrivate: i < 2 }));

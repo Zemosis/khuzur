@@ -65,7 +65,7 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     expect(rows[0]).toMatchObject({ status: "in_progress", lobby_code: "PUB-ABC123", name: "Table", current_player_count: 4, game_type: "thirteen" });
   });
 
-  it("a completed match ranks seats, pays rewards, moves ratings and stores rounds", async () => {
+  it("a completed match ranks seats, pays rewards and stores rounds, with no rating anywhere", async () => {
     const alice = await makeUser(m.pool, "alice@test.dev");
     const bob = await makeUser(m.pool, "bob@test.dev", { coins: 5, exp: 90 });
     const id = await session({ hostUserId: alice.id });
@@ -92,17 +92,15 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     expect(players.map((p) => p.is_winner)).toEqual([false, false, true, false]);
     expect(players.map((p) => p.coins_earned)).toEqual([50, 10, 100, 25]);
     expect(players[1]).toMatchObject({ guest_name: "P1", guest_tag: "0001", left_early: true, cpu_took_over: true, disconnect_count: 2, player_id: null });
-    expect(players[2]).toMatchObject({ player_id: bob.id, rounds_won: 3, rating_before: 1000 });
-    expect(players[2].rating_after).toBeGreaterThan(1000);
-    expect(players[0].rating_after).toBeLessThan(1000);
-    expect(players[1].rating_before).toBeNull(); // guests aren't rated
+    expect(players[2]).toMatchObject({ player_id: bob.id, rounds_won: 3 });
+    expect(Object.keys(players[2]).some((k) => k.includes("rating"))).toBe(false); // credits are the ranked play
     expect(players[0].stats).toMatchObject({ rounds_played: 3, rounds_won: 0, cards_left_total: 3, best_round_cards_left: 1, eliminated_at_round: null });
     expect(players[3].stats.eliminated_at_round).toBe(3);
 
     const profiles = Object.fromEntries((await m.pool.query("select * from profiles")).rows.map((p) => [p.id, p]));
     expect(profiles[bob.id]).toMatchObject({ coins: 105, exp: 150, level: 2, wins: 1, games_played: 1 });
     expect(profiles[alice.id]).toMatchObject({ coins: 50, exp: 35, level: 1, wins: 0, games_played: 1 });
-    expect(profiles[bob.id].rating + profiles[alice.id].rating).toBe(2000);
+    expect(profiles[bob.id]).not.toHaveProperty("rating");
 
     const r = (await m.pool.query("select * from game_rounds where session_id = $1 order by round_number", [id])).rows;
     expect(r.map((x) => x.round_number)).toEqual([1, 2, 3]);
@@ -110,7 +108,7 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
 
     const history = (await m.pool.query("select * from player_match_history where player_id = $1", [bob.id])).rows;
     expect(history).toHaveLength(1);
-    expect(history[0].rating_delta).toBe(profiles[bob.id].rating - 1000);
+    expect(Object.keys(history[0]).some((k) => k.includes("rating"))).toBe(false);
   });
 
   it("a completed Muushig match is placed by Muushig's rules and tallies piles, not hands", async () => {
@@ -158,8 +156,6 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     expect(players[3]).toMatchObject({ player_id: carol.id, rounds_won: 2, final_score: 0 });
     expect(players[3].stats).toEqual({ rounds_played: 2, rounds_won: 2, eaten: 8, gone_in: 2, folded: 0, sweeps: 1 });
     expect(players[4].stats).toEqual({ rounds_played: 2, rounds_won: 0, eaten: 0, gone_in: 1, folded: 1, sweeps: 0 });
-    expect(players[3].rating_after).toBeGreaterThan(1000);
-    expect(players[1].rating_after).toBeLessThan(1000);
     const r = (await m.pool.query("select * from game_rounds where session_id = $1 order by round_number", [id])).rows;
     expect(r.map((x) => x.winner_seat)).toEqual([3, null]);
     expect(r[0].seat_results).toHaveLength(5);
@@ -191,7 +187,7 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     expect(players[2].stats.hands).toEqual({});
   });
 
-  it("an abandoned match is recorded without positions, rewards or rating changes", async () => {
+  it("an abandoned match is recorded without positions or rewards", async () => {
     const alice = await makeUser(m.pool, "alice@test.dev");
     const id = await session();
     await m.finishSession({
@@ -205,9 +201,9 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     const s = (await m.pool.query("select status, ended_reason from game_sessions where id = $1", [id])).rows[0];
     expect(s).toEqual({ status: "abandoned", ended_reason: "all_left" });
     const p = (await m.pool.query("select * from game_players where session_id = $1", [id])).rows[0];
-    expect(p).toMatchObject({ final_position: null, is_winner: false, coins_earned: 0, rating_before: 1000, rating_after: 1000, stats: null });
+    expect(p).toMatchObject({ final_position: null, is_winner: false, coins_earned: 0, stats: null });
     const prof = (await m.pool.query("select * from profiles where id = $1", [alice.id])).rows[0];
-    expect(prof).toMatchObject({ coins: 0, games_played: 0, rating: 1000 });
+    expect(prof).toMatchObject({ coins: 0, games_played: 0 });
   });
 
   it("closeOrphanedSessions closes only in-progress sessions", async () => {

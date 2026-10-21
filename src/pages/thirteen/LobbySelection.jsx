@@ -1,4 +1,6 @@
-// THIRTEEN LOBBY — the shared GameLobby configured for Thirteen.
+// THIRTEEN LOBBY — the shared GameLobby configured for Thirteen. The CREDITS
+// tab hosts and joins credit matches: everyone stakes the same, the winner
+// takes the pot, and only people play.
 
 import React from "react";
 import GameLobby from "../../components/lobby/GameLobby";
@@ -11,6 +13,7 @@ const THIRTEEN = {
   route: "/game-13",
   defaultTableName: "CR7 GOAT",
   accent: { main: "#f4c430", deep: "#c89820" },
+  credits: { kind: "stake" },
   events: {
     list: "get_public_lobbies",
     listUpdate: "public_lobbies_update",

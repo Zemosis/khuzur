@@ -21,29 +21,6 @@ const REWARDS = [
 
 const levelForExp = (exp) => Math.floor(exp / 100) + 1;
 
-// Elo. Pairwise across the rated field, averaged — the standard extension of
-// two-player Elo to a placement result. Only signed-in players are rated, so
-// you cannot farm rating off CPUs or guests; with fewer than two, nobody moves.
-const K_FACTOR = 32;
-export const DEFAULT_RATING = 1000;
-
-export function computeRatingDeltas(entries) {
-  const deltas = new Map();
-  if (entries.length < 2) return deltas;
-
-  for (const a of entries) {
-    let sum = 0;
-    for (const b of entries) {
-      if (a.playerKey === b.playerKey) continue;
-      const expected = 1 / (1 + 10 ** ((b.rating - a.rating) / 400));
-      const actual = a.position < b.position ? 1 : a.position > b.position ? 0 : 0.5;
-      sum += actual - expected;
-    }
-    deltas.set(a.playerKey, Math.round((K_FACTOR * sum) / (entries.length - 1)));
-  }
-  return deltas;
-}
-
 /**
  * Inserts the session row at match start. Returns the new session id, or null
  * if persistence is unconfigured (in which case the match still runs fine).
@@ -58,7 +35,7 @@ export async function createSession({
   maxPlayers = 4,
   playerCount = 0,
   startedAt,
-  pokerTier = null,
+  creditTier = null,
   seats = null,
 }) {
   if (!pool) return null;
@@ -66,7 +43,7 @@ export async function createSession({
   const { rows } = await pool.query(
     `insert into game_sessions (
        game_type, status, host_id, host_display_name, name, is_private,
-       lobby_code, max_players, current_player_count, started_at, poker_tier, seats
+       lobby_code, max_players, current_player_count, started_at, credit_tier, seats
      ) values ($1, 'in_progress', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      returning id`,
     [
@@ -79,7 +56,7 @@ export async function createSession({
       maxPlayers,
       playerCount,
       startedAt || new Date(),
-      pokerTier,
+      creditTier,
       seats ? JSON.stringify(seats) : null,
     ],
   );
@@ -119,9 +96,10 @@ export function rankSeats(state) {
 
 /**
  * Closes out a session: updates the session row, writes one game_players row
- * per roster entry, and applies rewards + rating to signed-in players.
+ * per roster entry, and applies rewards to signed-in players. (There is no
+ * rating: credits are the ranked play.)
  *
- * Rewards and rating are applied ONLY when the match actually finished. An
+ * Rewards are applied ONLY when the match actually finished. An
  * abandoned match records what happened but produces no result.
  *
  * @param {Object} rec
@@ -232,37 +210,21 @@ export async function finishSession(rec) {
       );
     }
 
-    // Current ratings for the signed-in players, locked until commit.
+    // The signed-in players' progress, locked until commit.
     const userIds = roster.map((r) => r.userId).filter(Boolean);
     const profiles = new Map();
     if (userIds.length) {
       const { rows } = await client.query(
-        `select id, coins, exp, wins, games_played, rating
+        `select id, coins, exp, wins, games_played
            from profiles where id = any($1::uuid[]) for update`,
         [userIds],
       );
       for (const p of rows) profiles.set(p.id, p);
     }
 
-    // Rating only moves on a completed match, and only among signed-in players.
-    const ratingDeltas = completed
-      ? computeRatingDeltas(
-          roster
-            .filter((r) => r.userId && positionBySeat[r.seatIndex])
-            .map((r) => ({
-              playerKey: r.playerKey,
-              rating: profiles.get(r.userId)?.rating ?? DEFAULT_RATING,
-              position: positionBySeat[r.seatIndex],
-            })),
-        )
-      : new Map();
-
     const rows = roster.map((seat) => {
       const position = completed ? positionBySeat[seat.seatIndex] ?? null : null;
       const reward = completed && position ? REWARDS[position - 1] || REWARDS.at(-1) : null;
-      const profile = seat.userId ? profiles.get(seat.userId) : null;
-      const before = profile?.rating ?? (seat.userId ? DEFAULT_RATING : null);
-      const delta = ratingDeltas.get(seat.playerKey);
       const roundStats = poker ? { roundsWon: seat.poker?.hands_won ?? 0, stats: seat.poker ?? null } : roundStatsFor(seat.seatIndex);
 
       return {
@@ -281,8 +243,6 @@ export async function finishSession(rec) {
         left_early: !!seat.leftEarly,
         cpu_took_over: !!seat.cpuTookOver,
         disconnect_count: seat.disconnectCount || 0,
-        rating_before: before,
-        rating_after: delta == null ? before : before + delta,
         rounds_won: roundStats.roundsWon,
         stats: roundStats.stats ? JSON.stringify(roundStats.stats) : null,
       };
@@ -311,7 +271,7 @@ export async function finishSession(rec) {
       const exp = profile.exp + row.exp_earned;
       await client.query(
         `update profiles
-            set coins = $2, exp = $3, level = $4, wins = $5, games_played = $6, rating = $7
+            set coins = $2, exp = $3, level = $4, wins = $5, games_played = $6
           where id = $1`,
         [
           row.player_id,
@@ -320,7 +280,6 @@ export async function finishSession(rec) {
           levelForExp(exp),
           profile.wins + (row.is_winner ? 1 : 0),
           profile.games_played + 1,
-          row.rating_after ?? profile.rating,
         ],
       );
     }
@@ -342,7 +301,7 @@ export async function finishSession(rec) {
 /**
  * Records a match played alone against CPUs, from a report already checked by
  * parseSoloReport. The server places the player itself. Solo matches count for
- * stats only: no coins, exp or rating. A report already recorded (same player,
+ * stats only: no coins or exp. A report already recorded (same player,
  * same match id) is not recorded again.
  *
  * @returns {{ recorded: boolean, place: number }}

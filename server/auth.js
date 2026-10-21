@@ -18,8 +18,8 @@ if (pool && !JWT_SECRET) {
   throw new Error("JWT_SECRET must be set when DATABASE_URL is configured");
 }
 
-// The only profile columns a client may write. Coins, exp, level, wins,
-// games_played and rating are awarded by the game server alone.
+// The only profile columns a client may write. Coins, exp, level, wins and
+// games_played are awarded by the game server alone.
 const EDITABLE_PROFILE_FIELDS = ["username", "tag", "avatar", "custom_avatar", "custom_colors"];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -169,9 +169,9 @@ authRouter.get("/me", requireUser, async (req, res) => {
 });
 
 // Everything the profile's Stats panel shows, per game filter, in one round
-// trip (see stats.js).
+// trip, for ?stakes=all|free|credits (see stats.js).
 authRouter.get("/stats", requireUser, async (req, res) => {
-  res.json(await playerStats(req.user.id));
+  res.json(await playerStats(req.user.id, String(req.query.stakes ?? "all")));
 });
 
 // A game played alone against CPUs, reported by the browser when it ends.

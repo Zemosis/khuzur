@@ -127,20 +127,29 @@ describe.skipIf(!TEST_DATABASE_URL)("credits routes (Postgres)", () => {
     const cat = await makePlayer(m.pool, "CAT");
     await A.buyIn(cat, { tableId: "00000000-0000-4000-8000-000000000002", tableName: "Rail", tier: "LOW", amount: 400 });
     await m.pool.query("update credit_accounts set first_hand_at = now() where user_id = $1", [cat]);
+    // DAN beats EVE at a LOW credit Muushig match: the 200 pot is his.
+    const dan = await makePlayer(m.pool, "DAN");
+    const eve = await makePlayer(m.pool, "EVE");
+    const T3 = "00000000-0000-4000-8000-000000000003";
+    for (const id of [dan, eve]) await A.placeStake(id, { tableId: T3, tableName: "Ger", tier: "LOW", stake: 100 });
+    const seats = [dan, eve, null, null, null].map((userId, i) => ({ userId, forfeited: false, score: i ? 7 : 0, eaten: 1 }));
+    await A.settleMatch({ tableId: T3, tier: "LOW", isPrivate: false, sessionId: null, matchNumber: 1, stake: 100, seats, payouts: [{ seat: 0, userId: dan, amount: 200 }], cpuTake: 0 });
 
     const { top } = (await request(app).get("/api/credits/leaderboard")).body;
     const row = (name) => top.find((r) => r.name === name);
     expect(row("ANN")).toMatchObject({ total: 1250, sources: { start: 1000, claimed: 0, poker: 300, admin: -50 } });
     expect(row("BOB")).toMatchObject({ total: 1050, sources: { start: 1000, claimed: 300, poker: -300, admin: 50 } });
-    expect(row("CAT")).toMatchObject({ total: 1000, atTable: true, sources: { start: 1000, claimed: 0, poker: 0, admin: 0 } });
+    expect(row("CAT")).toMatchObject({ total: 1000, atTable: true, sources: { start: 1000, claimed: 0, poker: 0, muushig: 0, admin: 0 } });
+    expect(row("DAN")).toMatchObject({ total: 1100, sources: { poker: 0, muushig: 100 } });
+    expect(row("EVE")).toMatchObject({ total: 900, sources: { muushig: -100 } });
     for (const r of top) {
-      const { start, claimed, poker, admin } = r.sources;
-      expect(start + claimed + poker + admin).toBe(r.total);
+      const { start, claimed, poker, muushig, thirteen, admin } = r.sources;
+      expect(start + claimed + poker + muushig + thirteen + admin).toBe(r.total);
     }
   });
 
   it("createSession records a credit table's tier", async () => {
-    const id = await m.createSession({ gameType: "poker", lobbyId: "PUB-CR0001", lobbyName: "Felt", isPrivate: false, hostDisplayName: "ANN #0001", maxPlayers: 6, pokerTier: "MID" });
-    expect((await m.pool.query("select poker_tier from game_sessions where id = $1", [id])).rows[0].poker_tier).toBe("MID");
+    const id = await m.createSession({ gameType: "poker", lobbyId: "PUB-CR0001", lobbyName: "Felt", isPrivate: false, hostDisplayName: "ANN #0001", maxPlayers: 6, creditTier: "MID" });
+    expect((await m.pool.query("select credit_tier from game_sessions where id = $1", [id])).rows[0].credit_tier).toBe("MID");
   });
 });

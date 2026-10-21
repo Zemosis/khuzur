@@ -23,9 +23,9 @@ const thirteen = {
   isPrivate: false,
   you: 1,
   standings: [
-    { seat: 0, name: "Bot Saturn", kind: "cpu", level: "HARD", place: 1, score: 2, roundsWon: 2, leftEarly: false, cpuTookOver: false, ratingDelta: null, stats: null },
-    { seat: 1, name: "ANN #0001", kind: "human", level: null, place: 2, score: 9, roundsWon: 0, leftEarly: false, cpuTookOver: false, ratingDelta: -12, stats: { hands: { SINGLE: 7, PAIR: 2 } } },
-    { seat: 2, name: null, kind: "cpu", level: null, place: 3, score: 30, roundsWon: 0, leftEarly: false, cpuTookOver: false, ratingDelta: null, stats: null },
+    { seat: 0, name: "Bot Saturn", kind: "cpu", level: "HARD", place: 1, score: 2, roundsWon: 2, leftEarly: false, cpuTookOver: false, stats: null },
+    { seat: 1, name: "ANN #0001", kind: "human", level: null, place: 2, score: 9, roundsWon: 0, leftEarly: false, cpuTookOver: false, stats: { hands: { SINGLE: 7, PAIR: 2 } } },
+    { seat: 2, name: null, kind: "cpu", level: null, place: 3, score: 30, roundsWon: 0, leftEarly: false, cpuTookOver: false, stats: null },
   ],
   rounds: [
     {
@@ -72,7 +72,16 @@ describe("match page", () => {
     expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual(["Bot Saturn: 1st", "ANN: 2nd", "CPU · seat 3: 3rd"]);
     expect(rows[0]).toHaveTextContent("CPU · HARD");
     expect(rows[1]).toHaveTextContent("YOU");
-    expect(rows[1]).toHaveTextContent("-12");
+    expect(rows[1]).toHaveTextContent(/^2ndANN#0001YOU9 pts$/); // no rating: credits are the ranked play
+  });
+
+  it("a credit match tags its stakes and ends each staked row with the credits won or lost", async () => {
+    open({ ...thirteen, credit: { tier: "MID", stake: 500, pot: 500, cpuTake: 500, nets: { 1: -500 } } });
+    const rows = within(await screen.findByRole("list", { name: "Standings" })).getAllByRole("listitem");
+    expect(screen.getByText("CREDITS · MID · POT 500")).toBeInTheDocument();
+    expect(rows[1]).toHaveTextContent("−500 CR");
+    expect(rows[0]).not.toHaveTextContent("CR");
+    expect(screen.getByText(/500 went to a bot\./)).toBeInTheDocument();
   });
 
   it("starts the summary on you, with your hands; picking another row switches to them", async () => {

@@ -282,7 +282,13 @@ function RecentList({ matches }) {
             {m.leftEarly ? "Quit" : m.place ? `${ordinal(m.place)} of ${m.of}` : "-"}
           </span>
           <span className="text-parchment truncate">{GAME_NAMES[m.game] || m.game}</span>
-          <span className="text-bone/80">{m.solo ? "vs CPU" : "Online"}</span>
+          {m.tier ? (
+            <span className="tabular-nums whitespace-nowrap" style={{ color: m.net > 0 ? "#f4c430" : m.net < 0 ? "#e85a7a" : "#ead8b1" }} title={`A ${m.tier} credit match`}>
+              {m.net == null ? m.tier : `${m.net > 0 ? "+" : ""}${m.net} CR`}
+            </span>
+          ) : (
+            <span className="text-bone/80">{m.solo ? "vs CPU" : "Online"}</span>
+          )}
           <span className="text-bone text-right tabular-nums">{m.score ?? "-"} pts</span>
           <span className="text-bone/80 text-right tabular-nums">{formatDuration(m.seconds)}</span>
           <span className="text-bone/70 text-right">{new Date(m.finishedAt).toLocaleDateString()}</span>
@@ -416,9 +422,17 @@ function PokerSheet({ poker }) {
   );
 }
 
+// Which matches the other games' figures count: every one, free ones
+// (practice included) or credit matches.
+const MATCH_STAKES = [
+  ["all", "All"],
+  ["free", "Free"],
+  ["credits", "Credits"],
+];
+
 // Everything shows from the first visit: a player with no matches sees zeros
-// rather than an empty screen. Rating is hidden for now.
-function StatsSheet({ data }) {
+// rather than an empty screen. There is no rating: credits are the ranked play.
+function StatsSheet({ data, stakes, onStakes }) {
   const [filter, setFilter] = useState("overall");
   const [recentView, setRecentView] = useState("list");
   const [handsSort, setHandsSort] = useState("rank");
@@ -435,9 +449,23 @@ function StatsSheet({ data }) {
   const streak = v.streak.current;
   const places = PLACES[filter] || Math.max(4, ...v.placements.map((p) => p.place));
 
+  const c = v.credits ?? { games: 0 };
   return (
     <div className="flex-1 flex flex-col gap-6 p-4 overflow-y-auto min-h-0">
       <Toggle label="Game" options={FILTERS} value={filter} onChange={setFilter} />
+      <Toggle label="Stakes" options={MATCH_STAKES} value={stakes} onChange={onStakes} />
+
+      {stakes !== "free" && c.games > 0 && (
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <StatTile label="Credit matches" value={c.games} note={stakes === "all" ? `of ${v.games} games` : "played for a stake"} />
+          <StatTile label="Credits" value={`${c.net > 0 ? "+" : ""}${fmt(c.net)}`} note="won or lost" />
+          <StatTile label="Pots won" value={c.potsWon} note={`${Math.round((c.potsWon / c.games) * 100)}% of credit matches`} />
+          <StatTile label="Biggest pot" value={fmt(c.biggestPot)} note="won in one match" />
+        </div>
+      )}
+      {stakes === "credits" && c.games === 0 && (
+        <p className="font-pixel-body text-[20px] text-bone/70">No credit matches yet. Play one from the lobby's CREDITS tab.</p>
+      )}
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <StatTile label="Games" value={v.games} note={`${v.wins} won, ${v.losses} lost`} />
@@ -525,14 +553,23 @@ function StatsSheet({ data }) {
 function StatsPanel() {
   const navigate = useNavigate();
   const { credits } = useCredits();
-  const [data, setData] = useState(null);
+  // Each stakes' figures are fetched the first time it's picked, then kept.
+  const [stakes, setStakes] = useState("all");
+  const [byStakes, setByStakes] = useState({});
   const [error, setError] = useState("");
+  const data = byStakes[stakes] ?? null;
+  const shown = data ?? byStakes.all ?? null; // while another stakes loads, the last figures stay up
 
   useEffect(() => {
-    api("/stats")
-      .then(setData)
-      .catch((err) => setError(err.message));
-  }, []);
+    if (byStakes[stakes]) return;
+    let live = true;
+    api(`/stats?stakes=${stakes}`)
+      .then((d) => live && setByStakes((b) => ({ ...b, [stakes]: d })))
+      .catch((err) => live && setError(err.message));
+    return () => {
+      live = false;
+    };
+  }, [stakes, byStakes]);
 
   return (
     <Panel
@@ -552,10 +589,10 @@ function StatsPanel() {
         <p role="alert" className="p-6 font-pixel-body text-[22px] text-rose">
           Couldn't load your stats: {error}
         </p>
-      ) : !data ? (
+      ) : !shown ? (
         <p className="p-6 font-pixel-body text-[22px] text-bone">Loading your stats...</p>
       ) : (
-        <StatsSheet data={data} />
+        <StatsSheet data={data ?? shown} stakes={stakes} onStakes={setStakes} />
       )}
     </Panel>
   );

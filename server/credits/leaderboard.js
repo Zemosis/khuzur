@@ -4,10 +4,11 @@
 //
 // Each row also says where its credits came from. Every credit on the board
 // arrived one way: the starting grant, daily claims, an admin moving it, or
-// won and lost at the tables. Table results come from the ledger — what went
-// to the tables (buy-ins, top-ups) against what came back (cash-outs, restart
-// returns), plus what's on a table now — so the sources always add up to the
-// total, even for a hand record that never reached a balance.
+// won and lost at each game's tables. Table results come from the ledger —
+// what went to the tables (buy-ins, top-ups, stakes) against what came back
+// (cash-outs, returned stakes, pots, restart returns), plus what's on a table
+// now — so the sources always add up to the total, even for a hand record that
+// never reached a balance.
 
 import { pool } from "../db/index.js";
 
@@ -28,7 +29,9 @@ async function ranked() {
              coalesce(sum(amount) filter (where kind = 'grant'), 0)                    as start,
              coalesce(sum(amount) filter (where kind = 'claim'), 0)                    as claimed,
              coalesce(sum(amount) filter (where kind in ('admin_return_in', 'admin_return_out', 'admin_remove')), 0) as admin,
-             coalesce(sum(amount) filter (where kind in ('buy_in', 'top_up', 'cash_out', 'restart_return')), 0) as tables
+             coalesce(sum(amount) filter (where game_type = 'poker'), 0)              as poker,
+             coalesce(sum(amount) filter (where game_type = 'muushig'), 0)            as muushig,
+             coalesce(sum(amount) filter (where game_type = 'thirteen'), 0)           as thirteen
         from credit_ledger group by user_id
     )
     select a.user_id, p.username, p.tag, p.avatar, p.custom_avatar,
@@ -37,7 +40,9 @@ async function ranked() {
            rank() over (order by a.balance + coalesce(s.stack + s.pending, 0) desc)    as rank,
            coalesce(src.start, 0) as start, coalesce(src.claimed, 0) as claimed,
            coalesce(src.admin, 0) as admin,
-           coalesce(src.tables, 0) + coalesce(s.stack + s.pending, 0)                  as poker
+           coalesce(src.poker, 0) + case when s.game_type = 'poker' then s.stack + s.pending else 0 end     as poker,
+           coalesce(src.muushig, 0) + case when s.game_type = 'muushig' then s.stack + s.pending else 0 end as muushig,
+           coalesce(src.thirteen, 0) + case when s.game_type = 'thirteen' then s.stack + s.pending else 0 end as thirteen
       from credit_accounts a
       join profiles p on p.id = a.user_id
       left join credit_seats s on s.user_id = a.user_id
@@ -54,7 +59,7 @@ async function ranked() {
       avatar: { variant: r.avatar, custom: r.avatar === "custom" ? r.custom_avatar : null },
       total: Number(r.total),
       atTable: r.at_table,
-      sources: { start: Number(r.start), claimed: Number(r.claimed), poker: Number(r.poker), admin: Number(r.admin) },
+      sources: { start: Number(r.start), claimed: Number(r.claimed), poker: Number(r.poker), muushig: Number(r.muushig), thirteen: Number(r.thirteen), admin: Number(r.admin) },
     })),
   };
   return cache.rows;

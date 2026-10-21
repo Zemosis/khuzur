@@ -2,14 +2,18 @@
 //
 // Each row: place, avatar, name, piles eaten, the score change and the new
 // score. A player who ate all 5 gets ROUND WON; at match end the winner is
-// named and the host can start a rematch.
+// named and the host can start a rematch. At a credit match the end says who
+// took the pot, each staked seat shows what it won or lost, and everyone
+// gets PLAY AGAIN (a new stake) in place of the host's REMATCH.
 
 import React from "react";
 import { PixelAvatar } from "../PixelCard";
+import { fmt } from "../../utils/poker/tiers";
+import { signed } from "../credits/signed";
 
 const baseName = (name = "") => name.split(" #")[0];
 
-function Row({ place, r, player, face }) {
+function Row({ place, r, player, face, net = null }) {
   const tone = r.folded ? "#8a7fb0" : r.delta < 0 ? "#9bd14f" : "#e85a7a";
   return (
     <div className="flex items-center gap-3 px-3 py-2" style={{ backgroundColor: "#14102a", boxShadow: "0 0 0 2px #1f1a3d" }}>
@@ -28,6 +32,11 @@ function Row({ place, r, player, face }) {
         </div>
         <div className="font-pixel-body text-[18px] leading-none mt-1 text-bone/70">{r.folded ? "folded" : `${r.eaten} eaten`}</div>
       </div>
+      {net != null && (
+        <span className="font-pixel-display text-[10px] text-right tabular-nums" style={{ color: net > 0 ? "#f4c430" : "#e85a7a" }}>
+          {signed(net)}
+        </span>
+      )}
       <span className="font-pixel-display text-[12px] w-12 text-right" style={{ color: tone }}>
         {r.folded ? "±0" : `${r.delta > 0 ? "+" : ""}${r.delta}`}
       </span>
@@ -36,12 +45,28 @@ function Row({ place, r, player, face }) {
   );
 }
 
+/** Who took a credit match's pot, in a line. */
+function potLine(result, players) {
+  if (result.void) return "THE MATCH WAS VOID: EVERY STAKE WENT BACK";
+  const names = result.payouts.map((p) => baseName(players[p.seat].name).toUpperCase());
+  if (!names.length) return `A BOT WON: THE ${fmt(result.pot)} POT IS LOST`;
+  if (names.length === 1) return `${names[0]} WINS ${fmt(result.payouts[0].amount)} CREDITS`;
+  return `${names.join(" & ")} SPLIT THE ${fmt(result.pot)} POT`;
+}
+
 /**
  * onNext: deals the next round (practice); without it the round closes by
  * itself (online). onRematch: absent for an online player who isn't the host.
+ * credit: at a credit match, { stake, result (null while it's saved), onPlayAgain, error }.
  */
-const RoundResults = ({ round, results, players, faceFor, matchWinner = null, onNext, onRematch, onExit }) => {
+const RoundResults = ({ round, results, players, faceFor, matchWinner = null, onNext, onRematch, onExit, credit = null }) => {
   const over = matchWinner !== null;
+  const result = over ? credit?.result : null;
+  // Each staked seat's net once the pot is paid: its payout less its stake.
+  const netOf = (seat) => {
+    if (!result || result.void || !result.staked.includes(seat)) return null;
+    return (result.payouts.find((p) => p.seat === seat)?.amount ?? 0) - credit.stake;
+  };
   // The match's own order (engine endRound): lowest score, then more piles
   // eaten this round, then seat, so a tie at match end puts the winner first.
   const ranked = [...results].sort((a, b) => a.score - b.score || b.eaten - a.eaten || a.seat - b.seat);
@@ -60,6 +85,11 @@ const RoundResults = ({ round, results, players, faceFor, matchWinner = null, on
           {over && (
             <div className="font-pixel-display text-[11px] text-parchment mt-3">{baseName(players[matchWinner].name).toUpperCase()} WINS THE MATCH!</div>
           )}
+          {over && credit && (
+            <div role="status" className={`font-pixel-display text-[11px] mt-3 ${result ? "text-glow-gold" : "text-bone/70 blink"}`}>
+              {result ? potLine(result, players) : "PAYING OUT THE POT..."}
+            </div>
+          )}
         </div>
         <div className="flex items-center justify-end gap-3 px-3 font-pixel-display text-[10px] text-bone/50">
           <span className="w-12 text-right">ROUND</span>
@@ -67,7 +97,7 @@ const RoundResults = ({ round, results, players, faceFor, matchWinner = null, on
         </div>
         <div className="flex flex-col gap-1.5 -mt-2">
           {ranked.map((r, i) => (
-            <Row key={r.seat} place={i + 1} r={r} player={players[r.seat]} face={faceFor(r.seat)} />
+            <Row key={r.seat} place={i + 1} r={r} player={players[r.seat]} face={faceFor(r.seat)} net={netOf(r.seat)} />
           ))}
         </div>
         <div className="flex justify-center items-center gap-3 mt-1">
@@ -80,7 +110,17 @@ const RoundResults = ({ round, results, players, faceFor, matchWinner = null, on
               >
                 EXIT
               </button>
-              {onRematch ? (
+              {credit ? (
+                <button
+                  onClick={credit.onPlayAgain}
+                  disabled={!result}
+                  autoFocus
+                  className="pixel-btn font-pixel-display text-[11px] px-6 py-3"
+                  style={{ backgroundColor: "#9bd14f", borderColor: "#6a9a30", color: "#1a3a0e" }}
+                >
+                  PLAY AGAIN · {fmt(credit.stake)}
+                </button>
+              ) : onRematch ? (
                 <button
                   onClick={onRematch}
                   autoFocus
@@ -107,6 +147,11 @@ const RoundResults = ({ round, results, players, faceFor, matchWinner = null, on
             <span className="font-pixel-display text-[10px] text-bone/70 blink">NEXT ROUND STARTING...</span>
           )}
         </div>
+        {over && credit?.error && (
+          <p role="alert" className="font-pixel-body text-[20px] text-center leading-tight" style={{ color: "#e85a7a" }}>
+            {credit.error}
+          </p>
+        )}
       </div>
     </div>
   );

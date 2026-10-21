@@ -7,6 +7,8 @@
 import React from "react";
 import Rulebook, { Callout, CardRow, Cards, CpuLevels, Hi, Kbd, Key, Section, Steps, Versus } from "../Rulebook";
 import { MAX_DRAW_DEPTH, MAX_FOLDS_IN_A_ROW, MIN_PLAYING, START_SCORE, TRICKS_PER_ROUND, ZERO_PILES_PENALTY } from "../../utils/muushig/engine";
+import { FORFEIT_ROUNDS, MIN_STAKED, STAKES } from "../../utils/stakes";
+import { fmt } from "../../utils/poker/tiers";
 
 const SECTIONS = [
   ["goal", "The goal"],
@@ -17,6 +19,7 @@ const SECTIONS = [
   ["tricks", "Playing tricks"],
   ["scoring", "Scoring"],
   ["cpus", "CPU levels"],
+  ["credits", "Playing for credits"],
   ["controls", "Controls"],
 ];
 
@@ -250,7 +253,7 @@ export default function MuushigRules({ onClose }) {
       <Section id="cpus" n={8} title="CPU levels">
         <p>
           CPUs come in three levels. Pick one for a practice table; online, the host picks each CPU seat's level, and empty seats
-          fill with <Key>MEDIUM</Key> CPUs when the game starts. Every level goes in with a trump nobody can beat, the face-up one
+          fill with <Key>MEDIUM</Key> CPUs when the game starts (<Key>HARD</Key> at a credit table). Every level goes in with a trump nobody can beat, the face-up one
           included when it deals.
         </p>
         <CpuLevels levels={LEVELS} />
@@ -260,7 +263,35 @@ export default function MuushigRules({ onClose }) {
         </Callout>
       </Section>
 
-      <Section id="controls" n={9} title="Controls">
+      <Section id="credits" n={9} title="Playing for credits">
+        <p>
+          On the lobby's <Key>CREDITS</Key> tab, signed-in players play for credits. Muushig is played for a stake: everyone at the
+          table puts in <Key>the same amount</Key>, and <Key>the match winner takes the pot</Key>.
+        </p>
+        <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
+          {[
+            ["STAKES", `LOW ${fmt(STAKES.LOW)} · MID ${fmt(STAKES.MID)} · HIGH ${fmt(STAKES.HIGH)}. The host picks one`],
+            ["SITTING", "Your stake leaves your balance when you sit. Get up before the deal and it comes back"],
+            ["STARTING", `At least ${MIN_STAKED} players with stakes in. Hard bots fill the empty seats`],
+            ["THE POT", "Every player's stake. Bots put nothing in"],
+            ["A TIE", "Level on score and on piles in the last round: the pot is split"],
+          ].map(([k, v]) => (
+            <React.Fragment key={k}>
+              <div className="font-pixel-display text-[10px] text-parchment flex items-center">{k}</div>
+              <div className="text-bone/80">{v}</div>
+            </React.Fragment>
+          ))}
+        </div>
+        <Callout tone="rule" title="A BOT WINS, THE POT IS LOST">
+          If a bot wins the match, nobody gets the pot: those credits are gone.
+        </Callout>
+        <Callout tone="rule" title="LEAVING MID-MATCH">
+          A Hard bot plays your seat and your stake stays in. Come back to the table and the seat is yours again, but once the
+          bot has finished <Key>{FORFEIT_ROUNDS} rounds</Key> for you, the seat is the bot's: if it wins, the pot is lost.
+        </Callout>
+      </Section>
+
+      <Section id="controls" n={10} title="Controls">
         <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
           {[
             [<>DEPTH − / +</>, "Drawing for the deal: how deep into the pile to take your card (or ← →)"],

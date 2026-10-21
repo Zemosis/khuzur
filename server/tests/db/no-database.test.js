@@ -38,37 +38,3 @@ describe("without a database", () => {
   });
 });
 
-describe("computeRatingDeltas (pure Elo)", () => {
-  const entry = (playerKey, rating, position) => ({ playerKey, rating, position });
-
-  it("nobody moves with fewer than two rated players", () => {
-    expect(persistence.computeRatingDeltas([]).size).toBe(0);
-    expect(persistence.computeRatingDeltas([entry("a", 1000, 1)]).size).toBe(0);
-  });
-
-  it("an even field: the winner gains what the loser drops", () => {
-    const d = persistence.computeRatingDeltas([entry("a", 1000, 1), entry("b", 1000, 2)]);
-    expect(d.get("a")).toBe(16);
-    expect(d.get("b")).toBe(-16);
-  });
-
-  it("four players: places 1..4 go from most gained to most lost, summing to ~0", () => {
-    const d = persistence.computeRatingDeltas(["a", "b", "c", "d"].map((k, i) => entry(k, 1000, i + 1)));
-    const v = ["a", "b", "c", "d"].map((k) => d.get(k));
-    expect(v[0]).toBeGreaterThan(v[1]);
-    expect(v[1]).toBeGreaterThan(v[2]);
-    expect(v[2]).toBeGreaterThan(v[3]);
-    expect(Math.abs(v.reduce((a, b) => a + b, 0))).toBeLessThanOrEqual(2);
-  });
-
-  it("beating a stronger player earns more than beating a weaker one", () => {
-    const upset = persistence.computeRatingDeltas([entry("a", 1000, 1), entry("b", 1400, 2)]).get("a");
-    const expected = persistence.computeRatingDeltas([entry("a", 1400, 1), entry("b", 1000, 2)]).get("a");
-    expect(upset).toBeGreaterThan(expected);
-  });
-
-  it("a tie on position splits the points", () => {
-    const d = persistence.computeRatingDeltas([entry("a", 1000, 1), entry("b", 1000, 1)]);
-    expect(d.get("a")).toBe(0);
-  });
-});

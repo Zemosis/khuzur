@@ -64,13 +64,30 @@ function roundsWonBy(gameType, rounds, seat) {
   }).length;
 }
 
+/** A credit match's stakes and who was paid: { tier, stake, pot, cpuTake, nets: { seat: net } }, or null. */
+async function creditMatchOf(sessionId) {
+  const {
+    rows: [h],
+  } = await pool.query("select tier, seats, cpu_take from credit_hands where session_id = $1 and game_type <> 'poker' limit 1", [sessionId]);
+  if (!h) return null;
+  const staked = h.seats.filter((x) => x.user_id);
+  const stake = staked[0]?.stack_before ?? 0;
+  return {
+    tier: h.tier,
+    stake,
+    pot: stake * staked.length,
+    cpuTake: Number(h.cpu_take),
+    nets: Object.fromEntries(staked.map((x) => [x.seat, x.net])),
+  };
+}
+
 /** The match page's data, or null when this viewer may not see it. */
 export async function matchDetail(id, viewerId = null) {
   if (!UUID.test(id)) return null;
   const {
     rows: [s],
   } = await pool.query(
-    `select id, game_type, status, solo, is_private, started_at, finished_at, round_count, seats, name, poker_tier
+    `select id, game_type, status, solo, is_private, started_at, finished_at, round_count, seats, name, credit_tier
        from game_sessions where id = $1`,
     [id],
   );
@@ -79,7 +96,7 @@ export async function matchDetail(id, viewerId = null) {
 
   const { rows: players } = await pool.query(
     `select gp.seat_index, gp.player_id, gp.guest_name, gp.guest_tag, gp.final_score, gp.final_position,
-            gp.left_early, gp.cpu_took_over, gp.rounds_won, gp.rating_before, gp.rating_after, gp.stats,
+            gp.left_early, gp.cpu_took_over, gp.rounds_won, gp.stats,
             p.username, p.tag
        from game_players gp
        left join profiles p on p.id = gp.player_id
@@ -121,7 +138,6 @@ export async function matchDetail(id, viewerId = null) {
     roundsWon: p.rounds_won,
     leftEarly: p.left_early,
     cpuTookOver: p.cpu_took_over,
-    ratingDelta: p.rating_after != null && p.rating_before != null ? p.rating_after - p.rating_before : null,
     stats: p.stats,
   }));
   // Seats a CPU finished in: one that sat there from the start, or took over
@@ -141,7 +157,6 @@ export async function matchDetail(id, viewerId = null) {
       roundsWon: roundsWonBy(s.game_type, rounds, seat),
       leftEarly: false,
       cpuTookOver: false,
-      ratingDelta: null,
       stats: null,
     });
   }
@@ -150,6 +165,7 @@ export async function matchDetail(id, viewerId = null) {
   return {
     id: s.id,
     gameType: s.game_type,
+    credit: await creditMatchOf(s.id),
     startedAt: s.started_at,
     finishedAt: s.finished_at,
     durationSeconds: s.started_at && s.finished_at ? Math.round((s.finished_at - s.started_at) / 1000) : null,
@@ -210,7 +226,7 @@ async function pokerTable(s, viewerId) {
     id: s.id,
     gameType: "poker",
     table: s.name,
-    tier: s.poker_tier,
+    tier: s.credit_tier,
     isPrivate: s.is_private,
     startedAt: s.started_at,
     finishedAt: s.finished_at,

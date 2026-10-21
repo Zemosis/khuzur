@@ -4,7 +4,8 @@
 // Same rows as Thirteen's scoreboard: place, avatar, name + status chip, and
 // the score on the right. The sub line shows this round's eaten tricks and
 // what they will do to the score (-1 per trick, +5 for none). The bar under
-// the score fills as a player closes in on 0.
+// the score fills as a player closes in on 0. At a credit match a seat a bot
+// is covering shows how many rounds its player has left to come back.
 
 import React from "react";
 import { PixelAvatar } from "../PixelCard";
@@ -15,7 +16,7 @@ const baseName = (name = "") => name.split(" #")[0];
 function StatusChip({ label, bg, fg = "#1a1024", blink = false }) {
   return (
     <span
-      className={`font-pixel-display text-[10px] leading-none px-1.5 py-1 shrink-0 ${blink ? "blink" : ""}`}
+      className={`font-pixel-display text-[10px] leading-none px-1.5 py-1 shrink-0 whitespace-nowrap ${blink ? "blink" : ""}`}
       style={{ backgroundColor: bg, color: fg }}
     >
       {label}
@@ -26,7 +27,8 @@ function StatusChip({ label, bg, fg = "#1a1024", blink = false }) {
 /** Score change this round: -1 per eaten trick, +5 for none, 0 when folded. */
 const roundDelta = (p) => (p.folded ? 0 : p.eaten > 0 ? -p.eaten : 5);
 
-const MuushigScoreBoard = ({ players = [], currentPlayerIndex = -1, dealerIndex = -1, startScore = 15, myIndex = -1, faceFor }) => {
+/** covered: a credit match's seats ({ away, roundsLeft, forfeited } or null per seat). */
+const MuushigScoreBoard = ({ players = [], currentPlayerIndex = -1, dealerIndex = -1, startScore = 15, myIndex = -1, faceFor, covered = null }) => {
   const ranked = players
     .map((p, i) => ({ ...p, originalIndex: i }))
     // Same order as the match result: lowest score, then more piles eaten this round.
@@ -80,6 +82,15 @@ const MuushigScoreBoard = ({ players = [], currentPlayerIndex = -1, dealerIndex 
                     <StatusChip label="FOLD" bg="#463a78" fg="#ead8b1" />
                   ) : isActive ? (
                     <StatusChip label="TURN" bg="#f4c430" blink />
+                  ) : null}
+                  {covered?.[index]?.forfeited ? (
+                    <span title="Away too long: this seat is a bot's now">
+                      <StatusChip label="FORFEITED" bg="#7a1530" fg="#ead8b1" />
+                    </span>
+                  ) : covered?.[index]?.away ? (
+                    <span title={`A bot is covering. ${covered[index].roundsLeft} round${covered[index].roundsLeft === 1 ? "" : "s"} left to come back`}>
+                      <StatusChip label={`AWAY ${covered[index].roundsLeft}`} bg="#c89820" />
+                    </span>
                   ) : null}
                 </div>
                 <div className="font-pixel-body text-[18px] leading-none mt-1 text-bone/70 whitespace-nowrap">

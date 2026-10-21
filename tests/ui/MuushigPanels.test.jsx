@@ -9,7 +9,7 @@ import RoundResults from "../../src/components/muushig/RoundResults";
 import MuushigScoreBoard from "../../src/components/muushig/MuushigScoreBoard";
 import { MAX_DRAW_DEPTH, MAX_FOLDS_IN_A_ROW, MIN_PLAYING, START_SCORE, ZERO_PILES_PENALTY } from "../../src/utils/muushig/engine";
 
-const SECTIONS = ["The goal", "Cards", "Dealer, deal, trump", "Go in or fold", "Swapping cards", "Playing tricks", "Scoring", "CPU levels", "Controls"];
+const SECTIONS = ["The goal", "Cards", "Dealer, deal, trump", "Go in or fold", "Swapping cards", "Playing tricks", "Scoring", "CPU levels", "Playing for credits", "Controls"];
 const NAMES = ["You", "Bot Saturn", "Bot Venus", "Bot Mars", "Bot Jupiter"];
 const players = (over = []) => NAMES.map((name, id) => ({ id, name, score: 15, eaten: 0, ...over[id] }));
 const face = () => ({ variant: 1, customAvatarData: null });

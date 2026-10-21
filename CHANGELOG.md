@@ -4,6 +4,23 @@ Every version of Khuzur Card Hall, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
+## 1.3.0 — 21 October 2026
+
+### Muushig and Thirteen for credits
+- Thirteen's and Muushig's lobbies have a **CREDITS** tab. Both are played for a stake: everyone at the table puts in the same amount, and **the match winner takes the pot**.
+- Three stakes: **LOW 100**, **MID 500** and **HIGH 2,000**. The host picks one. Your stake leaves your balance when you sit, and comes back if you get up before the deal.
+- Start with 2 or more players.
+  - **Thirteen** is for people only: 2 to 4 players, and empty seats stay empty.
+  - **Muushig** always seats 5, so **Hard bots** fill the empty seats. Bots put nothing in, and **if a bot wins, the pot is lost**.
+- Leave mid-match and a Hard bot plays your seat. Come back within **2 rounds** (use the table code, or **RETURN** on the CREDITS tab) and the seat is yours again. Stay away longer and the seat is the bot's.
+- When the match ends, **PLAY AGAIN** stakes you for the next one.
+- Thirteen and Muushig wins and losses show on the leaderboard's breakdown, and a credit match's page shows what it was played for.
+- Both rulebooks have a new **Playing for credits** section.
+
+### Profiles and match pages
+- Your Thirteen, Muushig and Overall stats have an **All · Free · Credits** switch. Credits shows your credit matches: credits won or lost, pots won and your biggest pot. Credit matches in **Recent matches** show what you won or lost.
+- **No more rating.** Credits are the ranked play, so the hidden rating is gone and match pages no longer show a rating number next to each player. A credit match's page shows each player's credits won or lost there instead.
+
 ## 1.2.2 — 20 October 2026
 
 - **Rulebooks:** Muushig and Poker now have a **CPU levels** section, like Thirteen: who picks the levels, how Easy, Medium and Hard each play, and what a CPU can and can't see.

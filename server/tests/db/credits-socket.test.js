@@ -211,8 +211,8 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables over sockets (Postgres)", () 
     expect(await balance(bob)).toBe(500 + rows[0].amount);
     a.emit("leave_lobby", { lobbyId });
     await until(async () => !(await seatRow(ann)));
-    const session = await until(async () => (await m.pool.query("select status, poker_tier from game_sessions where lobby_code = $1 and status = 'finished'", [lobbyId])).rows[0]);
-    expect(session).toEqual({ status: "finished", poker_tier: "LOW" });
+    const session = await until(async () => (await m.pool.query("select status, credit_tier from game_sessions where lobby_code = $1 and status = 'finished'", [lobbyId])).rows[0]);
+    expect(session).toEqual({ status: "finished", credit_tier: "LOW" });
     const { rows: players } = await m.pool.query("select player_id from game_players gp join game_sessions gs on gs.id = gp.session_id where gs.lobby_code = $1", [lobbyId]);
     expect(players.map((p) => p.player_id).sort()).toEqual([ann, bob].sort());
     expect((await economy()).ok).toBe(true);

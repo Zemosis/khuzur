@@ -12,7 +12,7 @@ const POKER = {
   route: "/game-poker",
   defaultTableName: "High Rollers",
   accent: { main: "#9bd14f", deep: "#6a9a30" },
-  credits: true,
+  credits: { kind: "buyIn" },
   events: {
     list: "get_public_lobbies",
     listUpdate: "public_lobbies_update",

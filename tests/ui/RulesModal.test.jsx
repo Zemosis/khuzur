@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import RulesModal from "../../src/components/thirteen/RulesModal";
 
-const SECTIONS = ["The goal", "Card order", "Playing a round", "Combinations", "5-card hands", "Breaking ties", "Scoring", "CPU levels", "Controls"];
+const SECTIONS = ["The goal", "Card order", "Playing a round", "Combinations", "5-card hands", "Breaking ties", "Scoring", "CPU levels", "Playing for credits", "Controls"];
 
 describe("RulesModal", () => {
   it("is a labelled dialog with every section in the nav and the body", () => {

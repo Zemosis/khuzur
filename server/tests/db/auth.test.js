@@ -22,7 +22,7 @@ describe.skipIf(!TEST_DATABASE_URL)("accounts API (Postgres)", () => {
       const res = await signup();
       expect(res.status).toBe(201);
       expect(res.body.user.email).toBe("player@test.dev");
-      expect(res.body.profile).toMatchObject({ coins: 0, level: 1, rating: 1000, avatar: "1" });
+      expect(res.body.profile).toMatchObject({ coins: 0, level: 1, avatar: "1" });
       expect(m.verifyToken(res.body.token)).toEqual({ id: res.body.user.id, email: "player@test.dev" });
     });
 
@@ -51,7 +51,7 @@ describe.skipIf(!TEST_DATABASE_URL)("accounts API (Postgres)", () => {
       const res = await request(app).post("/api/auth/login").send({ email: "LOGIN@test.dev", password: "hunter22" });
       expect(res.status).toBe(200);
       expect(m.verifyToken(res.body.token)?.email).toBe("login@test.dev");
-      expect(res.body.profile.rating).toBe(1000);
+      expect(res.body.profile).not.toHaveProperty("rating");
     });
 
     it.each([
@@ -97,9 +97,9 @@ describe.skipIf(!TEST_DATABASE_URL)("accounts API (Postgres)", () => {
       const res = await request(app)
         .patch("/api/auth/profile")
         .set(bearer(token))
-        .send({ username: "ZEMO", tag: "AB12", avatar: "3", coins: 999999, rating: 3000 });
+        .send({ username: "ZEMO", tag: "AB12", avatar: "3", coins: 999999 });
       expect(res.status).toBe(200);
-      expect(res.body.profile).toMatchObject({ username: "ZEMO", tag: "AB12", avatar: "3", coins: 0, rating: 1000 });
+      expect(res.body.profile).toMatchObject({ username: "ZEMO", tag: "AB12", avatar: "3", coins: 0 });
     });
 
     it("PATCH /profile with nothing editable returns the profile unchanged", async () => {

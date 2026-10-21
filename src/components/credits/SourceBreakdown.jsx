@@ -18,6 +18,8 @@ const LOSS = "#e15474";
 const SOURCES = [
   ["claimed", "Daily claims"],
   ["poker", "Poker"],
+  ["thirteen", "Thirteen"],
+  ["muushig", "Muushig"],
   ["admin", "Admin"],
 ];
 

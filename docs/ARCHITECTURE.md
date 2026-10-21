@@ -196,8 +196,7 @@ without a verified email is refused.
 and Muushig practice), so the browser reports each finished one to `POST /matches`
 (`src/hooks/useSoloMatchReport.js`). `server/solo.js` checks the report and
 places the player from the final scores itself; the match is saved with
-`game_sessions.solo = true` and counts for stats only — no coins, exp or
-rating. Reports are de-duplicated per player and match id, and limited to a
+`game_sessions.solo = true` and counts for stats only — no coins or exp. Reports are de-duplicated per player and match id, and limited to a
 few a minute.
 
 The browser never talks to Postgres. Every read and write goes through the
@@ -462,21 +461,16 @@ where someone rage-quit and a CPU finished the hand is indistinguishable from a
 loss they played out.
 
 Rewards by final placement: 100/50/25/10 coins, 60/35/20/10 exp;
-`level = exp/100 + 1`. Rewards and rating apply **only** to matches that
+`level = exp/100 + 1`. Rewards apply **only** to matches that
 actually finished — an abandoned match records what happened but yields no
 result.
 
-### Rating
+### No rating
 
-`profiles.rating` (seeded at 1000) plus `rating_before` / `rating_after` on each
-`game_players` row. Elo is path-dependent: each delta depends on the ratings *at
-that moment*, so a rating history cannot be backfilled from final results. The
-snapshot is taken now even though nothing displays it yet.
-
-The formula is pairwise Elo across the rated field, averaged (`K = 32`) — the
-standard extension of two-player Elo to a placement result. **Only signed-in
-players are rated**, so rating cannot be farmed off CPUs or guests; with fewer
-than two rated players, nobody moves.
+There is no Elo or other rating: **credits are the ranked play** (the credits
+leaderboard). An Elo rating was kept until `013_remove_elo.sql` dropped
+`profiles.rating`, `game_players.rating_before` / `rating_after` and the views'
+rating columns.
 
 ### `game_rounds`
 
@@ -512,7 +506,7 @@ Rewards are Thirteen's table; 5th place gets 4th's.
 `final_score` = net chips and `stats` = the hand tally (`hands_played`,
 `hands_won`, `net`, `biggest_pot`, `vpip_hands`, `showdowns`,
 `showdowns_won`), built up hand by hand in the roster (`recordHand`). There
-are no places, coins, exp or rating. `008_poker_stats.sql` keeps poker out of
+are no places, coins or exp. `008_poker_stats.sql` keeps poker out of
 `player_match_history` and adds `player_poker_stats`.
 
 ### Deriving stats
@@ -538,7 +532,7 @@ NULL rather than 0 for someone who has never played, because "0%" and "no data"
 are different facts.
 
 Only the hot-path set the main menu reads (`coins`, `exp`, `level`, `wins`,
-`games_played`, `rating`) is denormalised onto `profiles`, and that is a cache.
+`games_played`) is denormalised onto `profiles`, and that is a cache.
 Do not add a `losses` column: a counter that can drift from the rows it
 summarises is worse than a join.
 
@@ -612,7 +606,7 @@ Google from then on (until password reset exists).
 
 **Column-level anti-tamper.** `PATCH /api/auth/profile` writes only the
 whitelisted identity fields (`username`, `tag`, `avatar`, `custom_avatar`,
-`custom_colors`). `coins`, `exp`, `level`, `wins`, `games_played` and `rating`
+`custom_colors`). `coins`, `exp`, `level`, `wins` and `games_played`
 are written only by `persistence.js` when a match finishes, inside one
 transaction that locks the affected profile rows.
 

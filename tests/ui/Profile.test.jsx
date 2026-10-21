@@ -32,6 +32,7 @@ const view = (over = {}) => ({
   placements: [],
   rounds: { won: 0, played: 0 },
   time: { totalSeconds: 0, avgSeconds: null, lastPlayedAt: null },
+  credits: { games: 0, net: 0, potsWon: 0, biggestPot: 0 },
   recent: [],
   ...over,
 });
@@ -125,6 +126,34 @@ const section = (title) => screen.getByRole("heading", { name: title }).closest(
 beforeEach(() => api.mockReset());
 
 describe("Profile stats", () => {
+  it("the stakes switch fetches free or credit matches, and credit ones show what they came to", async () => {
+    const creditView = view({
+      games: 2,
+      wins: 1,
+      losses: 1,
+      credits: { games: 2, net: 500, potsWon: 1, biggestPot: 1500 },
+      recent: [{ ...match("thirteen", 1, 2, true, 1), solo: false, tier: "MID", net: 1000 }],
+    });
+    api.mockImplementation(async (path, opts) => {
+      if (opts?.base === "/api/credits") return { balance: 12340, onTable: 0, rank: 57 };
+      return path === "/stats?stakes=credits" ? { ...played, stakes: "credits", overall: creditView, thirteen: creditView } : { ...played, stakes: "all" };
+    });
+    render(
+      <MemoryRouter>
+        <Profile />
+      </MemoryRouter>,
+    );
+    const stakes = await screen.findByRole("group", { name: "Stakes" });
+    expect(api).toHaveBeenCalledWith("/stats?stakes=all");
+    expect(screen.queryByText("Pots won")).toBeNull(); // no credit matches among these
+    await userEvent.click(within(stakes).getByRole("button", { name: "Credits" }));
+    expect(await screen.findByText("Pots won")).toBeInTheDocument();
+    expect(api).toHaveBeenCalledWith("/stats?stakes=credits");
+    expect(tile("Credits")).toHaveTextContent("+500");
+    expect(tile("Biggest pot")).toHaveTextContent("1,500");
+    expect(screen.getByText("+1000 CR")).toBeInTheDocument();
+  });
+
   it("shows every stat at zero before any match, and no rating anywhere", async () => {
     await renderProfile(empty);
     expect(tile("Games")).toHaveTextContent("0");

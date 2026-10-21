@@ -119,6 +119,21 @@ describe.skipIf(!TEST_DATABASE_URL)("match page (Postgres)", () => {
     expect(res.body.rounds[1].results[4]).toMatchObject({ seat: 4, folded: true, scoreAfter: 20 });
   });
 
+  it("a credit match says what it was played for and each staked seat's net", async () => {
+    const id = await muushigMatch();
+    expect((await get(id)).body.credit).toBeNull();
+    // The CPU in seat 3 won: alice's 100 is lost with the pot.
+    await m.pool.query("insert into credit_accounts (user_id, balance) values ($1, 900)", [alice.id]);
+    await m.pool.query(
+      `insert into credit_hands (table_id, session_id, tier, hand_number, seats, game_type, cpu_take)
+       values ('00000000-0000-4000-8000-000000000009', $1, 'LOW', 1, $2, 'muushig', 100)`,
+      [id, JSON.stringify([{ seat: 0, user_id: alice.id, stack_before: 100, net: -100 }, { seat: 3, user_id: null, cpu: true }])],
+    );
+    const { body } = await get(id);
+    expect(body.credit).toEqual({ tier: "LOW", stake: 100, pot: 100, cpuTake: 100, nets: { 0: -100 } });
+    expect(JSON.stringify(body)).not.toContain(alice.id);
+  });
+
   it("never sends user ids, player keys or emails", async () => {
     const id = await muushigMatch();
     const text = JSON.stringify((await get(id, alice)).body);
@@ -214,7 +229,7 @@ describe.skipIf(!TEST_DATABASE_URL)("match page (Postgres)", () => {
       maxPlayers: 6,
       playerCount: 2,
       startedAt: new Date(Date.now() - 600_000),
-      pokerTier: tier,
+      creditTier: tier,
     });
     const log = [
       { n: 1, net: 40, won: 60, hole: ["A♠", "A♦"], board: ["2♣", "7♦", "9♥", "J♠", "3♣"], folded: null, showdown: true, rank: "PAIR", shown: "Pair of aces", winners: [{ name: "ALICE #0001", hand: "Pair of aces" }] },

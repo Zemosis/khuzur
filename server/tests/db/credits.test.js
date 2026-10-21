@@ -225,7 +225,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit accounts (Postgres)", () => {
     it("is OK after real moves and catches a balance edited by hand", async () => {
       const ann = await player("ANN");
       await sit(ann, T1, "LOW", 500);
-      expect(await C.economyCheck()).toEqual({ balances: 500, atTables: 500, granted: 1000, claimed: 0, removed: 0, ok: true });
+      expect(await C.economyCheck()).toEqual({ balances: 500, atTables: 500, granted: 1000, claimed: 0, removed: 0, wonByBots: 0, ok: true });
       await m.pool.query("update credit_accounts set balance = balance + 1");
       expect((await C.economyCheck()).ok).toBe(false);
     });

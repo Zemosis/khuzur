@@ -44,14 +44,16 @@ export class ThirteenGame {
    * @param {Object} opts
    * @param {Array} opts.seats - 2–4 entries of { type: "HUMAN"|"AI", name, socketId?, avatar?, level? }
    * @param {String} opts.aiDifficulty
+   * @param {String} opts.level - the level of a CPU taking over a player's seat
    * @param {Function} opts.onState - called after every state change
    * @param {Function} opts.onRoundEnd - called once per completed round
    * @param {Function} opts.onGameOver - called once per finished match
    * @param {Object} opts.delays - override { aiTurn, roundEnd, deal } in ms (tests)
    * @param {Function} opts.rng - shuffles every deal; secure by default, seeded in tests
    */
-  constructor({ seats, aiDifficulty = "MEDIUM", onState, onRoundEnd, onGameOver, delays, rng = secureRandom }) {
+  constructor({ seats, aiDifficulty = "MEDIUM", level = "MEDIUM", onState, onRoundEnd, onGameOver, delays, rng = secureRandom }) {
     this.delays = { ...DEFAULT_DELAYS, ...delays };
+    this.level = level;
     this.rng = rng;
     this.onState = onState;
     this.onRoundEnd = onRoundEnd;
@@ -170,7 +172,7 @@ export class ThirteenGame {
     // A CPU taking over gets a stock face (avatar null).
     s.players = s.players.map((p, i) =>
       i === seatIndex
-        ? { ...p, type, name, socketId: socketId || null, avatar: avatar || null, level: type === "AI" ? "MEDIUM" : null }
+        ? { ...p, type, name, socketId: socketId || null, avatar: avatar || null, level: type === "AI" ? this.level : null }
         : p,
     );
     this.broadcast();

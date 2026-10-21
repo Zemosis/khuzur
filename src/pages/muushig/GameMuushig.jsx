@@ -44,6 +44,9 @@ import PixelIcon from "../../components/PixelIcon";
 import { BubblesToggle, MotionToggle } from "../../components/SettingsModal";
 import { TableHeader, TableSidebar, ConnectionSignal } from "../../components/TableChrome";
 import { useUnread } from "../../hooks/useUnread";
+import Modal from "../../components/credits/Modal";
+import { fmt } from "../../utils/poker/tiers";
+import { FORFEIT_ROUNDS } from "../../utils/stakes";
 import {
   MAX_FOLDS_IN_A_ROW,
   PHASES,
@@ -298,9 +301,21 @@ function OnlineMuushig({ lobbyId, playerName }) {
     const onError = (msg) => {
       if (!firstRef.current) setFatal(String(msg || "Lobby not found"));
     };
+    const onTable = (t) => {
+      setTable(t);
+      // A credit match is over and you staked for the next: back to the waiting table.
+      if (firstRef.current && t.mySeat != null) {
+        firstRef.current = null;
+        feed.current = [];
+        setFirst(null);
+      }
+    };
+    // The next credit match started without you (you didn't stake for it).
+    const onLeft = () => navigate("/lobby-muushig", { state: { tab: "credits" } });
     socket.on("connect", join);
     socket.on("muushig_state", onState);
-    socket.on("table_update", setTable);
+    socket.on("table_update", onTable);
+    socket.on("table_left", onLeft);
     socket.on("receive_chat", onChat);
     socket.on("move_rejected", onRejected);
     socket.on("error_message", onError);
@@ -310,7 +325,8 @@ function OnlineMuushig({ lobbyId, playerName }) {
     return () => {
       socket.off("connect", join);
       socket.off("muushig_state", onState);
-      socket.off("table_update", setTable);
+      socket.off("table_update", onTable);
+      socket.off("table_left", onLeft);
       socket.off("receive_chat", onChat);
       socket.off("move_rejected", onRejected);
       socket.off("error_message", onError);
@@ -324,15 +340,16 @@ function OnlineMuushig({ lobbyId, playerName }) {
 
   const exit = () => {
     socket.emit("leave_lobby", { lobbyId });
-    navigate("/");
+    navigate(table?.credit ? "/lobby-muushig" : "/", table?.credit ? { state: { tab: "credits" } } : undefined);
   };
+  const restake = () => socket.emit("credit_restake", { lobbyId });
   const sendChat = (text) => text.trim() && socket.emit("send_chat", { lobbyId, message: text.trim() });
 
   if (first) {
     return (
       <MuushigTable
         initial={first}
-        online={{ lobbyId, feed, feedVersion, rejection, onExit: exit, onSendChat: sendChat, chatLimit }}
+        online={{ lobbyId, feed, feedVersion, rejection, onExit: exit, onSendChat: sendChat, onRestake: restake, chatLimit }}
         messages={messages}
         setMessages={setMessages}
       />
@@ -354,6 +371,7 @@ function OnlineMuushig({ lobbyId, playerName }) {
         fillsEmptySeats
         chatLimit={chatLimit}
         onStart={() => socket.emit("start_game", { lobbyId })}
+        onRestake={restake}
         errorMessage={rejection?.text}
         myFace={{ variant: identity?.avatar ?? 1, customAvatarData: identity?.customAvatar }}
       />
@@ -634,7 +652,18 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
         setMessages([]);
         setGame((s) => rematch(s));
       };
-  const onExit = online ? online.onExit : () => navigate("/");
+  // A credit match: its stake, pot and covered seats (online only). Leaving
+  // mid-match asks first: a bot plays your seat, and your stake is at risk.
+  const credit = online ? (game.credit ?? null) : null;
+  const [confirmExit, setConfirmExit] = useState(false);
+  const [playAgainAt, setPlayAgainAt] = useState(null); // the rejection id seen when PLAY AGAIN was pressed
+  const staking = credit && game.phase !== PHASES.MATCH_OVER && credit.seats?.[mySeat]?.staked;
+  const onExit = online ? (staking ? () => setConfirmExit(true) : online.onExit) : () => navigate("/");
+  const onPlayAgain = () => {
+    setPlayAgainAt(online.rejection?.id ?? 0);
+    online.onRestake();
+  };
+  const playAgainError = playAgainAt != null && online?.rejection && online.rejection.id !== playAgainAt ? online.rejection.text : "";
 
   const handleSendMessage = (text) => {
     if (!text.trim()) return;
@@ -905,6 +934,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
               title="An online table"
             >
               ONLINE · #{online.lobbyId.replace(/^PUB-/, "")}
+              {credit && <span className="ml-1.5" style={{ color: "#7a4a00" }}>· POT {fmt(credit.pot || credit.result?.pot || 0)}</span>}
             </span>
           ) : (
             <span
@@ -1120,6 +1150,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
             startScore={START_SCORE}
             myIndex={mySeat}
             faceFor={faceFor}
+            covered={credit?.seats}
           />
           <GameChat messages={messages} onSendMessage={handleSendMessage} avatarFor={avatarFor} colorFor={colorFor} {...online?.chatLimit} />
         </TableSidebar>
@@ -1153,7 +1184,33 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
           onNext={onNextRound}
           onRematch={onRematch}
           onExit={onExit}
+          credit={credit && { stake: credit.stake, result: credit.result, onPlayAgain, error: playAgainError }}
         />
+      )}
+
+      {confirmExit && (
+        <Modal title="Leave the match?" icon="close" deep="#a83a5a" onClose={() => setConfirmExit(false)}>
+          <p className="font-pixel-body text-[22px] text-bone leading-tight">
+            A Hard bot plays your seat while you're gone. Come back within {FORFEIT_ROUNDS} rounds or your {fmt(credit.stake)} is lost with the seat.
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              onClick={() => setConfirmExit(false)}
+              autoFocus
+              className="pixel-btn font-pixel-display text-[11px] py-3"
+              style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}
+            >
+              STAY
+            </button>
+            <button
+              onClick={online.onExit}
+              className="pixel-btn font-pixel-display text-[11px] py-3"
+              style={{ backgroundColor: "#7a1530", borderColor: "#3a0a18", color: "#ead8b1" }}
+            >
+              LEAVE
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

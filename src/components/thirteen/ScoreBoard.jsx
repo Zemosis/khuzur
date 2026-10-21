@@ -16,7 +16,7 @@ const baseName = (name = "") => name.split(" #")[0];
 function StatusChip({ label, bg, fg = "#1a1024", blink = false }) {
   return (
     <span
-      className={`font-pixel-display text-[10px] leading-none px-1.5 py-1 shrink-0 ${blink ? "blink" : ""}`}
+      className={`font-pixel-display text-[10px] leading-none px-1.5 py-1 shrink-0 whitespace-nowrap ${blink ? "blink" : ""}`}
       style={{ backgroundColor: bg, color: fg }}
     >
       {label}
@@ -24,7 +24,8 @@ function StatusChip({ label, bg, fg = "#1a1024", blink = false }) {
   );
 }
 
-const ScoreBoard = ({ players = [], currentPlayerIndex = 0, roundNumber = 1, matchWins = [0, 0, 0, 0], myIndex = -1, faceFor }) => {
+/** covered: a credit match's seats ({ away, roundsLeft, forfeited } or null per seat). */
+const ScoreBoard = ({ players = [], currentPlayerIndex = 0, roundNumber = 1, matchWins = [0, 0, 0, 0], myIndex = -1, faceFor, covered = null }) => {
   const maxScore = GAME_SETTINGS.ELIMINATION_SCORE;
 
   const ranked = players
@@ -80,6 +81,15 @@ const ScoreBoard = ({ players = [], currentPlayerIndex = 0, roundNumber = 1, mat
                     <StatusChip label="TURN" bg="#f4c430" blink />
                   ) : player.hasPassed ? (
                     <StatusChip label="PASS" bg="#463a78" fg="#ead8b1" />
+                  ) : null}
+                  {covered?.[index]?.forfeited ? (
+                    <span title="Away too long: this seat is a bot's now">
+                      <StatusChip label="FORFEITED" bg="#7a1530" fg="#ead8b1" />
+                    </span>
+                  ) : covered?.[index]?.away ? (
+                    <span title={`A bot is covering. ${covered[index].roundsLeft} round${covered[index].roundsLeft === 1 ? "" : "s"} left to come back`}>
+                      <StatusChip label={`AWAY ${covered[index].roundsLeft}`} bg="#c89820" />
+                    </span>
                   ) : null}
                 </div>
                 <div className="font-pixel-body text-[18px] leading-none mt-1 text-bone/70 whitespace-nowrap">

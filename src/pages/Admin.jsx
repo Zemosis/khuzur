@@ -42,6 +42,7 @@ function Economy({ check }) {
           ["Granted", check.granted],
           ["Claimed", check.claimed],
           ["Removed", check.removed],
+          ["Won by bots", check.wonByBots ?? 0],
         ].map(([label, n]) => (
           <div key={label} className={TEXT}>
             <div className="text-bone/70">{label}</div>
@@ -179,6 +180,7 @@ function Pair({ flag, onDone }) {
           </p>
         )}
         {pair?.hands.map((h) => {
+          if (GAME_NAMES[h.gameType]) return <StakeMatch key={h.id} match={h} />;
           const seats = [];
           for (const s of h.seats) seats[s.seat] = { name: s.name };
           return (
@@ -208,6 +210,36 @@ function Pair({ flag, onDone }) {
         })}
       </div>
     </Panel>
+  );
+}
+
+const GAME_NAMES = { muushig: "Muushig", thirteen: "Thirteen" };
+
+/** A credit match (Muushig, Thirteen) in a pair's history: the stake, who staked, and each one's score and net. */
+function StakeMatch({ match }) {
+  const staked = match.seats.filter((s) => s.user_id);
+  const stake = staked[0]?.stack_before ?? 0;
+  return (
+    <article className="p-3" style={{ backgroundColor: INK, border: "3px solid #1f1a3d" }}>
+      <div className="font-pixel-display text-[10px] text-bone/80">
+        {when(match.playedAt)} · {GAME_NAMES[match.gameType] ?? match.gameType} · {match.tier} {fmt(stake)}
+        {match.isPrivate ? " · private" : ""} · pot {fmt(stake * staked.length)}
+        {match.cpuTake > 0 ? ` · ${fmt(match.cpuTake)} to bots` : ""}
+      </div>
+      {staked.map((s) => (
+        <div key={s.seat} className={`${TEXT} flex gap-3`}>
+          <span className="min-w-[120px]">{s.name}</span>
+          <span>
+            score {s.score}
+            {s.forfeited ? " · forfeited" : ""}
+          </span>
+          <span className="ml-auto tabular-nums" style={{ color: s.net >= 0 ? "#9bd14f" : "#e85a7a" }}>
+            {s.net > 0 ? "+" : ""}
+            {fmt(s.net)}
+          </span>
+        </div>
+      ))}
+    </article>
   );
 }
 

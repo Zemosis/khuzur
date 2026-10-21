@@ -22,11 +22,12 @@ export async function lockAccount(client, userId) {
   return { ...a, balance: num(a.balance) };
 }
 
-export async function ledger(client, { userId, kind, amount, balanceAfter, tier = null, tableId = null, handId = null, note = null, actorId = null }) {
+/** gameType: the game of the table a movement is at (null for one that isn't at a table). */
+export async function ledger(client, { userId, kind, amount, balanceAfter, tier = null, tableId = null, handId = null, note = null, actorId = null, gameType = null }) {
   await client.query(
-    `insert into credit_ledger (user_id, kind, amount, balance_after, tier, table_id, hand_id, note, actor_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [userId, kind, amount, balanceAfter, tier, tableId, handId, note, actorId],
+    `insert into credit_ledger (user_id, kind, amount, balance_after, tier, table_id, hand_id, note, actor_id, game_type)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [userId, kind, amount, balanceAfter, tier, tableId, handId, note, actorId, gameType],
   );
 }
 
@@ -57,12 +58,12 @@ async function ratholeFor(client, userId, tier) {
 }
 
 /** A seat's credits back to the balance, the seat gone. */
-async function payOut(client, userId, tableId, { tier, amount, kind = "cash_out", handId = null }) {
+async function payOut(client, userId, tableId, { tier, amount, kind = "cash_out", handId = null, gameType = "poker" }) {
   const a = await lockAccount(client, userId);
   const balance = a.balance + amount;
   await setBalance(client, userId, balance);
   await client.query("delete from credit_seats where user_id = $1 and table_id = $2", [userId, tableId]);
-  await ledger(client, { userId, kind, amount, balanceAfter: balance, tier, tableId, handId });
+  await ledger(client, { userId, kind, amount, balanceAfter: balance, tier, tableId, handId, gameType });
   return balance;
 }
 
@@ -122,16 +123,23 @@ export function claim(userId, onTable = 0) {
   });
 }
 
+/** One credit table at a time, whatever the game. */
+async function refuseSecondTable(client, userId) {
+  const {
+    rows: [seated],
+  } = await client.query("select table_name, game_type from credit_seats where user_id = $1", [userId]);
+  if (!seated) return;
+  if (seated.game_type === "muushig") throw new CreditError(`Your stake is in the match at ${seated.table_name} until it ends`);
+  throw new CreditError(`You're already at table ${seated.table_name}`);
+}
+
 /** Sitting down: `amount` from the balance to a new seat at `tableId`. */
 export function buyIn(userId, { tableId, tableName, tier, amount }) {
   return withTransaction(async (client) => {
     const a = await lockAccount(client, userId);
     const whyNot = await whyCantPlay(client, userId, a);
     if (whyNot) throw new CreditError(whyNot);
-    const {
-      rows: [seated],
-    } = await client.query("select table_name from credit_seats where user_id = $1", [userId]);
-    if (seated) throw new CreditError(`You're already at table ${seated.table_name}`);
+    await refuseSecondTable(client, userId);
     if (!Number.isInteger(amount)) throw new CreditError("Pick an amount");
     const rathole = await ratholeFor(client, userId, tier);
     const range = buyInRange(tier, a.balance, rathole);
@@ -148,7 +156,7 @@ export function buyIn(userId, { tableId, tableName, tier, amount }) {
     const balance = a.balance - amount;
     await setBalance(client, userId, balance);
     await client.query("insert into credit_seats (user_id, table_id, table_name, tier, stack) values ($1, $2, $3, $4, $5)", [userId, tableId, tableName, tier, amount]);
-    await ledger(client, { userId, kind: "buy_in", amount: -amount, balanceAfter: balance, tier, tableId });
+    await ledger(client, { userId, kind: "buy_in", amount: -amount, balanceAfter: balance, tier, tableId, gameType: "poker" });
     return { balance };
   });
 }
@@ -168,7 +176,7 @@ export function topUp(userId, amount, { tier, tableId, onTable }) {
     if (!updated.rowCount) throw new CreditError("You're not at this table");
     const balance = a.balance - amount;
     await setBalance(client, userId, balance);
-    await ledger(client, { userId, kind: "top_up", amount: -amount, balanceAfter: balance, tier, tableId });
+    await ledger(client, { userId, kind: "top_up", amount: -amount, balanceAfter: balance, tier, tableId, gameType: "poker" });
     return { balance };
   });
 }
@@ -183,6 +191,92 @@ export function cashOut(userId, tableId) {
     const paid = num(seat.stack) + num(seat.pending);
     await payOut(client, userId, tableId, { tier: seat.tier, amount: paid });
     return { paid };
+  });
+}
+
+// ---- Credit matches: a fixed stake each, the pot to the winner ------------
+
+/**
+ * Sitting at a credit match: exactly the table's stake from the balance to a
+ * new seat. `amount` is the stake the player was shown; it must be `stake`.
+ */
+export function placeStake(userId, { tableId, tableName, tier, stake, amount = stake, gameType = "muushig" }) {
+  return withTransaction(async (client) => {
+    const a = await lockAccount(client, userId);
+    const whyNot = await whyCantPlay(client, userId, a);
+    if (whyNot) throw new CreditError(whyNot);
+    await refuseSecondTable(client, userId);
+    if (amount !== stake) throw new CreditError(`This table's stake is ${fmt(stake)}`);
+    if (stake > a.balance) throw new CreditError(`Your balance is ${fmt(a.balance)}; this table's stake is ${fmt(stake)}`);
+    const balance = a.balance - stake;
+    await setBalance(client, userId, balance);
+    await client.query("insert into credit_seats (user_id, table_id, table_name, tier, stack, game_type) values ($1, $2, $3, $4, $5, $6)", [
+      userId,
+      tableId,
+      tableName,
+      tier,
+      stake,
+      gameType,
+    ]);
+    await ledger(client, { userId, kind: "stake", amount: -stake, balanceAfter: balance, tier, tableId, gameType });
+    return { balance };
+  });
+}
+
+/** Standing up before the deal: the stake back to the balance. Safe to repeat. */
+export function returnStake(userId, tableId) {
+  return withTransaction(async (client) => {
+    const {
+      rows: [seat],
+    } = await client.query("select tier, stack, game_type from credit_seats where user_id = $1 and table_id = $2 for update", [userId, tableId]);
+    if (!seat) return { paid: 0 };
+    const paid = num(seat.stack);
+    await payOut(client, userId, tableId, { tier: seat.tier, amount: paid, kind: "stake_back", gameType: seat.game_type });
+    return { paid };
+  });
+}
+
+/**
+ * A finished credit match, in one transaction: its record, the pot to the
+ * winners and every stake at the table spent. seats: per seat { userId (null
+ * for a CPU's), forfeited, score, eaten }; payouts and cpuTake from
+ * settlement(). The database must hold exactly `stake` for each staked seat
+ * and nobody else, or nothing is written. Returns the record's id, or null if
+ * the match was settled already (a retry after a lost reply).
+ */
+export function settleMatch({ tableId, tier, isPrivate, sessionId, matchNumber, stake, seats, payouts, cpuTake, rounds = [], gameType = "muushig" }) {
+  return withTransaction(async (client) => {
+    const paid = new Map(payouts.map((p) => [p.userId, p.amount]));
+    const seatsJson = seats.flatMap((s, seat) =>
+      s.userId
+        ? [{ seat, user_id: s.userId, stack_before: stake, stack_after: paid.get(s.userId) ?? 0, net: (paid.get(s.userId) ?? 0) - stake, won: paid.get(s.userId) ?? 0, committed: stake, folded_street: null, score: s.score, eaten: s.eaten, forfeited: !!s.forfeited }]
+        : [{ seat, user_id: null, cpu: true, score: s.score, eaten: s.eaten }],
+    );
+    const inserted = await client.query(
+      `insert into credit_hands (table_id, session_id, tier, hand_number, is_private, seats, events, game_type, cpu_take)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       on conflict (table_id, hand_number) do nothing returning id`,
+      [tableId, sessionId, tier, matchNumber, !!isPrivate, JSON.stringify(seatsJson), JSON.stringify(rounds), gameType, cpuTake],
+    );
+    if (!inserted.rowCount) return null;
+    const handId = inserted.rows[0].id;
+
+    const stakers = seats.filter((s) => s.userId).map((s) => s.userId);
+    const { rows } = await client.query("select user_id, stack from credit_seats where table_id = $1 for update", [tableId]);
+    const saved = new Map(rows.map((r) => [r.user_id, num(r.stack)]));
+    if (saved.size !== stakers.length || stakers.some((id) => saved.get(id) !== stake)) {
+      throw new CreditMismatch(`stakes at table ${tableId} don't match the database: ${JSON.stringify([...saved])} vs ${stakers.length} × ${stake}`);
+    }
+    await client.query("delete from credit_seats where table_id = $1", [tableId]);
+    // Locked in a fixed order, so two settlements can't deadlock on shared players.
+    for (const p of [...payouts].sort((x, y) => (x.userId < y.userId ? -1 : 1))) {
+      const a = await lockAccount(client, p.userId);
+      const balance = a.balance + p.amount;
+      await setBalance(client, p.userId, balance);
+      await ledger(client, { userId: p.userId, kind: "pot", amount: p.amount, balanceAfter: balance, tier, tableId, handId, gameType });
+    }
+    await client.query("update credit_accounts set first_hand_at = coalesce(first_hand_at, now()) where user_id = any($1::uuid[])", [stakers]);
+    return handId;
   });
 }
 
@@ -245,11 +339,11 @@ export function saveHand({ tableId, tier, isPrivate, sessionId, summary, events,
  */
 export function releaseTable(tableId, kind = "cash_out") {
   return withTransaction(async (client) => {
-    const { rows } = await client.query("select user_id, table_name, tier, stack, pending from credit_seats where table_id = $1 order by user_id for update", [tableId]);
+    const { rows } = await client.query("select user_id, table_name, tier, stack, pending, game_type from credit_seats where table_id = $1 order by user_id for update", [tableId]);
     const paid = [];
     for (const r of rows) {
       const amount = num(r.stack) + num(r.pending);
-      await payOut(client, r.user_id, tableId, { tier: r.tier, amount, kind });
+      await payOut(client, r.user_id, tableId, { tier: r.tier, amount, kind, gameType: r.game_type });
       if (kind === "restart_return") {
         await client.query("update credit_accounts set restart_notice = $2 where user_id = $1", [r.user_id, JSON.stringify({ amount, tableName: r.table_name })]);
       }
@@ -262,10 +356,10 @@ export function releaseTable(tableId, kind = "cash_out") {
 /** At boot: no table survived, so every seat goes home, and each player is told once. Returns how many. */
 export function returnAllSeats() {
   return withTransaction(async (client) => {
-    const { rows } = await client.query("select user_id, table_id, table_name, tier, stack, pending from credit_seats order by user_id for update");
+    const { rows } = await client.query("select user_id, table_id, table_name, tier, stack, pending, game_type from credit_seats order by user_id for update");
     for (const r of rows) {
       const amount = num(r.stack) + num(r.pending);
-      await payOut(client, r.user_id, r.table_id, { tier: r.tier, amount, kind: "restart_return" });
+      await payOut(client, r.user_id, r.table_id, { tier: r.tier, amount, kind: "restart_return", gameType: r.game_type });
       await client.query("update credit_accounts set restart_notice = $2 where user_id = $1", [r.user_id, JSON.stringify({ amount, tableName: r.table_name })]);
     }
     return rows.length;

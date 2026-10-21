@@ -8,6 +8,11 @@
 // On a phone the other seats share a strip at the top, as at the game table;
 // on any small screen the chat slides out from the header and the table
 // scrolls if it has to.
+//
+// A credit match (table.credit) seats only players who staked: empty seats
+// are Hard bots nobody can change (Muushig) or stay empty (Thirteen), the
+// felt shows the pot, START needs MIN_STAKED players, and after a match those
+// who haven't staked again see PLAY AGAIN instead of a seat.
 
 import React, { useCallback, useState } from "react";
 import { PixelAvatar } from "../PixelCard";
@@ -20,6 +25,8 @@ import { useUnread } from "../../hooks/useUnread";
 import { useChatBubbles } from "../../hooks/useChatBubbles";
 import ChatBubble from "../ChatBubble";
 import { TableHeader, TableSidebar } from "../TableChrome";
+import { fmt } from "../../utils/poker/tiers";
+import { MIN_STAKED } from "../../utils/stakes";
 
 const SIDE_SEAT_W = 224;
 const LEVELS = ["EASY", "MEDIUM", "HARD"];
@@ -54,9 +61,21 @@ function bubbleAt(pos, small) {
   return small ? { side: "below", align: STRIP_ALIGN[pos] ?? "center" } : BUBBLE_AT[pos];
 }
 
-function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, face, small = false, bubble = null, bubblePlace }) {
+function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, face, small = false, bubble = null, bubblePlace, credit = null }) {
   const base = `relative flex flex-col items-center justify-center gap-2 py-3 text-center ${small ? "flex-1 min-w-0 px-1.5" : "px-3"}`;
   const size = small ? { maxWidth: 132, minHeight: 112 } : { width: 184, minHeight: 124 };
+
+  if (!seat && credit?.botsFill) {
+    return (
+      <div className={base} style={{ ...size, border: "4px dashed #2a234d", backgroundColor: "rgba(20,16,42,0.45)" }}>
+        <PixelIcon name="user" size={24} color="#2a234d" />
+        <div className="font-pixel-display text-[10px]" style={{ color: LEVEL_COLOR.HARD }}>
+          HARD BOT
+        </div>
+        <div className="font-pixel-body text-[16px] text-bone/50 leading-none">unless a player sits</div>
+      </div>
+    );
+  }
 
   if (!seat) {
     return (
@@ -66,7 +85,7 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
       >
         <PixelIcon name="user" size={24} color="#2a234d" />
         <div className="font-pixel-display text-[10px] text-bone/40">EMPTY SEAT</div>
-        {isHost && (
+        {isHost && !credit && (
           <div className="flex flex-wrap justify-center gap-1">
             {LEVELS.map((level) => (
               <button
@@ -139,6 +158,9 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
             {level}
           </span>
         ))}
+      {!isCpu && credit && (
+        <span className="font-pixel-display text-[8px] text-glow-gold">STAKED {fmt(credit.stake)}</span>
+      )}
       {!isCpu && !seat.connected && (
         <div className="font-pixel-body text-[16px] text-rose blink">reconnecting…</div>
       )}
@@ -146,7 +168,19 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
   );
 }
 
-function InvitePanel({ table, seatedCount, hostName, onStart, errorMessage, fillsEmptySeats }) {
+/** A credit match's pot: what's in, and the rule. */
+function PotBanner({ credit }) {
+  return (
+    <div className="flex flex-col items-center gap-1 px-4 py-2" style={{ backgroundColor: "#2a1f08", boxShadow: "0 0 0 4px #c89820" }}>
+      <div className="font-pixel-display text-[16px] text-glow-gold tabular-nums">POT {fmt(credit.pot)}</div>
+      <div className="font-pixel-body text-[18px] text-bone leading-none">
+        {credit.staked} × {fmt(credit.stake)} · {credit.tier} · winner takes all
+      </div>
+    </div>
+  );
+}
+
+function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMessage, fillsEmptySeats }) {
   const [copied, setCopied] = useState(null);
   // One START per press: a double-click would be rejected after the game has
   // already begun. A rejection (e.g. no longer host) re-arms the button.
@@ -167,16 +201,22 @@ function InvitePanel({ table, seatedCount, hostName, onStart, errorMessage, fill
   };
   const link = `${window.location.origin}/join/${table.code}`;
   // Muushig fills empty seats at START; Thirteen plays with whoever is seated.
-  const canStart = fillsEmptySeats || seatedCount >= 2;
+  // A credit match needs MIN_STAKED players with stakes in.
+  const credit = table.credit;
+  const canStart = credit ? credit.staked >= MIN_STAKED : fillsEmptySeats || seatedCount >= 2;
+  const [restaking, setRestaking] = useState(false);
+  if (errorMessage !== seenError && restaking) setRestaking(false);
 
   return (
     <div
       className="flex flex-col items-center gap-4 p-4 sm:p-6 text-center"
       style={{ backgroundColor: "rgba(10,7,18,0.8)", border: "4px solid #0a0712", boxShadow: "0 0 0 4px #463a78", maxWidth: 520 }}
     >
+      {credit && <PotBanner credit={credit} />}
       <div className="font-pixel-display text-[14px] text-glow-gold">WAITING FOR PLAYERS</div>
       <div className="font-pixel-body text-[22px] text-bone/80">
         {seatedCount}/{table.seats.length} seated
+        {credit?.deciding > 0 && <span className="text-bone/60"> · {credit.deciding} deciding</span>}
       </div>
 
       <div className="flex flex-col items-center gap-1">
@@ -207,7 +247,22 @@ function InvitePanel({ table, seatedCount, hostName, onStart, errorMessage, fill
         {copied === "code" ? "Code copied!" : copied === "link" ? "Invite link copied!" : ""}
       </div>
 
-      {table.isHost ? (
+      {credit && table.mySeat == null ? (
+        <>
+          <button
+            onClick={() => {
+              setRestaking(true);
+              onRestake();
+            }}
+            disabled={restaking}
+            className="pixel-btn font-pixel-display text-[14px] px-8 py-4 flex items-center gap-3"
+            style={{ backgroundColor: "#9bd14f", borderColor: "#6a9a30", color: "#1a1024" }}
+          >
+            <PixelIcon name="play" size={14} /> PLAY AGAIN · {fmt(credit.stake)}
+          </button>
+          <div className="font-pixel-body text-[18px] text-bone/60">Stake {fmt(credit.stake)} to take a seat for the next match, or EXIT.</div>
+        </>
+      ) : table.isHost ? (
         <>
           <button
             onClick={() => {
@@ -221,13 +276,18 @@ function InvitePanel({ table, seatedCount, hostName, onStart, errorMessage, fill
             <PixelIcon name="play" size={14} /> START GAME
           </button>
           <div className="font-pixel-body text-[18px] text-bone/60">
-            {fillsEmptySeats
-              ? "Empty seats are filled with MEDIUM CPUs when you start."
-              : "Start with 2 to 4 players. Empty seats stay empty."}
+            {credit
+              ? `Needs ${MIN_STAKED} players with stakes in. ${credit.botsFill ? "Empty seats are Hard bots." : "Empty seats stay empty."}`
+              : fillsEmptySeats
+                ? "Empty seats are filled with MEDIUM CPUs when you start."
+                : "Start with 2 to 4 players. Empty seats stay empty."}
           </div>
         </>
       ) : (
         <div className="font-pixel-display text-[10px] text-bone/70 blink">Waiting for {hostName} to start</div>
+      )}
+      {credit && table.mySeat != null && (
+        <div className="font-pixel-body text-[18px] text-bone/60">EXIT before the deal and your {fmt(credit.stake)} comes back.</div>
       )}
     </div>
   );
@@ -242,6 +302,7 @@ export default function WaitingTable({
   onRemoveCpu,
   onSetCpuLevel,
   onStart,
+  onRestake, // PLAY AGAIN at a credit match
   errorMessage,
   myFace,
   fillsEmptySeats = false,
@@ -268,8 +329,9 @@ export default function WaitingTable({
       onAddCpu={onAddCpu}
       onRemoveCpu={onRemoveCpu}
       onSetCpuLevel={onSetCpuLevel}
-      face={pos === "bottom" ? myFace : undefined}
+      face={at[pos].index === table.mySeat ? myFace : undefined}
       small={small}
+      credit={table.credit}
       bubble={
         at[pos].index === table.mySeat
           ? bubbles.mine
@@ -296,6 +358,7 @@ export default function WaitingTable({
         seatedCount={seatedCount}
         hostName={hostName}
         onStart={onStart}
+        onRestake={onRestake}
         errorMessage={errorMessage}
         fillsEmptySeats={fillsEmptySeats}
       />

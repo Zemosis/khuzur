@@ -22,7 +22,8 @@ A shedding game for 2 to 4 players, in the style of Vietnam's *Tiến lên*. Bea
 4. [Breaking ties](#4-breaking-ties)
 5. [Scoring](#5-scoring)
 6. [CPU levels](#6-cpu-levels)
-7. [Controls](#7-controls)
+7. [Playing for credits](#7-playing-for-credits)
+8. [Controls](#8-controls)
 
 ### Words used in this rulebook
 
@@ -164,7 +165,26 @@ CPU players come in three levels. Pick one for a practice table. Online, the hos
 
 ---
 
-## 7. Controls
+## 7. Playing for credits
+
+On the lobby's **CREDITS** tab, signed-in players with a linked Google or Discord login play for credits. Everyone at the table puts in **the same stake**, and **the match winner takes the pot**.
+
+| | |
+| --- | --- |
+| **Stakes** | LOW 100 · MID 500 · HIGH 2,000. The host picks one |
+| **Sitting** | Your stake leaves your balance when you sit. Get up before the deal and it comes back |
+| **Starting** | 2 to 4 players with stakes in. Only people play: the host can't add CPUs |
+| **The pot** | Every player's stake, to the last player left in the match |
+
+**Leaving mid-match.** A Hard bot plays your seat and your stake stays in the pot. Come back to the table (its code, or **RETURN** on the CREDITS tab) and the seat is yours again. Once the bot has finished **2 rounds** for you, the seat is the bot's: if it wins, the pot is lost. Until the match ends you can't sit at another credit table.
+
+**After the match** everyone stays at the table without a seat. **PLAY AGAIN** stakes you for the next match. Anyone who hasn't staked when it starts goes back to the lobby.
+
+If the server restarts mid-match, the match doesn't count and every stake goes back.
+
+---
+
+## 8. Controls
 
 | Action | How |
 | --- | --- |
@@ -177,4 +197,4 @@ CPU players come in three levels. Pick one for a practice table. Online, the hos
 
 ---
 
-<sub>**For contributors:** the game enforces these rules in `src/utils/handEvaluator.js` and `src/utils/gameLogic.js`, and the CPU players live in `src/utils/aiPlayer.js`. The server runs copies of all of them in `server/game/`. The in-game rulebook is `src/components/thirteen/RulesModal.jsx`. Change all of them together.</sub>
+<sub>**For contributors:** the game enforces these rules in `src/utils/handEvaluator.js` and `src/utils/gameLogic.js`, the CPU players live in `src/utils/aiPlayer.js`, and the credit stakes in `src/utils/stakes.js`. The server runs copies of all of them in `server/game/`. The in-game rulebook is `src/components/thirteen/RulesModal.jsx`. Change all of them together.</sub>

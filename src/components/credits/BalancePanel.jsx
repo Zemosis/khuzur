@@ -1,6 +1,7 @@
 // BALANCE PANEL — the CREDITS tab's account panel: your balance (and what's at
-// a table), CLAIM, why you can't play if you can't, the leaderboard, and a
-// note when a restart sent your table credits home.
+// a table), CLAIM, why you can't play if you can't, the leaderboard, a note
+// when a restart sent your table credits home, and the way back to a credit
+// match where a bot is covering your seat.
 
 import React from "react";
 import { useNavigate } from "react-router-dom";
@@ -44,6 +45,16 @@ export default function BalancePanel({ credits, isGuest, error, onSignIn, onClai
                 credits{credits.seat ? ` + ${fmt(credits.onTable)} at ${credits.seat.tableName}` : ""}
               </span>
             </div>
+            {credits.rejoin && (
+              <div role="status" className="flex items-center gap-2.5">
+                <p className="flex-1 min-w-0 font-pixel-body text-[20px] leading-tight" style={{ color: "#f4c430" }}>
+                  A bot is playing your seat at {credits.rejoin.tableName}. Your stake is still in.
+                </p>
+                <Btn tone={TONES.poison} onClick={() => navigate(`/join/${credits.rejoin.code}`)} className="px-3 shrink-0" style={{ height: 40 }}>
+                  Return
+                </Btn>
+              </div>
+            )}
             {credits.canPlay ? (
               // Keyed by the claim, so its countdown restarts from now whenever the claim changes.
               <ClaimButton key={credits.claim.nextAt ?? credits.claim.state} claim={credits.claim} onClaim={onClaim} busy={claiming} />

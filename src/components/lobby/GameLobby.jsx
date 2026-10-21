@@ -29,9 +29,14 @@ import { gameRoute } from "../../lib/games";
 import BalancePanel from "../credits/BalancePanel";
 import CreditHostPanel from "../credits/CreditHostPanel";
 import BuyInPanel from "../credits/BuyInPanel";
+import StakePanel from "../credits/StakePanel";
 import ClaimButton from "../credits/ClaimButton";
 import { useCredits } from "../../hooks/useCredits";
-import { TIERS, buyInRange } from "../../utils/poker/tiers";
+import { TIERS, buyInRange, fmt } from "../../utils/poker/tiers";
+import { STAKES, STAKE_TIERS } from "../../utils/stakes";
+
+// A stake game's tier buttons: the one amount everyone at the table stakes.
+const STAKE_BUTTONS = STAKE_TIERS.map((id) => ({ id, label: fmt(STAKES[id]), title: `Everyone stakes ${fmt(STAKES[id])}; the winner takes the pot` }));
 
 const CODE_LENGTH = 6;
 const EXP_PER_LEVEL = 100;
@@ -306,6 +311,8 @@ function TablesPanel({ game, lobbies, onJoin, onRefresh }) {
         ) : (
           lobbies.map((lobby, i) => {
             const full = lobby.current >= lobby.max;
+            // A credit match takes no one new once it's dealt (only its own players, back to their seats).
+            const closed = full || (lobby.stake != null && lobby.inProgress);
             return (
               <div
                 key={lobby.id}
@@ -332,12 +339,13 @@ function TablesPanel({ game, lobbies, onJoin, onRefresh }) {
                     </span>
                     {lobby.tier && (
                       <span className="font-pixel-display text-[8px] px-1.5 py-1 shrink-0" style={{ backgroundColor: "#c89820", color: INK }}>
-                        {lobby.tier} {TIERS[lobby.tier].smallBlind}/{TIERS[lobby.tier].bigBlind}
+                        {lobby.stake != null ? `${lobby.tier} · ${fmt(lobby.stake)}` : `${lobby.tier} ${TIERS[lobby.tier].smallBlind}/${TIERS[lobby.tier].bigBlind}`}
                       </span>
                     )}
                   </div>
                   <div className="font-pixel-body text-[18px] text-bone/60 leading-none mt-1 truncate">
                     {lobby.id}
+                    {lobby.stake != null && lobby.current > 0 && <span className="text-glow-gold"> · pot {fmt(lobby.stake * lobby.current)}</span>}
                     <span className="sm:hidden"> · {lobby.host}</span>
                   </div>
                 </div>
@@ -345,13 +353,13 @@ function TablesPanel({ game, lobbies, onJoin, onRefresh }) {
                 <SeatPips current={lobby.current} max={lobby.max} color={game.accent.main} />
                 <div className="flex justify-end">
                   <Btn
-                    tone={full ? TONES.dusk : TONES.poison}
-                    disabled={full}
+                    tone={closed ? TONES.dusk : TONES.poison}
+                    disabled={closed}
                     onClick={() => onJoin(lobby.id)}
                     className="px-4"
                     style={{ height: 40 }}
                   >
-                    {full ? "Full" : "Join"}
+                    {full ? "Full" : closed ? "Playing" : "Join"}
                   </Btn>
                 </div>
               </div>
@@ -375,13 +383,15 @@ export default function GameLobby({ game }) {
 
   const playerName = `${identity.name} #${identity.tag}`;
   const ev = game.events;
-  // A game with credits (poker) has FREE and CREDITS tabs.
+  // A game with credits has FREE and CREDITS tabs. Poker's credit tables take
+  // a buy-in (credits: { kind: "buyIn" }); a stake game's take one fixed stake each.
   // Back from a credit table, the lobby opens on the CREDITS tab.
   const location = useLocation();
   const [mode, setMode] = useState(game.credits && location.state?.tab === "credits" ? "credits" : "free");
   const credit = !!game.credits && mode === "credits";
   const { credits, error: creditsError, busy: claiming, refresh: refreshCredits, claim, dismissNotice } = useCredits({ enabled: !!game.credits });
-  // The buy-in panel: { tier, tableName, lobbyId? | create: { name, isPrivate }, busy, error }.
+  const stakes = game.credits?.kind === "stake";
+  // The buy-in or stake panel: { tier, tableName, lobbyId? | create: { name, isPrivate }, busy, error }.
   const [buyIn, setBuyIn] = useState(null);
   const buyInRef = useRef(null); // the socket handlers read the panel without re-subscribing
   useEffect(() => {
@@ -403,7 +413,7 @@ export default function GameLobby({ game }) {
       clearTimeout(errorTimer);
       errorTimer = setTimeout(() => setError(""), 4000);
     };
-    const onTableInfo = ({ lobbyId, name, tier }) => setBuyIn({ tier, tableName: name, lobbyId, busy: false, error: "" });
+    const onTableInfo = ({ lobbyId, name, tier, stake }) => setBuyIn({ tier, stake, tableName: name, lobbyId, busy: false, error: "" });
 
     refresh();
     socket.on("connect", refresh);
@@ -428,12 +438,12 @@ export default function GameLobby({ game }) {
   }
 
   function createCreditTable(name, tier, isPrivate) {
-    setBuyIn({ tier, tableName: name.trim() || `${identity.name}'s table`, create: { isPrivate }, busy: false, error: "" });
+    setBuyIn({ tier, stake: stakes ? STAKES[tier] : null, tableName: name.trim() || `${identity.name}'s table`, create: { isPrivate }, busy: false, error: "" });
   }
 
   function joinTable(lobbyId) {
     const table = lobbies.find((l) => l.id === lobbyId);
-    if (table?.tier) return setBuyIn({ tier: table.tier, tableName: table.name, lobbyId, busy: false, error: "" });
+    if (table?.tier) return setBuyIn({ tier: table.tier, stake: table.stake, tableName: table.name, lobbyId, busy: false, error: "" });
     socket.emit(ev.join, { lobbyId, playerName });
   }
 
@@ -506,7 +516,12 @@ export default function GameLobby({ game }) {
           {credit ? (
             <>
               <BalancePanel credits={credits} isGuest={isGuest} error={creditsError} onSignIn={() => setShowLogin(true)} onClaim={claim} claiming={claiming} onDismissNotice={dismissNotice} />
-              <CreditHostPanel defaultName={game.defaultTableName} disabled={isGuest || !credits?.canPlay} onCreate={createCreditTable} />
+              <CreditHostPanel
+                defaultName={game.defaultTableName}
+                tiers={stakes ? STAKE_BUTTONS : undefined}
+                disabled={isGuest || !credits?.canPlay}
+                onCreate={createCreditTable}
+              />
               <JoinPanel onJoin={joinTable} />
             </>
           ) : (
@@ -529,7 +544,22 @@ export default function GameLobby({ game }) {
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
-      {buyIn && credits && (
+      {buyIn && credits && buyIn.stake != null && (
+        <StakePanel
+          tier={buyIn.tier}
+          stake={buyIn.stake}
+          tableName={buyIn.tableName}
+          balance={credits.balance}
+          bots={game.id === "muushig"}
+          busy={buyIn.busy}
+          error={buyIn.error}
+          onConfirm={confirmBuyIn}
+          onCancel={() => setBuyIn(null)}
+        >
+          <ClaimButton claim={credits.claim} onClaim={() => claim().then(refreshCredits)} busy={claiming} />
+        </StakePanel>
+      )}
+      {buyIn && credits && buyIn.stake == null && (
         <BuyInPanel
           tier={buyIn.tier}
           tableName={buyIn.tableName}

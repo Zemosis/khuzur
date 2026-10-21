@@ -9,6 +9,8 @@ import { PixelCard } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
 import { CpuLevels } from "../Rulebook";
 import { GAME_SETTINGS } from "../../utils/constants";
+import { FORFEIT_ROUNDS, MIN_STAKED, STAKES } from "../../utils/stakes";
+import { fmt } from "../../utils/poker/tiers";
 
 const OUT_AT = GAME_SETTINGS.ELIMINATION_SCORE;
 const DOUBLE_AT = GAME_SETTINGS.PENALTY_THRESHOLD;
@@ -22,6 +24,7 @@ const SECTIONS = [
   ["ties", "Breaking ties"],
   ["scoring", "Scoring"],
   ["cpus", "CPU levels"],
+  ["credits", "Playing for credits"],
   ["controls", "Controls"],
 ];
 
@@ -451,7 +454,31 @@ export default function RulesModal({ onClose }) {
               </Callout>
             </Section>
 
-            <Section id="controls" n={9} title="Controls">
+            <Section id="credits" n={9} title="Playing for credits">
+              <p>
+                On the lobby's <Key>CREDITS</Key> tab, signed-in players play for credits. Everyone at the table puts in{" "}
+                <Key>the same stake</Key>, and <Key>the match winner takes the pot</Key>.
+              </p>
+              <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
+                {[
+                  ["STAKES", `LOW ${fmt(STAKES.LOW)} · MID ${fmt(STAKES.MID)} · HIGH ${fmt(STAKES.HIGH)}. The host picks one`],
+                  ["SITTING", "Your stake leaves your balance when you sit. Get up before the deal and it comes back"],
+                  ["STARTING", `${MIN_STAKED} to 4 players with stakes in. Only people play: no CPUs`],
+                  ["THE POT", "Every player's stake, to the last player left in the match"],
+                ].map(([k, v]) => (
+                  <React.Fragment key={k}>
+                    <div className="font-pixel-display text-[10px] text-parchment flex items-center">{k}</div>
+                    <div className="text-bone/80">{v}</div>
+                  </React.Fragment>
+                ))}
+              </div>
+              <Callout tone="rule" title="LEAVING MID-MATCH">
+                A Hard bot plays your seat and your stake stays in. Come back to the table and the seat is yours again, but once the
+                bot has finished <Key>{FORFEIT_ROUNDS} rounds</Key> for you, the seat is the bot's: if it wins, the pot is lost.
+              </Callout>
+            </Section>
+
+            <Section id="controls" n={10} title="Controls">
               <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
                 {[
                   [<>Click a card</>, "Select or deselect it"],

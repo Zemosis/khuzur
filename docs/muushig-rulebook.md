@@ -28,6 +28,7 @@ In Muushig, winning a trick is called **eating** it: you eat the pile.
 7. [Scoring](#7-scoring)
 8. [Winning the match](#8-winning-the-match)
 9. [CPU levels](#9-cpu-levels)
+10. [Playing for credits](#10-playing-for-credits)
 
 ---
 
@@ -141,7 +142,7 @@ The match ends after the first round in which someone reaches **0 or less**. The
 
 ## 9. CPU levels
 
-CPU players come in three levels. Pick one for a practice table. Online, the host picks each CPU seat's level, and any empty seats fill with **Medium** CPUs when the game starts. Every level goes in with a trump nobody can beat, the face-up one included when it deals.
+CPU players come in three levels. Pick one for a practice table. Online, the host picks each CPU seat's level, and any empty seats fill with **Medium** CPUs when the game starts (**Hard** at a credit table). Every level goes in with a trump nobody can beat, the face-up one included when it deals.
 
 | Level | Plays like | How it plays |
 | --- | --- | --- |
@@ -153,4 +154,26 @@ CPU players come in three levels. Pick one for a practice table. Online, the hos
 
 ---
 
-<sub>**For contributors:** the engine in `src/utils/muushig/` implements exactly these rules, and the server runs a copy in `server/game/muushig/`. The CPU players are `src/utils/muushig/ai.js` (copied to the server too), and the in-game rulebook is `src/components/muushig/MuushigRules.jsx`. Change all of them together.</sub>
+## 10. Playing for credits
+
+On the lobby's **CREDITS** tab, signed-in players with a linked Google or Discord login play for credits. Muushig is played for a stake: everyone at the table puts in **the same amount**, and **the match winner takes the pot**.
+
+| | |
+| --- | --- |
+| **Stakes** | LOW 100 · MID 500 · HIGH 2,000. The host picks one |
+| **Sitting** | Your stake leaves your balance when you sit. Get up before the deal and it comes back |
+| **Starting** | At least 2 players with stakes in. Hard bots fill the empty seats, and the host can't change them |
+| **The pot** | Every player's stake. Bots put nothing in |
+| **A tie** | Level on score and on piles eaten in the last round: the pot is split evenly |
+
+> **A bot wins, the pot is lost.** If a bot wins the match, nobody gets the pot: those credits are gone.
+
+**Leaving mid-match.** A Hard bot plays your seat and your stake stays in the pot. Come back to the table (its code, or **RETURN** on the CREDITS tab) and the seat is yours again. Once the bot has finished **2 rounds** for you, the seat is the bot's: if it wins, the pot is lost. Until the match ends you can't sit at another credit table.
+
+**After the match** everyone stays at the table without a seat. **PLAY AGAIN** stakes you for the next match. Anyone who hasn't staked when it starts goes back to the lobby.
+
+If the server restarts mid-match, the match doesn't count and every stake goes back.
+
+---
+
+<sub>**For contributors:** the engine in `src/utils/muushig/` implements exactly these rules, and the server runs a copy in `server/game/muushig/`. The CPU players are `src/utils/muushig/ai.js` and the credit stakes `src/utils/stakes.js` (both copied to the server too), and the in-game rulebook is `src/components/muushig/MuushigRules.jsx`. Change all of them together.</sub>

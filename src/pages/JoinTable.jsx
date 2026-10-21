@@ -7,6 +7,7 @@ import { socket, connectSocket } from "../utils/socket";
 import { useAuth } from "../hooks/useAuth";
 import { gameRoute } from "../lib/games";
 import BuyInPanel from "../components/credits/BuyInPanel";
+import StakePanel from "../components/credits/StakePanel";
 import { useCredits } from "../hooks/useCredits";
 import { buyInRange } from "../utils/poker/tiers";
 
@@ -18,7 +19,8 @@ export default function JoinTable() {
   const { identity, loading } = useAuth();
   const [error, setError] = useState("");
   const { credits, refresh } = useCredits({ enabled: false });
-  const [table, setTable] = useState(null); // a credit table asking for a buy-in: { tier, name, busy, error }
+  // A credit table asking for a buy-in, or a credit match for its stake: { tier, name, gameType, stake?, busy, error }.
+  const [table, setTable] = useState(null);
   const lobbyId = code.trim().toUpperCase();
   const playerName = `${identity.name} #${identity.tag}`;
 
@@ -26,9 +28,9 @@ export default function JoinTable() {
     if (loading) return;
     const join = () => socket.emit("join_lobby", { lobbyId, playerName });
     const onJoined = (data) => navigate(gameRoute(data.gameType), { replace: true, state: { ...data, playerName } });
-    const onTableInfo = ({ name, tier }) => {
+    const onTableInfo = ({ name, tier, gameType = "poker", stake = null }) => {
       refresh();
-      setTable({ name, tier, busy: false, error: "" });
+      setTable({ name, tier, gameType, stake, busy: false, error: "" });
     };
     const onError = (msg) => setTable((t) => (t ? { ...t, busy: false, error: String(msg) } : (setError(String(msg || "Lobby not found")), t)));
 
@@ -66,7 +68,23 @@ export default function JoinTable() {
       ) : (
         <div className="font-pixel-display text-[14px] text-glow-gold blink">JOINING TABLE {lobbyId}...</div>
       )}
-      {table && credits && (
+      {table && credits && table.stake != null && (
+        <StakePanel
+          tier={table.tier}
+          stake={table.stake}
+          tableName={table.name}
+          balance={credits.balance}
+          bots={table.gameType === "muushig"}
+          busy={table.busy}
+          error={table.error}
+          onConfirm={(amount) => {
+            setTable((t) => ({ ...t, busy: true, error: "" }));
+            socket.emit("join_lobby", { lobbyId, playerName, buyIn: amount });
+          }}
+          onCancel={() => navigate(`/lobby-${table.gameType}`, { state: { tab: "credits" } })}
+        />
+      )}
+      {table && credits && table.stake == null && (
         <BuyInPanel
           tier={table.tier}
           tableName={table.name}

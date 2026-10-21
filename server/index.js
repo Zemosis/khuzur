@@ -21,10 +21,12 @@ import { createChatGuard, cleanChat } from "./chatGuard.js";
 import { matchesRouter } from "./matches.js";
 import { migrate, pool } from "./db/index.js";
 import { CreditTable, returnSeatsAfterRestart } from "./credits/tables.js";
+import { CreditMatch } from "./credits/matchTables.js";
 import { creditsRouter } from "./credits/routes.js";
 import { adminRouter } from "./credits/admin.js";
 import { economyCheck } from "./credits/check.js";
 import { isTier } from "./game/poker/tiers.js";
+import { isStakeTier, MIN_STAKED } from "./game/stakes.js";
 
 const PORT = process.env.PORT || 3001;
 const CORS_ORIGINS = (process.env.CORS_ORIGIN || "http://localhost:5173")
@@ -96,6 +98,10 @@ const GAMES = {
   },
 };
 const gameTypeOf = (type) => (Object.hasOwn(GAMES, type) ? type : "thirteen");
+// Games whose credit tables are a stake per match, the winner taking the pot.
+const STAKE_GAMES = new Set(["muushig", "thirteen"]);
+/** A credit table played for a stake per match (CreditMatch), not for chips. */
+const isCreditMatch = (lobby) => lobby.credits instanceof CreditMatch;
 
 const app = express();
 app.use(cors({ origin: CORS_ORIGINS }));
@@ -103,7 +109,7 @@ app.get("/", (_req, res) => res.json({ ok: true, service: "card-game-server" }))
 // Before the accounts router, which answers JSON errors for its whole path.
 app.use("/api/auth/oauth", oauthRouter);
 app.use("/api/auth", authRouter);
-app.use("/api/credits", creditsRouter({ onTableFor }));
+app.use("/api/credits", creditsRouter({ onTableFor, rejoinFor }));
 app.use("/api/admin", adminRouter({ standUp: standUpCreditPlayer }));
 app.use("/api/matches", matchesRouter());
 
@@ -126,8 +132,10 @@ const io = new Server(server, {
  *   rounds: Array<round summary>,
  *   sessionPromise, recorded,
  *   game: ThirteenGame | MuushigGame | PokerTable | null
- *   tier: "LOW" | "MID" | "HIGH" | null,   // a credit poker table's stakes
- *   credits: CreditTable | null,            // at credit tables: wraps `game` (its .table)
+ *   tier: "LOW" | "MID" | "HIGH" | null,   // a credit table's stakes
+ *   credits: CreditTable | CreditMatch | null,
+ *     // poker: a CreditTable wrapping `game` (its .table); muushig: a
+ *     // CreditMatch holding the stakes beside it (see isCreditMatch)
  * }>
  *
  * `members` is the LIVE connection map and loses a player the moment they quit.
@@ -201,6 +209,8 @@ function tableViewFor(lobby, member) {
     code: shareCode(lobby.id),
     mySeat: member.seatIndex,
     isHost: lobby.hostKey === member.key,
+    // A credit match: its stake and pot, and how many members haven't staked for the next match.
+    credit: isCreditMatch(lobby) ? { ...lobby.credits.view(), deciding: [...lobby.members.values()].filter((m) => m.seatIndex == null).length } : null,
     seats: lobby.seats.map((s) => {
       if (!s) return null;
       if (s.kind === "cpu") return { kind: "cpu", name: s.name, level: s.level };
@@ -242,10 +252,16 @@ function publicLobbyList(gameType) {
         name: l.name,
         host: host?.displayName || "?",
         // Poker seats CPUs at the table itself; a seat whose player has left is free.
-        current: l.gameType === "poker" ? l.game.state.seats.filter((p) => p && !p.leaving).length : l.members.size,
+        current:
+          l.gameType === "poker"
+            ? l.game.state.seats.filter((p) => p && !p.leaving).length
+            : isCreditMatch(l)
+              ? l.seats.filter((s) => s?.kind === "human").length
+              : l.members.size,
         max: l.maxPlayers,
         inProgress: l.gameType === "poker" ? l.game.started : !!l.game,
         tier: l.tier ?? null,
+        stake: isCreditMatch(l) ? l.credits.stake : null,
       };
     });
 }
@@ -304,6 +320,7 @@ function broadcastState(lobby, game = lobby.game) {
       ...view(game.state, member.seatIndex ?? -1, game),
       amHost: lobby.hostKey === member.key,
       dealMsLeft: game.dealMsLeft(),
+      ...creditViewOf(lobby),
     });
   }
 }
@@ -316,8 +333,12 @@ function sendStateTo(lobby, socket) {
     ...view(lobby.game.state, member?.seatIndex ?? -1, lobby.game),
     amHost: !!member && lobby.hostKey === member.key,
     dealMsLeft: lobby.game.dealMsLeft(),
+    ...creditViewOf(lobby),
   });
 }
+
+/** A credit match's stake, pot, covered seats and result, for the game state. */
+const creditViewOf = (lobby) => (isCreditMatch(lobby) ? { credit: lobby.credits.view() } : {});
 
 /** Adds (or refreshes) a seat in the recording ledger. Never removes. */
 function rosterEnter(lobby, member) {
@@ -404,7 +425,7 @@ function beginSession(lobby) {
     maxPlayers: lobby.game?.state?.players?.length ?? lobby.maxPlayers,
     playerCount: lobby.roster.size,
     startedAt: lobby.game?.startedAt,
-    pokerTier: lobby.tier ?? null,
+    creditTier: lobby.tier ?? null,
     seats: seatsOf(lobby.game?.state),
   }).catch((err) => {
     console.error("[db] createSession failed:", err);
@@ -432,8 +453,9 @@ function startGame(lobby) {
       if (s.kind === "human") lobby.members.get(s.key).seatIndex = i;
     });
   }
-  // Muushig always seats 5: empty seats become MEDIUM CPUs.
-  lobby.seats = lobby.seats.map((s) => s ?? { kind: "cpu", name: null, level: "MEDIUM" });
+  // Muushig always seats 5: empty seats become MEDIUM CPUs (HARD at a credit table).
+  const fill = isCreditMatch(lobby) ? "HARD" : "MEDIUM";
+  lobby.seats = lobby.seats.map((s) => s ?? { kind: "cpu", name: null, level: fill });
   for (const s of lobby.seats) if (s.kind === "cpu" && !s.name) s.name = nextCpuName(lobby.seats);
   const seats = lobby.seats.map((s) => {
     if (s.kind === "cpu") return { type: "AI", name: s.name, socketId: null, level: s.level };
@@ -447,8 +469,17 @@ function startGame(lobby) {
     onState: (game) => broadcastState(lobby, game),
     // Fires before onGameOver, so the final round is captured before the
     // session is closed out.
-    onRoundEnd: (round) => lobby.rounds.push(round),
-    onGameOver: () => closeSession(lobby, { completed: true, endedReason: "completed" }),
+    onRoundEnd: (round) => {
+      lobby.rounds.push(round);
+      if (isCreditMatch(lobby)) lobby.credits.roundEnded();
+    },
+    onGameOver: () => {
+      closeSession(lobby, { completed: true, endedReason: "completed" });
+      if (isCreditMatch(lobby)) settleCreditMatch(lobby);
+    },
+    // A credit table's CPUs, and any that covers a player who left, play HARD.
+    // (Thirteen's `level` is only for those covering.)
+    ...(isCreditMatch(lobby) ? { level: "HARD" } : {}),
   });
 
   beginSession(lobby);
@@ -506,10 +537,10 @@ async function endCreditTable(lobby) {
 }
 
 /** Why this socket can't host or join a credit table at `tier`, or null. A linked login and frozen accounts are checked with the buy-in. */
-function creditRefusal(socket, tier) {
+function creditRefusal(socket, tier, gameType = "poker") {
   if (!pool) return "Credit tables aren't available right now";
   if (shuttingDown) return "The server is restarting. Try again in a minute.";
-  if (!isTier(tier)) return "Pick LOW, MID or HIGH";
+  if (!(STAKE_GAMES.has(gameType) ? isStakeTier(tier) : isTier(tier))) return "Pick LOW, MID or HIGH";
   if (!socket.data.userId) return "Sign in to play for credits";
   return null;
 }
@@ -526,6 +557,93 @@ async function sitWithCredits(lobby, member, socket, buyIn) {
   return false;
 }
 
+/**
+ * Stakes a member at a credit match's waiting table and seats them. On a
+ * refusal the reason goes to them and, unless `stay`, they leave the table.
+ */
+async function stakeAndSeat(lobby, member, socket, amount, { stay = false } = {}) {
+  const fail = (error) => {
+    socket.emit(stay ? "move_rejected" : "error_message", stay ? { reason: error } : error);
+    if (stay) return false;
+    socket.leave(lobby.id);
+    if (lobby.members.get(member.key) === member) removeMember(lobby, member);
+    return false;
+  };
+  const result = await lobby.credits.sit(member.userId, amount);
+  if (!result.ok) return fail(result.error);
+  // The table may have started or filled while the stake was placed: it comes back.
+  if (lobby.game || lobby.members.get(member.key) !== member || !takeSeat(lobby, member)) {
+    lobby.credits.standUp(member.userId);
+    return fail(lobby.game ? "The match has started" : "The table is full");
+  }
+  return true;
+}
+
+/**
+ * join_lobby at a credit match, for someone not at the table: stake and sit
+ * while it waits; mid-match only a staked player coming back to their seat.
+ */
+async function joinCreditMatch(socket, lobby, buyIn) {
+  const userId = socket.data.userId;
+  if (lobby.game) {
+    if (!userId || !lobby.credits.canReturn(userId)) return socket.emit("error_message", "This table's match is under way. Try again when it ends");
+    const member = addMember(lobby, socket);
+    member.seatIndex = lobby.credits.seatOf(userId);
+    lobby.credits.back(userId);
+    enterRoom(socket, lobby.id);
+    lobby.game.replaceSeat(member.seatIndex, { type: "HUMAN", name: member.displayName, socketId: socket.id, avatar: member.avatar });
+    rosterEnter(lobby, member);
+    socket.emit("lobby_joined", { lobbyId: lobby.id, gameType: lobby.gameType, isHost: false, mySocketId: socket.id });
+    broadcastState(lobby);
+    return;
+  }
+  if (lobby.seats.every(Boolean)) return socket.emit("error_message", "Lobby is full");
+  const why = creditRefusal(socket, lobby.tier, lobby.gameType);
+  if (why) return socket.emit("error_message", why);
+  // The stake panel needs to know the table first.
+  if (buyIn == null) return socket.emit("credit_table_info", { lobbyId: lobby.id, name: lobby.name, tier: lobby.tier, gameType: lobby.gameType, stake: lobby.credits.stake });
+  const member = addMember(lobby, socket);
+  if (!(await stakeAndSeat(lobby, member, socket, buyIn))) return;
+  enterRoom(socket, lobby.id);
+  console.log(`${socket.data.displayName} staked at ${lobby.id}`);
+  socket.emit("lobby_joined", { lobbyId: lobby.id, gameType: lobby.gameType, isHost: false, mySocketId: socket.id });
+  broadcastTable(lobby);
+  broadcastLobbyList(lobby.gameType);
+}
+
+/**
+ * A credit match is over: the pot to the winner, everyone sees the result,
+ * and the table waits for the next match with nobody seated (PLAY AGAIN
+ * stakes and seats you). With nobody left at it, the table closes.
+ */
+async function settleCreditMatch(lobby) {
+  const game = lobby.game;
+  broadcastState(lobby, game); // "Saving…"
+  const sessionId = await (lobby.sessionPromise ?? null);
+  await lobby.credits.settle(game.state, { sessionId, rounds: lobby.rounds });
+  broadcastState(lobby, game);
+  game.destroy();
+  if (lobby.game !== game) return;
+  lobby.game = null;
+  lobby.seats = Array(lobby.maxPlayers).fill(null);
+  for (const m of lobby.members.values()) m.seatIndex = null;
+  if (lobby.members.size === 0) {
+    lobby.credits.release("stake_back");
+    destroyLobby(lobby);
+  } else broadcastTable(lobby);
+  broadcastLobbyList(lobby.gameType);
+}
+
+/** A credit match this player can go back to (a CPU covers their seat): { gameType, code, tableName }, or null. */
+function rejoinFor(userId) {
+  for (const lobby of lobbies.values()) {
+    if (!isCreditMatch(lobby) || !lobby.game || !lobby.credits.canReturn(userId)) continue;
+    if (lobby.members.get(userId)?.connected) continue;
+    return { gameType: lobby.gameType, code: shareCode(lobby.id), tableName: lobby.name };
+  }
+  return null;
+}
+
 /** What a player holds at a credit table right now (stack, chips waiting, chips in the pot), or null. */
 function onTableFor(userId) {
   for (const lobby of lobbies.values()) {
@@ -538,6 +656,8 @@ function onTableFor(userId) {
 /** An admin froze or reversed this player: off any credit table. Resolves once their credits are home. */
 async function standUpCreditPlayer(userId, reason) {
   for (const lobby of lobbies.values()) {
+    // Mid-match their stake stays in the pot, and the seat is no longer theirs.
+    if (isCreditMatch(lobby)) lobby.credits.forfeit(userId);
     const member = lobby.credits && lobby.members.get(userId);
     if (!member) continue;
     if (member.connected && member.socketId) io.to(member.socketId).emit("table_left", { reason });
@@ -587,7 +707,12 @@ function removeMember(lobby, member, { convertSeat = true } = {}) {
   // Poker: the seat empties (the hand in play folds). A credit seat's credits
   // go home now, or when the hand they're in is saved. leave() is queued behind
   // any buy-in still in flight, so it's always called and pays out whatever got seated.
-  if (lobby.credits) member.cashedOut = lobby.credits.leave(member.userId);
+  // A credit match: waiting, the stake comes back; mid-match it stays in the
+  // pot while a CPU covers the seat, until they come back or forfeit it.
+  if (isCreditMatch(lobby)) {
+    if (lobby.game && member.seatIndex != null) lobby.credits.away(member.userId);
+    else member.cashedOut = lobby.credits.standUp(member.userId);
+  } else if (lobby.credits) member.cashedOut = lobby.credits.leave(member.userId);
   else if (lobby.gameType === "poker" && member.seatIndex != null) lobby.game.standUp(member.seatIndex);
 
   // Mid-game: a CPU inherits the seat and hand so the match can continue.
@@ -604,8 +729,15 @@ function removeMember(lobby, member, { convertSeat = true } = {}) {
   if (lobby.game) rosterLeave(lobby, member, { cpuTookOver });
 
   if (lobby.members.size === 0) {
+    if (isCreditMatch(lobby)) {
+      // Mid-match the CPUs play it out and settleCreditMatch closes the table; waiting, every stake goes home.
+      if (!lobby.game) {
+        lobby.credits.release("stake_back");
+        destroyLobby(lobby);
+      }
+    }
     // A credit table finishes the hand in play and saves it first; endCreditTable then destroys it.
-    if (lobby.credits) lobby.game.closeAfterHand();
+    else if (lobby.credits) lobby.game.closeAfterHand();
     else destroyLobby(lobby);
   } else {
     if (lobby.hostKey === member.key) {
@@ -694,9 +826,9 @@ io.on("connection", (socket) => {
 
   socket.on("create_lobby", async ({ lobbyName, isPrivate, gameType, tier, buyIn } = {}) => {
     const type = gameTypeOf(gameType);
-    const credit = type === "poker" && tier != null;
+    const credit = tier != null && (type === "poker" || STAKE_GAMES.has(type));
     if (credit) {
-      const why = creditRefusal(socket, tier);
+      const why = creditRefusal(socket, tier, type);
       if (why) return socket.emit("error_message", why);
     }
     // One lobby per player: leaving any previous one keeps the list clean. A
@@ -728,11 +860,16 @@ io.on("connection", (socket) => {
       credits: null,
     };
     if (type === "poker") lobby.game = credit ? createCreditTable(lobby) : createPokerTable(lobby);
+    // Muushig always seats 5, so CPUs fill a credit match; Thirteen's is for people only.
+    else if (credit) lobby.credits = new CreditMatch({ name: lobby.name, tier, isPrivate: lobby.isPrivate, gameType: type, botsFill: type === "muushig" });
     const member = addMember(lobby, socket);
     lobbies.set(lobbyId, lobby);
     // A credit table's room is entered once the buy-in succeeds: a refused one
     // leaves the player watching the table list, where they were.
-    if (credit) {
+    if (isCreditMatch(lobby)) {
+      if (!(await stakeAndSeat(lobby, member, socket, buyIn))) return;
+      enterRoom(socket, lobbyId);
+    } else if (credit) {
       if (!(await sitWithCredits(lobby, member, socket, buyIn))) return;
       enterRoom(socket, lobbyId);
     } else {
@@ -767,6 +904,7 @@ io.on("connection", (socket) => {
       member.connected = true;
       enterRoom(socket, lobbyId);
       if (lobby.game && lobby.gameType !== "poker" && member.seatIndex != null) {
+        if (isCreditMatch(lobby)) lobby.credits.back(member.userId);
         lobby.game.replaceSeat(member.seatIndex, {
           type: "HUMAN",
           name: member.displayName,
@@ -786,6 +924,7 @@ io.on("connection", (socket) => {
       return;
     }
 
+    if (isCreditMatch(lobby)) return joinCreditMatch(socket, lobby, buyIn);
     const full = lobby.gameType === "poker" ? lobby.game.firstFreeSeat() === -1 : lobby.members.size >= lobby.maxPlayers;
     if (full) {
       socket.emit("error_message", "Lobby is full");
@@ -867,9 +1006,10 @@ io.on("connection", (socket) => {
 
   const reject = (reason) => socket.emit("move_rejected", { reason });
 
-  socket.on("start_game", ({ lobbyId } = {}) => {
+  socket.on("start_game", async ({ lobbyId } = {}) => {
     const lobby = hostCommand(lobbyId);
     if (!lobby) return;
+    if (isCreditMatch(lobby)) return startCreditMatch(lobby);
     if (lobby.gameType === "poker") {
       const result = lobby.game.start();
       if (!result.ok) return reject(result.error);
@@ -885,11 +1025,35 @@ io.on("connection", (socket) => {
     startGame(lobby);
   });
 
+  /** START at a credit match: everyone staked is dealt in, members who didn't stake go back to the lobby. */
+  async function startCreditMatch(lobby) {
+    if (lobby.seats.filter((s) => s?.kind === "human").length < MIN_STAKED) return reject(`Needs ${MIN_STAKED} players with stakes in`);
+    // The seats as staked, in the game's order: Thirteen deals only the filled ones.
+    const taken = lobby.seats.map((s) => (s?.kind === "human" ? { ...s, member: lobby.members.get(s.key) } : s));
+    const order = lobby.gameType === "thirteen" ? taken.filter(Boolean) : taken;
+    const result = await lobby.credits.begin(order.map((s) => s?.member?.userId ?? null));
+    if (!result.ok) return reject(result.error);
+    if (lobby.game) return;
+    for (const m of [...lobby.members.values()]) {
+      if (m.seatIndex != null) continue;
+      if (m.connected && m.socketId) io.to(m.socketId).emit("table_left", { reason: "started" });
+      io.sockets.sockets.get(m.socketId)?.leave(lobby.id);
+      removeMember(lobby, m);
+    }
+    // Anyone who stood up while the match began is in it, a CPU covering their stake from the first deal.
+    const gone = order.map((s) => s?.member && lobby.members.get(s.key) !== s.member);
+    lobby.seats = order.map((s, i) => (gone[i] ? { kind: "cpu", name: `${s.member.name} (CPU)`, level: "HARD" } : s && (s.kind === "human" ? { kind: "human", key: s.key } : s)));
+    startGame(lobby);
+    order.forEach((s, i) => gone[i] && lobby.credits.away(s.member.userId));
+    broadcastState(lobby);
+  }
+
   const isSeat = (lobby, seat) => Number.isInteger(seat) && seat >= 0 && seat < lobby.seats.length;
 
   socket.on("add_cpu", ({ lobbyId, seat, level = "MEDIUM" } = {}) => {
     const lobby = hostCommand(lobbyId);
     if (!lobby) return;
+    if (isCreditMatch(lobby)) return reject(lobby.credits.botsFill ? "Credit tables seat Hard bots" : "Credit tables are for people only");
     if (lobby.gameType === "poker") {
       if (lobby.credits) return reject("Credit tables are for people only");
       if (!CPU_LEVELS.includes(level)) return reject("Pick EASY, MEDIUM or HARD");
@@ -914,6 +1078,7 @@ io.on("connection", (socket) => {
   socket.on("remove_cpu", ({ lobbyId, seat } = {}) => {
     const lobby = hostCommand(lobbyId);
     if (!lobby) return;
+    if (isCreditMatch(lobby)) return reject(lobby.credits.botsFill ? "Credit tables seat Hard bots" : "Credit tables are for people only");
     if (lobby.gameType === "poker") {
       if (lobby.game.state.seats[seat]?.type !== "AI") return reject("There's no CPU in that seat");
       lobby.game.standUp(seat);
@@ -931,6 +1096,7 @@ io.on("connection", (socket) => {
   socket.on("set_cpu_level", ({ lobbyId, seat, level } = {}) => {
     const lobby = hostCommand(lobbyId);
     if (!lobby) return;
+    if (isCreditMatch(lobby)) return reject(lobby.credits.botsFill ? "Credit tables seat Hard bots" : "Credit tables are for people only");
     if (lobby.gameType === "poker") return reject("Remove the CPU and add one at the new level");
     if (!isSeat(lobby, seat) || lobby.seats[seat]?.kind !== "cpu") {
       socket.emit("move_rejected", { reason: "There's no CPU in that seat" });
@@ -1021,6 +1187,7 @@ io.on("connection", (socket) => {
     const lobby = lobbies.get(lobbyId);
     const member = lobby?.members.get(socket.data.playerKey);
     if (!lobby?.game || lobby.gameType === "poker" || !member) return;
+    if (isCreditMatch(lobby)) return reject("Press PLAY AGAIN to stake for the next match");
     if (lobby.hostKey !== member.key) {
       socket.emit("move_rejected", { reason: "Only the host can start a rematch" });
       return;
@@ -1031,6 +1198,23 @@ io.on("connection", (socket) => {
       return;
     }
     beginSession(lobby);
+  });
+
+  // PLAY AGAIN at a credit match: stake for the next match and take a seat.
+  socket.on("credit_restake", async ({ lobbyId, amount } = {}) => {
+    const lobby = lobbies.get(lobbyId);
+    const member = lobby?.members.get(socket.data.playerKey);
+    if (!lobby || !member || !isCreditMatch(lobby)) return;
+    if (member.seatIndex != null) return;
+    if (lobby.game) return reject("The match is still being settled");
+    const why = creditRefusal(socket, lobby.tier, lobby.gameType);
+    if (why) return reject(why);
+    if (!(await stakeAndSeat(lobby, member, socket, amount ?? lobby.credits.stake, { stay: true }))) return;
+    // The host leads the next match only if they stake for it too: else the first who does.
+    const host = lobby.members.get(lobby.hostKey);
+    if (!host || host.seatIndex == null) lobby.hostKey = member.key;
+    broadcastTable(lobby);
+    broadcastLobbyList(lobby.gameType);
   });
 
   socket.on("send_chat", ({ lobbyId, message } = {}) => {

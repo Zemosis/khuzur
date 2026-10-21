@@ -6,8 +6,12 @@ import * as accounts from "./accounts.js";
 import { leaderboard, rankOf } from "./leaderboard.js";
 import { CreditError } from "./rules.js";
 
-/** onTableFor(userId): what that player holds at a credit table right now (stack, chips waiting, chips in the pot), or null. */
-export function creditsRouter({ onTableFor = () => null } = {}) {
+/**
+ * onTableFor(userId): what that player holds at a credit table right now
+ * (stack, chips waiting, chips in the pot), or null. rejoinFor(userId): a
+ * credit match they can go back to ({ gameType, code, tableName }), or null.
+ */
+export function creditsRouter({ onTableFor = () => null, rejoinFor = () => null } = {}) {
   const router = express.Router();
   router.use(express.json({ limit: "4kb" }), requireDb);
   const handle = (fn) => async (req, res) => {
@@ -19,7 +23,7 @@ export function creditsRouter({ onTableFor = () => null } = {}) {
       res.status(500).json({ error: "Credits are unavailable right now" });
     }
   };
-  const meFor = async (userId) => ({ ...(await accounts.me(userId, onTableFor(userId))), rank: await rankOf(userId) });
+  const meFor = async (userId) => ({ ...(await accounts.me(userId, onTableFor(userId))), rank: await rankOf(userId), rejoin: rejoinFor(userId) });
 
   router.get("/me", requireUser, handle((req) => meFor(req.user.id)));
   router.post(

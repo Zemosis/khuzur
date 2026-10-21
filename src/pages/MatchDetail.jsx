@@ -14,6 +14,8 @@ import { Panel, TopBar } from "../components/PixelUI";
 import SettingsModal from "../components/SettingsModal";
 import Standings from "../components/match/Standings";
 import Summary from "../components/match/Summary";
+import { fmt } from "../utils/poker/tiers";
+import { signed } from "../components/credits/signed";
 import ScoreTimeline from "../components/match/ScoreTimeline";
 import RoundList from "../components/match/RoundList";
 import PokerTablePage from "../components/match/PokerTablePage";
@@ -108,16 +110,32 @@ export default function MatchDetail() {
                 <h1 className="font-pixel-display text-[18px]" style={{ color: game.deep }}>
                   {game.name.toUpperCase()}
                 </h1>
+                {match.credit && (
+                  <span className="font-pixel-display text-[9px] px-1.5 py-1 self-center" style={{ backgroundColor: "#c89820", color: "#0a0712" }}>
+                    CREDITS · {match.credit.tier} · POT {fmt(match.credit.pot)}
+                  </span>
+                )}
                 <span className="font-pixel-body text-[20px] text-bone">
                   {new Date(match.finishedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })} ·{" "}
                   {formatDuration(match.durationSeconds)} · {match.roundCount ?? match.rounds.length} rounds ·{" "}
                   {match.isPrivate ? "Private table" : "Public table"}
                 </span>
               </header>
+              {match.credit && (
+                <p className="font-pixel-body text-[20px] text-bone -mt-2">
+                  Everyone staked {fmt(match.credit.stake)}.{" "}
+                  {match.credit.nets[picked] != null && (
+                    <span style={{ color: match.credit.nets[picked] > 0 ? "#f4c430" : "#e85a7a" }}>
+                      {seatName(pickedSeat)}: {signed(match.credit.nets[picked])}.{" "}
+                    </span>
+                  )}
+                  {match.credit.cpuTake > 0 && `${fmt(match.credit.cpuTake)} went to a bot.`}
+                </p>
+              )}
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] items-start">
                 <Panel title="Standings" icon="crown" deep={game.deep}>
-                  <Standings standings={match.standings} you={match.you} picked={picked} onPick={setPicked} />
+                  <Standings standings={match.standings} you={match.you} picked={picked} onPick={setPicked} nets={match.credit?.nets} />
                 </Panel>
                 <Panel title="Summary" icon="user" deep="#463a78">
                   {pickedSeat && (

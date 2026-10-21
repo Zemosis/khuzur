@@ -58,11 +58,11 @@ describe.skipIf(!TEST_DATABASE_URL)("solo matches and per-game stats (Postgres)"
     expect(res.body).toEqual({ recorded: true, place: 1 });
 
     const { rows } = await m.pool.query(
-      "select gs.solo, gs.max_players, gp.final_position, gp.coins_earned, gp.exp_earned, gp.rating_before from game_players gp join game_sessions gs on gs.id = gp.session_id",
+      "select gs.solo, gs.max_players, gp.final_position, gp.coins_earned, gp.exp_earned from game_players gp join game_sessions gs on gs.id = gp.session_id",
     );
-    expect(rows).toEqual([{ solo: true, max_players: 4, final_position: 1, coins_earned: 0, exp_earned: 0, rating_before: null }]);
-    const { rows: [profile] } = await m.pool.query("select coins, exp, rating from profiles");
-    expect(profile).toMatchObject({ coins: 0, exp: 0, rating: 1000 });
+    expect(rows).toEqual([{ solo: true, max_players: 4, final_position: 1, coins_earned: 0, exp_earned: 0 }]);
+    const { rows: [profile] } = await m.pool.query("select coins, exp from profiles");
+    expect(profile).toMatchObject({ coins: 0, exp: 0 });
   });
 
   it("records a repeated report of the same match only once", async () => {
@@ -136,6 +136,45 @@ describe.skipIf(!TEST_DATABASE_URL)("solo matches and per-game stats (Postgres)"
     expect(s.muushig).toMatchObject({ games: 2, wins: 0, deadLast: 1, avgFinish: 3.5 });
     expect(s.muushig.extras).toMatchObject({ eaten: 18, gone_in: 12, folded: 4, sweeps: 2 });
     expect(s.muushig.streak).toEqual({ current: -2, bestWin: 0 });
+  });
+
+  it("splits free and credit matches, with what the credit ones came to", async () => {
+    await report(thirteen(1, 40)); // free
+    await report(thirteen(4, 30)); // made a credit match below: lost the stake
+    await report(thirteen(1, 20)); // made a credit match below: won the pot
+    const {
+      rows: [me],
+    } = await m.pool.query("select id from users where email = 'solo@test.dev'");
+    const { rows: sessions } = await m.pool.query(
+      "select gp.session_id from game_players gp join game_sessions gs on gs.id = gp.session_id where gp.player_id = $1 order by gs.finished_at",
+      [me.id],
+    );
+    const credit = async (sessionId, n, net, won) => {
+      await m.pool.query("update game_sessions set credit_tier = 'MID' where id = $1", [sessionId]);
+      await m.pool.query(
+        `insert into credit_hands (table_id, session_id, tier, hand_number, seats, game_type)
+         values ('00000000-0000-4000-8000-00000000000${n}', $1, 'MID', 1, $2, 'thirteen')`,
+        [sessionId, JSON.stringify([{ seat: 0, user_id: me.id, stack_before: 500, net, won }])],
+      );
+    };
+    await credit(sessions[1].session_id, 1, -500, 0);
+    await credit(sessions[2].session_id, 2, 1000, 1500);
+    const forStakes = async (stakes) => (await request(app).get(`/api/auth/stats?stakes=${stakes}`).set(auth())).body;
+
+    const all = await forStakes("all");
+    expect(all.stakes).toBe("all");
+    expect(all.thirteen).toMatchObject({ games: 3, wins: 2, credits: { games: 2, net: 500, potsWon: 1, biggestPot: 1500 } });
+    expect(all.thirteen.recent.map((r) => [r.place, r.tier, r.net])).toEqual([
+      [1, "MID", 1000],
+      [4, "MID", -500],
+      [1, null, null],
+    ]);
+    const free = await forStakes("free");
+    expect(free.thirteen).toMatchObject({ games: 1, wins: 1, credits: { games: 0, net: 0 } });
+    const credits = await forStakes("credits");
+    expect(credits.overall).toMatchObject({ games: 2, wins: 1, losses: 1, credits: { net: 500, potsWon: 1 } });
+    expect(credits.muushig.games).toBe(0);
+    expect((await forStakes("nonsense")).stakes).toBe("all");
   });
 
   it("never exposes rating", async () => {

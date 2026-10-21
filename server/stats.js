@@ -3,12 +3,15 @@
 // instant. Poker has no places, so it has its own figures (pokerStatsFor, as
 // { free, credits }) and stays out of the others, overall included.
 // Every figure is computed from the recorded matches (player_match_history),
-// online and solo alike, so it can never disagree with history. Rating is
-// deliberately left out for now.
+// online and solo alike, so it can never disagree with history. The other
+// games' figures come for one stakes at a time (all, free or credits; see
+// STAKE_VIEWS). There is no rating: credits are the ranked play.
 
 import { pool } from "./db/index.js";
 
 const VIEWS = { overall: null, thirteen: "thirteen", muushig: "muushig" };
+// Which matches count: every one, free ones (practice included), or credit matches.
+export const STAKE_VIEWS = ["all", "free", "credits"];
 const RECENT = 20;
 
 const int = (v) => (v == null ? 0 : Number(v));
@@ -25,9 +28,9 @@ function streaks(results) {
   return { current: run, bestWin };
 }
 
-async function statsFor(playerId, gameType) {
-  const where = "player_id = $1 and ($2::game_type is null or game_type = $2)";
-  const args = [playerId, gameType];
+async function statsFor(playerId, gameType, stakes) {
+  const where = "player_id = $1 and ($2::game_type is null or game_type = $2) and ($3::text = 'all' or (credit_tier is not null) = ($3::text = 'credits'))";
+  const args = [playerId, gameType, stakes];
 
   const [summary, places, results, recent, extras, hands] = await Promise.all([
     pool.query(
@@ -43,7 +46,11 @@ async function statsFor(playerId, gameType) {
          coalesce(sum(coalesce((stats ->> 'rounds_played')::int, round_count)), 0) as rounds_played,
          coalesce(sum(duration_seconds), 0)                        as total_seconds,
          round(avg(duration_seconds))                              as avg_seconds,
-         max(finished_at)                                          as last_played_at
+         max(finished_at)                                          as last_played_at,
+         count(*) filter (where credit_tier is not null)           as credit_games,
+         coalesce(sum(credit_net), 0)                              as credit_net,
+         count(*) filter (where credit_won > 0)                    as pots_won,
+         coalesce(max(credit_won), 0)                              as biggest_pot
        from player_match_history where ${where}`,
       args,
     ),
@@ -57,7 +64,7 @@ async function statsFor(playerId, gameType) {
     pool.query(`select is_winner from player_match_history where ${where} order by finished_at`, args),
     pool.query(
       `select session_id, game_type, final_position, max_players, final_score, is_winner,
-              left_early, solo, duration_seconds, finished_at
+              left_early, solo, duration_seconds, finished_at, credit_tier, credit_net
          from player_match_history where ${where}
         order by finished_at desc limit ${RECENT}`,
       args,
@@ -96,6 +103,8 @@ async function statsFor(playerId, gameType) {
     placements: places.rows.map((r) => ({ place: int(r.place), times: int(r.times) })),
     rounds: { won: int(s.rounds_won), played: int(s.rounds_played) },
     time: { totalSeconds: int(s.total_seconds), avgSeconds: dec(s.avg_seconds), lastPlayedAt: s.last_played_at },
+    // Credit matches among these: what they came to.
+    credits: { games: int(s.credit_games), net: int(s.credit_net), potsWon: int(s.pots_won), biggestPot: int(s.biggest_pot) },
     recent: recent.rows.map((r) => ({
       id: r.session_id,
       game: r.game_type,
@@ -107,6 +116,8 @@ async function statsFor(playerId, gameType) {
       score: r.final_score,
       seconds: r.duration_seconds,
       finishedAt: r.finished_at,
+      tier: r.credit_tier,
+      net: r.credit_net == null ? null : int(r.credit_net),
     })),
   };
   if (extras) view.extras = Object.fromEntries(extras.rows.map((r) => [r.key, Number(r.total)]));
@@ -131,7 +142,7 @@ const pokerFigures = (r = {}) => {
   };
 };
 
-const STAKES = "case when gs.poker_tier is null then 'free' else 'credits' end";
+const STAKES = "case when gs.credit_tier is null then 'free' else 'credits' end";
 
 /**
  * Poker figures from player_poker_stats, free and credit play apart: zeros
@@ -143,7 +154,7 @@ async function pokerStatsFor(playerId) {
   const [figures, tables, ranks] = await Promise.all([
     pool.query("select * from player_poker_stats where player_id = $1", [playerId]),
     pool.query(
-      `select gs.id, ${STAKES} as stakes, gs.poker_tier, gs.name as table_name, gs.finished_at, gp.final_score,
+      `select gs.id, ${STAKES} as stakes, gs.credit_tier, gs.name as table_name, gs.finished_at, gp.final_score,
               coalesce((gp.stats ->> 'hands_played')::int, 0) as hands,
               extract(epoch from (coalesce(gp.left_at, gs.finished_at) - coalesce(gp.joined_at, gs.started_at)))::integer as seconds
          from game_players gp
@@ -169,17 +180,18 @@ async function pokerStatsFor(playerId) {
     recent: tables.rows
       .filter((r) => r.stakes === stakes)
       .slice(0, RECENT)
-      .map((r) => ({ id: r.id, tier: r.poker_tier, table: r.table_name, net: int(r.final_score), hands: int(r.hands), seconds: int(r.seconds), finishedAt: r.finished_at })),
+      .map((r) => ({ id: r.id, tier: r.credit_tier, table: r.table_name, net: int(r.final_score), hands: int(r.hands), seconds: int(r.seconds), finishedAt: r.finished_at })),
     showdownRanks: Object.fromEntries(ranks.rows.filter((r) => r.stakes === stakes).map((r) => [r.rank, { shown: int(r.shown), won: int(r.won) }])),
   });
   return { free: forStakes("free"), credits: forStakes("credits") };
 }
 
-/** { overall, thirteen, muushig, poker } for one signed-in player. */
-export async function playerStats(playerId) {
+/** { stakes, overall, thirteen, muushig, poker } for one signed-in player; all but poker for `stakes` only. */
+export async function playerStats(playerId, stakes = "all") {
+  if (!STAKE_VIEWS.includes(stakes)) stakes = "all";
   const [entries, poker] = await Promise.all([
-    Promise.all(Object.entries(VIEWS).map(async ([name, gameType]) => [name, await statsFor(playerId, gameType)])),
+    Promise.all(Object.entries(VIEWS).map(async ([name, gameType]) => [name, await statsFor(playerId, gameType, stakes)])),
     pokerStatsFor(playerId),
   ]);
-  return { ...Object.fromEntries(entries), poker };
+  return { stakes, ...Object.fromEntries(entries), poker };
 }

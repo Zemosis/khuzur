@@ -1,12 +1,15 @@
 // STANDINGS — every seat's finish, best first. Each row picks the player the
 // summary and the timeline are about; yours is marked YOU. A player who left
-// shows as LEFT, and the CPU that finished their seat gets its own row.
+// shows as LEFT, and the CPU that finished their seat gets its own row. At a
+// credit match each staked player's row ends with the credits they won or
+// lost (nets, by seat).
 
 import React from "react";
 import { INK } from "../pixelTokens";
 import { ordinal } from "../profile/ordinal";
 import { seatName } from "../../utils/matchSummary";
 import { seatColor } from "./seatColors";
+import { signed } from "../credits/signed";
 
 const ACCENT = "#f4c430";
 
@@ -18,7 +21,7 @@ function Chip({ bg, fg = INK, children }) {
   );
 }
 
-export default function Standings({ standings, you, picked, onPick }) {
+export default function Standings({ standings, you, picked, onPick, nets = null }) {
   return (
     <div className="flex flex-col gap-1.5 p-3" role="list" aria-label="Standings">
       {standings.map((s) => {
@@ -58,9 +61,18 @@ export default function Standings({ standings, you, picked, onPick }) {
               {s.cpuTookOver && <Chip bg="#2a234d" fg="#ead8b1">CPU TOOK OVER</Chip>}
             </span>
             <span className="text-right tabular-nums text-parchment whitespace-nowrap">{s.score ?? "-"} pts</span>
-            <span className="text-right tabular-nums whitespace-nowrap min-w-[52px]" style={{ color: s.ratingDelta > 0 ? "#9bd14f" : s.ratingDelta < 0 ? "#e85a7a" : "#8a7fb0" }}>
-              {s.ratingDelta == null ? "" : `${s.ratingDelta > 0 ? "+" : ""}${s.ratingDelta}`}
-            </span>
+            {(() => {
+              const net = s.kind === "human" ? nets?.[s.seat] : null;
+              return (
+                <span
+                  className="text-right tabular-nums whitespace-nowrap min-w-[52px]"
+                  title={net == null ? undefined : "Credits won or lost"}
+                  style={{ color: net > 0 ? "#f4c430" : net < 0 ? "#e85a7a" : "#8a7fb0" }}
+                >
+                  {net == null ? "" : `${signed(net)} CR`}
+                </span>
+              );
+            })()}
           </button>
         );
       })}

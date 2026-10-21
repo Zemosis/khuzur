@@ -98,8 +98,8 @@ describe.skipIf(!TEST_DATABASE_URL)("Google / Discord sign in (Postgres)", () =>
     expect(first.error).toBeUndefined();
     const user = m.verifyToken(first.token);
     expect(user.email).toBe("ann@gmail.test");
-    const { rows } = await m.pool.query("select username, rating from profiles where id = $1", [user.id]);
-    expect(rows[0]).toEqual({ username: null, rating: 1000 }); // name set up on the site next
+    const { rows } = await m.pool.query("select username, level from profiles where id = $1", [user.id]);
+    expect(rows[0]).toEqual({ username: null, level: 1 }); // name set up on the site next
 
     // The code is traded with the secret and the PKCE verifier.
     const body = new URLSearchParams(first.calls[0].init.body);

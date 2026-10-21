@@ -49,6 +49,10 @@ import { BubblesToggle, MotionToggle } from "../../components/SettingsModal";
 import { TableHeader, TableSidebar, ConnectionSignal } from "../../components/TableChrome";
 import { useUnread } from "../../hooks/useUnread";
 import { positionOf, seatPositions } from "../../utils/seatPosition";
+import Modal from "../../components/credits/Modal";
+import { signed } from "../../components/credits/signed";
+import { fmt } from "../../utils/poker/tiers";
+import { FORFEIT_ROUNDS } from "../../utils/stakes";
 
 const AVATAR_COLOR = { 1: "#f4c430", 2: "#5fd4d6", 3: "#e85a7a", 4: "#9bd14f", 5: "#c5a8ff", custom: "#ead8b1" };
 
@@ -96,6 +100,7 @@ function roundEndOf(s) {
   return {
     roundNumber: s.roundNumber,
     players: s.players.map((p, idx) => ({
+      seat: idx,
       name: p.name,
       score: p.score,
       isEliminated: p.isEliminated,
@@ -104,6 +109,14 @@ function roundEndOf(s) {
     roundWinnerName: s.winnerIndex !== undefined ? s.players[s.winnerIndex]?.name : undefined,
     isGameOver: s.gameState === GAME_STATES.GAME_OVER,
   };
+}
+
+/** Who took a credit match's pot, in a line. */
+function potLine(result, players) {
+  if (result.void) return "THE MATCH WAS VOID: EVERY STAKE WENT BACK";
+  const names = result.payouts.map((p) => players[p.seat].name.split(" #")[0].toUpperCase());
+  if (!names.length) return `A BOT WON: THE ${fmt(result.pot)} POT IS LOST`;
+  return `${names.join(" & ")} ${names.length === 1 ? `WINS ${fmt(result.payouts[0].amount)} CREDITS` : `SPLIT THE ${fmt(result.pot)} POT`}`;
 }
 
 /** The log's fields for one move (null: nothing to log). */
@@ -263,6 +276,14 @@ const GameThirteen = () => {
     [isSoloGame, playerName],
   );
 
+  // A credit match (online): its stake, pot and covered seats, and whether
+  // you have a stake in the match being played.
+  const credit = isSoloGame ? null : (gameState?.credit ?? null);
+  const staking = !!credit && gameState.gameState !== GAME_STATES.GAME_OVER && !!credit.seats?.[getMyPlayerIndex(gameState)]?.staked;
+  const [confirmExit, setConfirmExit] = useState(false);
+  const [restakeError, setRestakeError] = useState("");
+  const restakingRef = useRef(false); // PLAY AGAIN sent: a refusal shows on the results
+
   // Your turn, made hard to miss (also from another tab), and chat bubbles
   // over the seats.
   const bubbles = useChatBubbles(messages);
@@ -374,8 +395,23 @@ const GameThirteen = () => {
   });
   const onRejected = useEffectEvent(({ reason }) => {
     setErrorMessage(reason || "Move rejected");
+    setRestakeError(restakingRef.current ? reason || "" : "");
+    restakingRef.current = false;
     safePlay("playError");
   });
+  const onTable = useEffectEvent((t) => {
+    setTable(t);
+    // A credit match is over and you staked for the next: back to the waiting table.
+    if (gameStateRef.current && t.mySeat != null) {
+      gameStateRef.current = null;
+      lastHistoryLengthRef.current = 0;
+      restakingRef.current = false;
+      setGameState(null);
+      setShowRoundEnd(false);
+    }
+  });
+  // The next credit match started without you (you didn't stake for it).
+  const onLeft = useEffectEvent(() => navigate("/lobby-13", { state: { tab: "credits" } }));
 
   useEffect(() => {
     if (!lobbyId) {
@@ -390,6 +426,8 @@ const GameThirteen = () => {
     const handleStateUpdate = (newState) => onServerState(newState);
     const handleReceiveChat = (msg) => onChat(msg);
     const handleMoveRejected = (rejection) => onRejected(rejection);
+    const handleTable = (t) => onTable(t);
+    const handleLeft = () => onLeft();
 
     connect().then(() => {
       if (socket.connected) joinGame();
@@ -399,14 +437,16 @@ const GameThirteen = () => {
     socket.on("game_state_update", handleStateUpdate);
     socket.on("receive_chat", handleReceiveChat);
     socket.on("move_rejected", handleMoveRejected);
-    socket.on("table_update", setTable);
+    socket.on("table_update", handleTable);
+    socket.on("table_left", handleLeft);
 
     return () => {
       socket.off("connect", handleConnect);
       socket.off("game_state_update", handleStateUpdate);
       socket.off("receive_chat", handleReceiveChat);
       socket.off("move_rejected", handleMoveRejected);
-      socket.off("table_update", setTable);
+      socket.off("table_update", handleTable);
+      socket.off("table_left", handleLeft);
       // Left without EXIT (browser Back): the server holds the seat for the
       // grace period; coming back re-joins and reclaims it.
       socket.emit("leave_page", { lobbyId });
@@ -559,9 +599,17 @@ const GameThirteen = () => {
   };
 
   // --- EXIT ---
-  const handleExit = () => {
+  // Leaving a credit match mid-match asks first: a bot covers your seat, and your stake is at risk.
+  const leave = () => {
     if (!isSoloGame) socket.emit("leave_lobby", { lobbyId });
-    navigate("/");
+    if (credit || table?.credit) navigate("/lobby-13", { state: { tab: "credits" } });
+    else navigate("/");
+  };
+  const handleExit = () => (staking ? setConfirmExit(true) : leave());
+  const playAgain = () => {
+    restakingRef.current = true;
+    setRestakeError("");
+    socket.emit("credit_restake", { lobbyId });
   };
 
   // --- REMATCH ---
@@ -593,6 +641,7 @@ const GameThirteen = () => {
         onRemoveCpu={handleRemoveCpu}
         onSetCpuLevel={handleSetCpuLevel}
         onStart={handleStart}
+        onRestake={playAgain}
         chatLimit={chatLimit}
         errorMessage={errorMessage}
         myFace={{ variant: identity.avatar, customAvatarData: identity.customAvatar }}
@@ -776,8 +825,9 @@ const GameThirteen = () => {
         narrow={narrow}
         onExit={handleExit}
         badge={
-          <div className="font-pixel-display text-[10px] text-bone/60">
+          <div className="font-pixel-display text-[10px] text-bone/60 whitespace-nowrap">
             LOBBY <span className="text-glow-cyan">#{lobbyId}</span>
+            {credit && <span className="text-glow-gold"> · POT {fmt(credit.pot || credit.result?.pot || 0)}</span>}
           </div>
         }
         title="THIRTEEN"
@@ -964,6 +1014,7 @@ const GameThirteen = () => {
             matchWins={gameState.matchWins || [0, 0, 0, 0]}
             myIndex={myIndex}
             faceFor={faceFor}
+            covered={credit?.seats}
           />
           <GameChat
             messages={messages}
@@ -974,6 +1025,31 @@ const GameThirteen = () => {
           />
         </TableSidebar>
       </div>
+
+      {confirmExit && (
+        <Modal title="Leave the match?" icon="close" deep="#a83a5a" onClose={() => setConfirmExit(false)}>
+          <p className="font-pixel-body text-[22px] text-bone leading-tight">
+            A Hard bot plays your seat while you're gone. Come back within {FORFEIT_ROUNDS} rounds or your {fmt(credit.stake)} is lost with the seat.
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              onClick={() => setConfirmExit(false)}
+              autoFocus
+              className="pixel-btn font-pixel-display text-[11px] py-3"
+              style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}
+            >
+              STAY
+            </button>
+            <button
+              onClick={leave}
+              className="pixel-btn font-pixel-display text-[11px] py-3"
+              style={{ backgroundColor: "#7a1530", borderColor: "#3a0a18", color: "#ead8b1" }}
+            >
+              LEAVE
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* ROUND END / GAME OVER OVERLAY */}
       {showRoundEnd && roundEndData && (
@@ -1008,6 +1084,11 @@ const GameThirteen = () => {
                       : "GAME FINISHED";
                   })()}
                 </div>
+                {credit && (
+                  <div role="status" className={`font-pixel-display text-[10px] text-center ${credit.result ? "text-glow-gold" : "text-bone/70 blink"}`}>
+                    {credit.result ? potLine(credit.result, roundEndData.players) : "PAYING OUT THE POT..."}
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -1062,6 +1143,16 @@ const GameThirteen = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      {(() => {
+                        const r = roundEndData.isGameOver && credit?.result;
+                        if (!r || r.void || !r.staked.includes(p.seat)) return null;
+                        const net = (r.payouts.find((x) => x.seat === p.seat)?.amount ?? 0) - credit.stake;
+                        return (
+                          <span className="font-pixel-display text-[9px] tabular-nums mx-1" style={{ color: net > 0 ? "#f4c430" : "#e85a7a" }}>
+                            {signed(net)}
+                          </span>
+                        );
+                      })()}
                       <span className="font-pixel-display text-[10px] text-glow-gold whitespace-nowrap">
                         {p.score} pts
                       </span>
@@ -1081,7 +1172,30 @@ const GameThirteen = () => {
                 ))}
             </div>
 
-            {roundEndData.isGameOver ? (
+            {roundEndData.isGameOver && credit ? (
+              <div className="flex flex-col items-center gap-3 mt-4">
+                <button
+                  onClick={playAgain}
+                  disabled={!credit.result}
+                  className="pixel-btn font-pixel-display text-[10px] px-6 py-3"
+                  style={{ backgroundColor: "#9bd14f", borderColor: "#6a9a30", color: "#1a3a0e" }}
+                >
+                  PLAY AGAIN · {fmt(credit.stake)}
+                </button>
+                <button
+                  onClick={leave}
+                  className="pixel-btn font-pixel-display text-[10px] px-6 py-3"
+                  style={{ backgroundColor: "#7a1530", borderColor: "#3a0a18", color: "#ead8b1" }}
+                >
+                  EXIT
+                </button>
+                {restakeError && (
+                  <p role="alert" className="font-pixel-body text-[20px] text-center leading-tight" style={{ color: "#e85a7a" }}>
+                    {restakeError}
+                  </p>
+                )}
+              </div>
+            ) : roundEndData.isGameOver ? (
               <div className="flex flex-col items-center gap-3 mt-4">
                 {amHost || isSoloGame ? (
                   <>

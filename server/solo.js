@@ -1,7 +1,7 @@
 // SOLO REPORTS — games played alone against CPUs run in the browser, so the
 // browser reports how they ended. A report is checked before it is recorded,
 // and the server works out the placing itself from the final scores. Solo
-// matches count for stats only (no coins, exp or rating), so a forged report
+// matches count for stats only (no coins or exp), so a forged report
 // can only inflate the sender's own profile.
 
 const GAMES = {

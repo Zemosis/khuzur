@@ -63,7 +63,7 @@ async function accountSummary(userId) {
 /** Every hand two players sat in together (newest first, up to 200), each seat named. */
 export async function pairDetail(a, b) {
   const { rows } = await pool.query(
-    `select id, played_at, tier, is_private, seats, board, events from credit_hands
+    `select id, played_at, tier, is_private, seats, board, events, game_type, cpu_take from credit_hands
       where seats @> $1::jsonb and seats @> $2::jsonb order by played_at desc limit 200`,
     [JSON.stringify([{ user_id: a }]), JSON.stringify([{ user_id: b }])],
   );
@@ -75,6 +75,8 @@ export async function pairDetail(a, b) {
       id: h.id,
       playedAt: h.played_at,
       tier: h.tier,
+      gameType: h.game_type,
+      cpuTake: Number(h.cpu_take),
       isPrivate: h.is_private,
       board: h.board,
       events: h.events,
