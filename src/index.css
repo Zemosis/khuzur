@@ -500,19 +500,53 @@ input[type="range"].pixel-range {
 /* Still, the shine would just be a white bar on the button. */
 html[data-motion="reduced"] .claim-shine { display: none; }
 
-/* PixelLoader: each cell lights at its own delay, holds while the rest light
-   (the last lights at 640ms, + 160ms: 800ms), then goes out in the same order.
-   step-end keeps every change a hard snap. Unlit until its delay comes up. */
-@keyframes pixel-loader {
-  0% { background-color: var(--on); box-shadow: 1px 1px 0 #0a0712; }
-  50%, 100% { background-color: var(--off); box-shadow: none; }
+/* Loading UI loaders (components/loading-ui/, from loading-ui.com): block
+   glyphs that move a whole character at a time. REDUCED holds them still. */
+@keyframes loading-ui-square-snake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(var(--loader-x), 0); }
+  50% { transform: translate(var(--loader-x), var(--loader-y)); }
+  75% { transform: translate(0, var(--loader-y)); }
 }
-.pixel-loader-cell {
-  background-color: var(--off);
-  animation: pixel-loader 1600ms step-end infinite;
+.loading-ui-square-snake {
+  width: var(--loader-size);
+  height: var(--loader-size);
 }
-html[data-motion="reduced"] .pixel-loader-cell { animation: none; }
-html[data-motion="reduced"] .pixel-loader-cell[data-still-on] { background-color: var(--on); }
+.loading-ui-square-snake > span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1ch;
+  height: 1ch;
+  pointer-events: none;
+  animation: loading-ui-square-snake var(--duration, 2s) linear infinite;
+}
+@keyframes loading-ui-conveyor {
+  0% { transform: translateX(var(--loader-start-x)); }
+  100% { transform: translateX(var(--loader-end-x)); }
+}
+.loading-ui-conveyor {
+  width: var(--loader-width);
+  height: 1em;
+}
+.loading-ui-conveyor > [data-block] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1ch;
+  height: 100%;
+  pointer-events: none;
+  background-color: var(--mask-color);
+  animation: loading-ui-conveyor var(--duration, 1.8s) linear infinite;
+}
+html[data-motion="reduced"] .loading-ui-square-snake > span,
+html[data-motion="reduced"] .loading-ui-conveyor > [data-block] { animation: none; }
 
 @keyframes blink {
   0%, 50% { opacity: 1; }

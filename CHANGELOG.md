@@ -4,6 +4,13 @@ Every version of Khuzur Card Hall, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
+## 1.3.1 — 21 October 2026
+
+- **Profile stats open at once.** Your stats show straight away with the figures from your last visit, and a small **UPDATING** box in the corner refreshes them behind the scenes.
+- **Match pages use the whole screen** on wide displays: standings and the summary on the left, the timeline and rounds on the right.
+- **Timeline:** the scores for the round you hover now show under the chart, so they never cover the lines.
+- New loading animations on the **CLAIM** buttons.
+
 ## 1.3.0 — 21 October 2026
 
 ### Muushig and Thirteen for credits

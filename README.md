@@ -1,4 +1,4 @@
-# Khuzur Card Hall
+# Khuzur: Card Hall
 
 A retro pixel-art card hall in the browser. Play classic card games with friends online, or practise against CPU players, all styled like a 16-bit console game.
 
@@ -6,11 +6,11 @@ A retro pixel-art card hall in the browser. Play classic card games with friends
 
 ## Games
 
-| Game | Players | What it is | Rules |
-| --- | --- | --- | --- |
-| **Thirteen** | 2–4 | A shedding game in the style of Vietnam's *Tiến lên*: beat the last play with a higher single, pair, triple or 5-card hand, and be the first to empty your hand. | [Rulebook](docs/thirteen-rulebook.md) |
-| **Muushig** | 5 | A Mongolian trick-taking game with trumps. Everyone starts on 15 points, each trick you win takes one off, and the first to reach 0 wins. | [Rulebook](docs/muushig-rulebook.md) |
-| **Poker** | 2–6 | No-limit Texas Hold'em, for free chips or for credits. | [Rulebook](docs/poker-rulebook.md) |
+| Game         | Players | What it is                                                                                                                                                       | Rules                                 |
+| ------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| **Thirteen** | 2–4     | A shedding game in the style of Vietnam's _Tiến lên_: beat the last play with a higher single, pair, triple or 5-card hand, and be the first to empty your hand. | [Rulebook](docs/thirteen-rulebook.md) |
+| **Muushig**  | 5       | A Mongolian trick-taking game with trumps. Everyone starts on 15 points, each trick you win takes one off, and the first to reach 0 wins.                        | [Rulebook](docs/muushig-rulebook.md)  |
+| **Poker**    | 2–6     | No-limit Texas Hold'em, for free chips or for credits.                                                                                                           | [Rulebook](docs/poker-rulebook.md)    |
 
 Every game also has its rules built in: open **RULES** at any table.
 
@@ -81,13 +81,13 @@ npm run coverage      # coverage report in coverage/
 
 ## Documentation
 
-| Document | What's in it |
-| --- | --- |
-| [Thirteen rulebook](docs/thirteen-rulebook.md) | Card order, combinations, scoring, CPU levels |
-| [Muushig rulebook](docs/muushig-rulebook.md) | Dealing, going in or folding, trumps, scoring |
-| [Poker rulebook](docs/poker-rulebook.md) | Betting, pots, chips, credit tables |
-| [Architecture](docs/ARCHITECTURE.md) | How the client, server and database fit together, security and deployment |
-| [Style guide](docs/STYLEGUIDE.md) | The pixel-art design rules every screen follows |
+| Document                                       | What's in it                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------- |
+| [Thirteen rulebook](docs/thirteen-rulebook.md) | Card order, combinations, scoring, CPU levels                             |
+| [Muushig rulebook](docs/muushig-rulebook.md)   | Dealing, going in or folding, trumps, scoring                             |
+| [Poker rulebook](docs/poker-rulebook.md)       | Betting, pots, chips, credit tables                                       |
+| [Architecture](docs/ARCHITECTURE.md)           | How the client, server and database fit together, security and deployment |
+| [Style guide](docs/STYLEGUIDE.md)              | The pixel-art design rules every screen follows                           |
 
 ## License
 

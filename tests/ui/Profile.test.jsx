@@ -123,9 +123,46 @@ const renderProfile = async (data) => {
 const tile = (label) => screen.getByText(label, { selector: "span" }).parentElement;
 const section = (title) => screen.getByRole("heading", { name: title }).closest("section");
 
-beforeEach(() => api.mockReset());
+beforeEach(() => {
+  api.mockReset();
+  localStorage.clear();
+});
 
 describe("Profile stats", () => {
+  it("opens on the figures kept from last time, with UPDATING in the corner until the fresh ones land", async () => {
+    localStorage.setItem("khuzur_stats:me:all", JSON.stringify({ ...played, overall: view({ games: 3, wins: 1, losses: 2 }) }));
+    let answer;
+    api.mockImplementation(async (_path, opts) => (opts?.base === "/api/credits" ? { balance: 12340, onTable: 0, rank: 57 } : new Promise((r) => (answer = r))));
+    render(
+      <MemoryRouter>
+        <Profile />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole("group", { name: "Game" })).toBeInTheDocument();
+    expect(screen.queryByText("Loading your stats...")).toBeNull();
+    expect(tile("Games")).toHaveTextContent("3");
+    expect(screen.getByText("Updating")).toBeInTheDocument();
+    answer({ ...played, stakes: "all" });
+    await screen.findByText("7", { selector: "span" });
+    expect(screen.queryByText("Updating")).toBeNull();
+    expect(JSON.parse(localStorage.getItem("khuzur_stats:me:all")).overall.games).toBe(7);
+  });
+
+  it("keeps the old figures when the refresh fails, and says so", async () => {
+    localStorage.setItem("khuzur_stats:me:all", JSON.stringify({ ...played, overall: view({ games: 3 }) }));
+    api.mockImplementation(async (_path, opts) => {
+      if (opts?.base === "/api/credits") return { balance: 12340, onTable: 0, rank: 57 };
+      throw new Error("offline");
+    });
+    render(
+      <MemoryRouter>
+        <Profile />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("Couldn't update: showing the last figures")).toBeInTheDocument();
+    expect(tile("Games")).toHaveTextContent("3");
+  });
+
   it("the stakes switch fetches free or credit matches, and credit ones show what they came to", async () => {
     const creditView = view({
       games: 2,

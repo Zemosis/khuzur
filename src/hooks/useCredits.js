@@ -8,7 +8,7 @@ import { useAuth } from "./useAuth";
 
 const CREDITS = { base: "/api/credits" };
 
-/** How long a claim's loader (PixelLoader) shows at the least. */
+/** How long a claim's loader (ConveyorLoop) shows at the least. */
 export const LOADER_MIN_MS = 600;
 
 /** `promise`'s value, but not before `ms` have passed: a quick answer would only flash the loader. */

@@ -1,7 +1,8 @@
 // SCORE TIMELINE — every seat's score after each round, from the start. The
 // picked player's line is bright and labelled at its end; the rest stay dim.
 // Thirteen counts points up (lower is better); Muushig counts down from 15 to
-// 0. Hover or arrow-key focus on a round shows everyone's score there.
+// 0. Hover or arrow-key focus on a round shows everyone's score there, in a
+// readout under the chart, so it never covers a line.
 
 import React, { useEffect, useRef, useState } from "react";
 import { scoreLines, seatName } from "../../utils/matchSummary";
@@ -62,8 +63,6 @@ export default function ScoreTimeline({ gameType, rounds, seats, picked }) {
     else return;
     e.preventDefault();
   };
-  const tipLeft = hover == null ? 0 : Math.min(width - 190, Math.max(0, x(hover) + 12));
-
   return (
     <div className="flex flex-col gap-3 p-3">
       {/* Legend: color is never the only way to tell the seats apart. */}
@@ -134,23 +133,24 @@ export default function ScoreTimeline({ gameType, rounds, seats, picked }) {
             );
           })}
         </svg>
-        {hover != null && (
-          <div
-            role="status"
-            className="absolute pointer-events-none flex flex-col gap-1 px-2.5 py-2 font-pixel-body text-[18px] leading-none"
-            style={{ left: tipLeft, top: 8, width: 178, backgroundColor: "#0a0712", boxShadow: "0 0 0 2px #463a78" }}
-          >
+      </div>
+      {/* The hovered round's scores, best first; one line, so the chart never moves. */}
+      <div role="status" className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 font-pixel-body text-[18px] leading-none" style={{ minHeight: 22 }}>
+        {hover == null ? (
+          <span className="text-bone/50">Hover a round to see everyone's score</span>
+        ) : (
+          <>
             <span className="font-pixel-display text-[9px] text-bone/70">{hover === 0 ? "START" : `AFTER ROUND ${hover}`}</span>
             {[...seats]
               .sort((a, b) => lines[a.seat][hover] - lines[b.seat][hover])
               .map((s) => (
-                <span key={s.seat} className="flex items-center gap-1.5 text-parchment">
+                <span key={s.seat} className="flex items-center gap-1.5" style={{ color: s.seat === picked ? "#ead8b1" : "#c8b890" }}>
                   <span aria-hidden style={{ width: 8, height: 8, backgroundColor: seatColor(s.seat) }} />
-                  <span className="truncate flex-1">{seatName(s)}</span>
-                  <span className="tabular-nums">{lines[s.seat][hover]}</span>
+                  {seatName(s)}
+                  <span className="tabular-nums text-parchment">{lines[s.seat][hover]}</span>
                 </span>
               ))}
-          </div>
+          </>
         )}
       </div>
     </div>

@@ -22,6 +22,7 @@ import { useCredits } from "../hooks/useCredits";
 import { fmt } from "../utils/poker/tiers";
 import { api } from "../lib/api";
 import { connectSocket } from "../utils/socket";
+import UpdatingChip from "../components/UpdatingChip";
 
 const ACCENT = "#f4c430";
 const EXP_PER_LEVEL = 100;
@@ -432,7 +433,7 @@ const MATCH_STAKES = [
 
 // Everything shows from the first visit: a player with no matches sees zeros
 // rather than an empty screen. There is no rating: credits are the ranked play.
-function StatsSheet({ data, stakes, onStakes }) {
+function StatsSheet({ data, stakes, onStakes, dim = false }) {
   const [filter, setFilter] = useState("overall");
   const [recentView, setRecentView] = useState("list");
   const [handsSort, setHandsSort] = useState("rank");
@@ -451,7 +452,8 @@ function StatsSheet({ data, stakes, onStakes }) {
 
   const c = v.credits ?? { games: 0 };
   return (
-    <div className="flex-1 flex flex-col gap-6 p-4 overflow-y-auto min-h-0">
+    // Dimmed while these are another stakes' figures, until this one's arrive.
+    <div className="flex-1 flex flex-col gap-6 p-4 overflow-y-auto min-h-0" style={{ opacity: dim ? 0.45 : 1, transition: "opacity 150ms" }}>
       <Toggle label="Game" options={FILTERS} value={filter} onChange={setFilter} />
       <Toggle label="Stakes" options={MATCH_STAKES} value={stakes} onChange={onStakes} />
 
@@ -550,26 +552,69 @@ function StatsSheet({ data, stakes, onStakes }) {
   );
 }
 
+// The last figures for each stakes, kept in this browser per player: the
+// profile opens on them at once and refreshes them behind the scenes.
+const cacheKey = (playerId, stakes) => `khuzur_stats:${playerId}:${stakes}`;
+function readStats(playerId, stakes) {
+  try {
+    return JSON.parse(localStorage.getItem(cacheKey(playerId, stakes)));
+  } catch {
+    return null;
+  }
+}
+function keepStats(playerId, stakes, data) {
+  try {
+    localStorage.setItem(cacheKey(playerId, stakes), JSON.stringify(data));
+  } catch {
+    /* storage full or blocked: the figures still show, just not next time */
+  }
+}
+
 function StatsPanel() {
   const navigate = useNavigate();
   const { credits } = useCredits();
-  // Each stakes' figures are fetched the first time it's picked, then kept.
+  const { profile } = useAuth();
+  const playerId = profile?.id ?? "me";
   const [stakes, setStakes] = useState("all");
-  const [byStakes, setByStakes] = useState({});
+  // Each stakes' figures: the kept ones at once, then the server's, fetched
+  // once per visit the first time that stakes is picked.
+  const [byStakes, setByStakes] = useState(() =>
+    Object.fromEntries(MATCH_STAKES.map(([id]) => [id, readStats(playerId, id)]).filter(([, d]) => d)),
+  );
+  const [fetched, setFetched] = useState({});
+  const [failedAt, setFailedAt] = useState(null); // a refresh that didn't land, while older figures show
   const [error, setError] = useState("");
   const data = byStakes[stakes] ?? null;
   const shown = data ?? byStakes.all ?? null; // while another stakes loads, the last figures stay up
 
   useEffect(() => {
-    if (byStakes[stakes]) return;
+    if (fetched[stakes]) return;
     let live = true;
     api(`/stats?stakes=${stakes}`)
-      .then((d) => live && setByStakes((b) => ({ ...b, [stakes]: d })))
-      .catch((err) => live && setError(err.message));
+      .then((d) => {
+        if (!live) return;
+        setByStakes((b) => ({ ...b, [stakes]: d }));
+        keepStats(playerId, stakes, d);
+        setFetched((f) => ({ ...f, [stakes]: true }));
+      })
+      .catch((err) => {
+        if (!live) return;
+        setFetched((f) => ({ ...f, [stakes]: true }));
+        if (byStakes[stakes]) setFailedAt(Date.now());
+        else setError(err.message);
+      });
     return () => {
       live = false;
     };
-  }, [stakes, byStakes]);
+  }, [stakes, fetched, byStakes, playerId]);
+
+  // A failed refresh says so for a few seconds, then the chip goes.
+  useEffect(() => {
+    if (!failedAt) return;
+    const id = setTimeout(() => setFailedAt(null), 4000);
+    return () => clearTimeout(id);
+  }, [failedAt]);
+  const chip = failedAt ? "failed" : shown && !fetched[stakes] ? "updating" : null;
 
   return (
     <Panel
@@ -592,8 +637,9 @@ function StatsPanel() {
       ) : !shown ? (
         <p className="p-6 font-pixel-body text-[22px] text-bone">Loading your stats...</p>
       ) : (
-        <StatsSheet data={data ?? shown} stakes={stakes} onStakes={setStakes} />
+        <StatsSheet data={data ?? shown} stakes={stakes} onStakes={setStakes} dim={!data} />
       )}
+      <UpdatingChip state={chip} />
     </Panel>
   );
 }

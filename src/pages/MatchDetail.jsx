@@ -91,7 +91,7 @@ export default function MatchDetail() {
       <TopBar title={poker ? "Table" : "Match"} accent="#f4c430" backLabel="Back" onBack={back} onSettings={() => setShowSettings(true)} />
 
       <main className="flex-1 min-h-0 overflow-y-auto">
-        <div className="w-full max-w-[1100px] mx-auto p-4 flex flex-col gap-4">
+        <div className="w-full max-w-[1600px] mx-auto p-4 flex flex-col gap-4">
           {error ? (
             <Panel title="Match" icon="cards" deep="#463a78">
               <p className="font-pixel-body text-[22px] text-bone p-6 text-center">
@@ -133,30 +133,35 @@ export default function MatchDetail() {
                 </p>
               )}
 
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] items-start">
-                <Panel title="Standings" icon="crown" deep={game.deep}>
-                  <Standings standings={match.standings} you={match.you} picked={picked} onPick={setPicked} nets={match.credit?.nets} />
-                </Panel>
-                <Panel title="Summary" icon="user" deep="#463a78">
-                  {pickedSeat && (
-                    <Summary
-                      gameType={match.gameType}
-                      rounds={match.rounds}
-                      seat={picked}
-                      name={seatName(pickedSeat)}
-                      hands={pickedRow?.stats?.hands}
-                    />
-                  )}
-                </Panel>
+              {/* Wide: the players on the left (standings, then the picked one's
+                  summary), the match as it went on the right (timeline, then
+                  rounds). Narrower, the four stack in that same order. */}
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] items-start">
+                <div className="flex flex-col gap-4 min-w-0">
+                  <Panel title="Standings" icon="crown" deep={game.deep}>
+                    <Standings standings={match.standings} you={match.you} picked={picked} onPick={setPicked} nets={match.credit?.nets} />
+                  </Panel>
+                  <Panel title="Summary" icon="user" deep="#463a78">
+                    {pickedSeat && (
+                      <Summary
+                        gameType={match.gameType}
+                        rounds={match.rounds}
+                        seat={picked}
+                        name={seatName(pickedSeat)}
+                        hands={pickedRow?.stats?.hands}
+                      />
+                    )}
+                  </Panel>
+                </div>
+                <div className="flex flex-col gap-4 min-w-0">
+                  <Panel title="Timeline" icon="star" deep="#463a78">
+                    <ScoreTimeline gameType={match.gameType} rounds={match.rounds} seats={seats} picked={picked} />
+                  </Panel>
+                  <Panel title="Rounds" icon="cards" deep="#463a78">
+                    <RoundList gameType={match.gameType} rounds={match.rounds} seats={seats} picked={picked} />
+                  </Panel>
+                </div>
               </div>
-
-              <Panel title="Timeline" icon="star" deep="#463a78">
-                <ScoreTimeline gameType={match.gameType} rounds={match.rounds} seats={seats} picked={picked} />
-              </Panel>
-
-              <Panel title="Rounds" icon="cards" deep="#463a78">
-                <RoundList gameType={match.gameType} rounds={match.rounds} seats={seats} picked={picked} />
-              </Panel>
             </>
           )}
         </div>

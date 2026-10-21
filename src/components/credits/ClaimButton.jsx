@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Btn } from "../PixelUI";
 import { INK, TONES } from "../pixelTokens";
 import { fmt } from "../../utils/poker/tiers";
-import PixelLoader from "../PixelLoader";
+import ConveyorLoop from "../loading-ui/ConveyorLoop";
 
 /** 51_600_000 -> "14h 20m" (rounded up to the minute). */
 function untilText(ms) {
@@ -28,8 +28,8 @@ export default function ClaimButton({ claim, onClaim, busy = false }) {
       <Btn tone={TONES.poison} onClick={onClaim} disabled={busy} className={`w-full ${busy ? "is-busy" : ""}`}>
         {busy ? (
           <span className="flex items-center justify-center gap-2">
-            {/* The pixel loader, while the claim goes through. */}
-            <PixelLoader label={null} on="#1a3a0e" off="rgba(26,58,14,0.2)" />
+            {/* Blocks running along a track, while the claim goes through. */}
+            <ConveyorLoop length={5} mask="#9bd14f" label={null} className="text-[14px]" />
             Claiming
           </span>
         ) : claim.state === "ready" ? (

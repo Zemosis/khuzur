@@ -12,7 +12,7 @@
 
 import React, { useEffect, useState } from "react";
 import { fmt } from "../../utils/poker/tiers";
-import PixelLoader from "../PixelLoader";
+import ConveyorLoop from "../loading-ui/ConveyorLoop";
 import PixelIcon from "../PixelIcon";
 import { INK } from "../pixelTokens";
 
@@ -76,7 +76,7 @@ export default function MenuClaim({ claim, onClaim, busy = false, error = "" }) 
       >
         {state === "busy" ? (
           <>
-            <PixelLoader label={null} on="#1a3a0e" off="rgba(26,58,14,0.2)" />
+            <ConveyorLoop length={5} mask="#9bd14f" label={null} className="text-[14px]" />
             CLAIMING
           </>
         ) : (
