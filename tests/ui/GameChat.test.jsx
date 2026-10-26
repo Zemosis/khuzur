@@ -91,3 +91,25 @@ describe("GameChat", () => {
     expect(screen.getByRole("tab", { name: "CHAT" })).toHaveAttribute("aria-selected", "true");
   });
 });
+
+describe("table lines and pots in the log", () => {
+  it("shows who left, came back or forfeited, and who took the pot", async () => {
+    const user = userEvent.setup();
+    render(
+      <GameChat
+        onSendMessage={() => {}}
+        messages={[
+          sys(1, { kind: "table", tone: "away", text: "BOB left. A Hard bot plays their seat: they have 2 rounds to come back." }),
+          sys(2, { kind: "table", tone: "back", text: "BOB is back in their seat." }),
+          sys(3, { kind: "table", tone: "gone", text: "CAT was away 2 rounds: the seat is the bot's now, and the stake stays in the pot." }),
+          sys(4, { kind: "pot", text: "ANN wins the 1,500 pot." }),
+        ]}
+      />,
+    );
+    await user.click(screen.getByRole("tab", { name: /log/i }));
+    expect(screen.getByText("BOB left. A Hard bot plays their seat: they have 2 rounds to come back.")).toHaveStyle({ color: "#e85a7a" });
+    expect(screen.getByText("BOB is back in their seat.")).toHaveStyle({ color: "#9bd14f" });
+    expect(screen.getByText(/CAT was away 2 rounds/)).toBeInTheDocument();
+    expect(screen.getByText("ANN WINS THE 1,500 POT.")).toBeInTheDocument();
+  });
+});

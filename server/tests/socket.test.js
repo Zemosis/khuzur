@@ -742,12 +742,15 @@ describe("a running match", () => {
     expect((await r).reason).toBe("Match is still in progress");
   });
 
-  it("leaving mid-match hands the seat to a CPU", async () => {
+  it("leaving mid-match hands the seat to a CPU, and the log says so", async () => {
     const { socks, lobbyId } = await fourHumans();
     const update = next(socks[0], "game_state_update", (s) => s.players[2].type === "AI");
+    const logged = next(socks[0], "receive_chat", (m) => m.type === "SYSTEM");
     socks[2].emit("leave_lobby", { lobbyId });
     const s = await update;
     expect(s.players[2].name).toMatch(/\(CPU\)$/);
+    const name = s.players[2].name.replace(" (CPU)", "");
+    expect(await logged).toMatchObject({ type: "SYSTEM", kind: "table", tone: "away", text: `${name} left. A CPU plays their seat.` });
   });
 
   it("a disconnect keeps the seat through the grace period and rejoin reclaims it", async () => {

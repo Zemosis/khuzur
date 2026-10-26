@@ -4,6 +4,11 @@ Every version of Khuzur Card Hall, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
+## 1.3.3 — 26 October 2026
+
+- **The log follows the table.** It now says when a player leaves and a CPU plays their seat (at a credit match, how many rounds they have to come back), when they come back, when someone joins by taking over a CPU's seat, and when a seat is forfeited. At a poker table it says who left.
+- At the end of a credit match, the log says who took the pot, or that a bot won it.
+
 ## 1.3.2 — 21 October 2026
 
 - **Poker on your Overall stats.** Recent matches list your poker tables with the chips or credits each came to. Time played and your credit figures count poker too, and a new **Poker** box sums up your tables. Wins, places and streaks still count Thirteen and Muushig only, since a poker table has no places.

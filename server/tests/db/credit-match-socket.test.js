@@ -84,6 +84,8 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
     sock.tables = [];
     sock.on("muushig_state", (v) => sock.views.push(v));
     sock.on("game_state_update", (v) => sock.views.push(v));
+    sock.logs = [];
+    sock.on("receive_chat", (msg) => msg.type === "SYSTEM" && sock.logs.push(msg));
     sock.on("table_update", (t) => sock.tables.push(t));
     open.push(sock);
     await new Promise((resolve, reject) => {
@@ -94,7 +96,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
   }
   /** The next `event` passing `test`; for states and tables, one already seen counts. */
   function waitFor(sock, event, test = () => true, ms = 20000) {
-    const seen = { muushig_state: sock.views, game_state_update: sock.views, table_update: sock.tables }[event]?.findLast(test);
+    const seen = { muushig_state: sock.views, game_state_update: sock.views, table_update: sock.tables, receive_chat: sock.logs }[event]?.findLast(test);
     if (seen) return Promise.resolve(seen);
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -244,6 +246,12 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
     const covered = await waitFor(a, "muushig_state", (v) => v.players[1].type === "AI");
     expect(covered.players[1].level).toBe("HARD");
     expect(covered.credit.seats[1]).toMatchObject({ away: true, forfeited: false, roundsLeft: 2 });
+    const bobName = covered.players[1].name.replace(" (CPU)", "");
+    expect(await waitFor(a, "receive_chat", (l) => l.tone === "away")).toMatchObject({
+      type: "SYSTEM",
+      kind: "table",
+      text: `${bobName} left. A Hard bot plays their seat: they have 2 rounds to come back.`,
+    });
     expect(await balance(bob)).toBe(900);
     expect((await me(bob)).rejoin).toEqual({ gameType: "muushig", code: lobbyId.replace("PUB-", ""), tableName: "Ger" });
     const stranger = await client(await player());
@@ -254,6 +262,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
     await waitFor(back, "lobby_joined");
     const seated = await waitFor(back, "muushig_state", (v) => v.mySeat === 1 && v.players[1].type === "HUMAN");
     expect(seated.credit.seats[1]).toMatchObject({ away: false });
+    expect((await waitFor(a, "receive_chat", (l) => l.tone === "back")).text).toBe(`${bobName} is back in their seat.`);
     expect((await me(bob)).rejoin).toBeNull();
   });
 
@@ -274,6 +283,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
       return;
     }
     expect(seen.roundNumber - covered.roundNumber).toBeGreaterThanOrEqual(1);
+    expect((await waitFor(a, "receive_chat", (l) => l.tone === "gone")).text).toMatch(/^M\d+ was away 2 rounds: the seat is the bot's now, and the stake stays in the pot\.$/);
     expect((await me(bob)).rejoin).toBeNull();
     const back = await client(bob);
     back.emit("join_lobby", { lobbyId });

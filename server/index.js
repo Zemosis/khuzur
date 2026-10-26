@@ -26,7 +26,7 @@ import { creditsRouter } from "./credits/routes.js";
 import { adminRouter } from "./credits/admin.js";
 import { economyCheck } from "./credits/check.js";
 import { isTier } from "./game/poker/tiers.js";
-import { isStakeTier, MIN_STAKED } from "./game/stakes.js";
+import { isStakeTier, MIN_STAKED, FORFEIT_ROUNDS } from "./game/stakes.js";
 
 const PORT = process.env.PORT || 3001;
 const CORS_ORIGINS = (process.env.CORS_ORIGIN || "http://localhost:5173")
@@ -337,6 +337,23 @@ function sendStateTo(lobby, socket) {
   });
 }
 
+/**
+ * A line in the table's log for everyone there: who left, who a CPU now plays
+ * for, who came back, whose seat was forfeited. tone: "away" | "back" | "gone".
+ * (A credit match's pot is logged by each browser as it shows the result, so
+ * the log never tells the ending before the table does.)
+ */
+function tableLog(lobby, text, tone) {
+  io.to(lobby.id).emit("receive_chat", {
+    id: `log-${randomUUID()}`,
+    type: "SYSTEM",
+    kind: "table",
+    tone,
+    text,
+    timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  });
+}
+
 /** A credit match's stake, pot, covered seats and result, for the game state. */
 const creditViewOf = (lobby) => (isCreditMatch(lobby) ? { credit: lobby.credits.view() } : {});
 
@@ -471,7 +488,11 @@ function startGame(lobby) {
     // session is closed out.
     onRoundEnd: (round) => {
       lobby.rounds.push(round);
-      if (isCreditMatch(lobby)) lobby.credits.roundEnded();
+      if (!isCreditMatch(lobby)) return;
+      for (const userId of lobby.credits.roundEnded()) {
+        const name = lobby.roster.get(userId)?.name ?? "A player";
+        tableLog(lobby, `${name} was away ${FORFEIT_ROUNDS} rounds: the seat is the bot's now, and the stake stays in the pot.`, "gone");
+      }
     },
     onGameOver: () => {
       closeSession(lobby, { completed: true, endedReason: "completed" });
@@ -593,6 +614,7 @@ async function joinCreditMatch(socket, lobby, buyIn) {
     enterRoom(socket, lobby.id);
     lobby.game.replaceSeat(member.seatIndex, { type: "HUMAN", name: member.displayName, socketId: socket.id, avatar: member.avatar });
     rosterEnter(lobby, member);
+    tableLog(lobby, `${member.name} is back in their seat.`, "back");
     socket.emit("lobby_joined", { lobbyId: lobby.id, gameType: lobby.gameType, isHost: false, mySocketId: socket.id });
     broadcastState(lobby);
     return;
@@ -723,6 +745,15 @@ function removeMember(lobby, member, { convertSeat = true } = {}) {
       name: `${member.name} (CPU)`,
       socketId: null,
     });
+    tableLog(
+      lobby,
+      isCreditMatch(lobby)
+        ? `${member.name} left. A Hard bot plays their seat: they have ${FORFEIT_ROUNDS} rounds to come back.`
+        : `${member.name} left. A CPU plays their seat.`,
+      "away",
+    );
+  } else if (lobby.gameType === "poker" && member.seatIndex != null) {
+    tableLog(lobby, `${member.name} left the table.`, "away");
   }
 
   // The ledger keeps the seat so the result is still attributed to them.
@@ -960,6 +991,7 @@ io.on("connection", (socket) => {
       );
       if (seatIdx !== -1) {
         member.seatIndex = seatIdx;
+        const cpu = lobby.game.state.players[seatIdx].name;
         lobby.game.replaceSeat(seatIdx, {
           type: "HUMAN",
           name: member.displayName,
@@ -967,6 +999,7 @@ io.on("connection", (socket) => {
           avatar: member.avatar,
         });
         rosterEnter(lobby, member);
+        tableLog(lobby, cpu === `${member.name} (CPU)` ? `${member.name} is back in their seat.` : `${member.name} joined, taking over ${cpu}'s seat.`, "back");
       }
     }
 

@@ -168,6 +168,8 @@ const GameChat = ({ messages = [], onSendMessage, avatarFor, colorFor, notice = 
   );
 };
 
+const TABLE_TONE = { away: "#e85a7a", back: "#9bd14f", gone: "#c8a8b8" };
+
 function Divider({ children, color = "#8a7fb0" }) {
   return (
     <div className="flex items-center gap-2 my-1" style={{ color }}>
@@ -274,6 +276,16 @@ function LogLine({ msg, color = "#ead8b1" }) {
       </div>
     );
   }
+  // The table, not the game: who left (a CPU plays for them), who came back,
+  // whose seat was forfeited; and who took a credit match's pot.
+  if (msg.kind === "table") {
+    return (
+      <div className="font-pixel-body text-[18px] leading-tight px-2 py-1" style={{ color: TABLE_TONE[msg.tone] ?? "#c8b890" }} title={msg.timestamp}>
+        {msg.text}
+      </div>
+    );
+  }
+  if (msg.kind === "pot") return <Divider color="#f4c430">{msg.text.toUpperCase()}</Divider>;
   if (msg.kind === "trick") return <Divider>{msg.name} {msg.verb || "TAKES THE TRICK"}</Divider>;
   if (msg.kind === "roundEnd") return <Divider color="#f4c430">{msg.name} {msg.verb || "WINS THE ROUND"}</Divider>;
 

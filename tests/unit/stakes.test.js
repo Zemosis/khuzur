@@ -78,3 +78,14 @@ describe("settlement", () => {
     expect(r.payouts.reduce((t, p) => t + p.amount, 0) + r.cpuTake).toBe(r.pot);
   });
 });
+
+describe("potText", () => {
+  it("names who took a credit match's pot, a covered seat by its player", async () => {
+    const { potText } = await import("../../src/components/credits/potText.js");
+    const names = ["ANN #0001", "BOB #0002 (CPU)", "Bot Saturn"];
+    expect(potText({ pot: 300, payouts: [{ seat: 1, amount: 300 }], void: false }, names)).toBe("BOB wins the 300 pot.");
+    expect(potText({ pot: 1500, payouts: [], void: false }, names)).toBe("A bot won: the 1,500 pot is lost.");
+    expect(potText({ pot: 300, payouts: [{ seat: 0, amount: 150 }, { seat: 1, amount: 150 }], void: false }, names)).toBe("ANN and BOB split the 300 pot.");
+    expect(potText({ pot: 300, payouts: [], void: true }, names)).toBe("The match didn't count: every stake went back.");
+  });
+});

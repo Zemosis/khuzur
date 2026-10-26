@@ -47,6 +47,7 @@ import { useUnread } from "../../hooks/useUnread";
 import Modal from "../../components/credits/Modal";
 import { fmt } from "../../utils/poker/tiers";
 import { FORFEIT_ROUNDS } from "../../utils/stakes";
+import { potText } from "../../components/credits/potText";
 import {
   MAX_FOLDS_IN_A_ROW,
   PHASES,
@@ -442,7 +443,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
   const [volumes, setVolumes] = useState({ master: 50, sfx: 50 });
   // RANK / SUIT, or your own order (dragged) for the round.
   const handOrder = useHandOrder(roundKeyOf(game));
-  const loggedRef = useRef({ match: null, count: 0, caughtUp: false });
+  const loggedRef = useRef({ match: null, count: 0, caughtUp: false, pot: null });
   const feltRef = useRef(null);
   const drawPileRef = useRef(null);
   const deadPileRef = useRef(null);
@@ -600,13 +601,18 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
     if (catchingUp) logged.count = Math.max(0, game.events.findLastIndex((e) => e.type === "round"));
     const fresh = game.events.slice(logged.count);
     logged.count = game.events.length;
-    if (!fresh.length) return;
+    // A credit match's pot, once, as the result shows (not before).
+    const result = game.credit?.result;
+    const pot = result && logged.pot !== game.matchNumber ? [{ kind: "pot", text: potText(result, game.players.map((p) => p.name)) }] : [];
+    if (pot.length) logged.pot = game.matchNumber;
+    if (!fresh.length && !pot.length) return;
     const entries = fresh
       .map((e) => {
         if (e.type === "play" && !catchingUp) safePlay("playSnap");
         return [logEntry(e, game)].flat().filter(Boolean);
       })
       .flat()
+      .concat(pot)
       .map((fields) => ({ id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type: "SYSTEM", timestamp: now(), ...fields }));
     setMessages((m) => [...m, ...entries]);
   }, [game, setMessages]);

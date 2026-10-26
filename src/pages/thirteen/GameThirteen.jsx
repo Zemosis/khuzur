@@ -53,6 +53,7 @@ import Modal from "../../components/credits/Modal";
 import { signed } from "../../components/credits/signed";
 import { fmt } from "../../utils/poker/tiers";
 import { FORFEIT_ROUNDS } from "../../utils/stakes";
+import { potText } from "../../components/credits/potText";
 
 const AVATAR_COLOR = { 1: "#f4c430", 2: "#5fd4d6", 3: "#e85a7a", 4: "#9bd14f", 5: "#c5a8ff", custom: "#ead8b1" };
 
@@ -371,6 +372,11 @@ const GameThirteen = () => {
     }
 
     logMoves(next);
+    // A credit match's pot, logged as the result shows (not before).
+    if (next.credit?.result && !prev?.credit?.result) {
+      const text = potText(next.credit.result, next.players.map((p) => p.name));
+      setMessages((m) => [...m, logEntry({ kind: "pot", text })]);
+    }
   };
 
   // --- GAME SETUP ---
@@ -391,7 +397,7 @@ const GameThirteen = () => {
   const onChat = useEffectEvent((msg) => {
     const isMe = msg.sender === (playerName || "Host");
     setMessages((prev) => [...prev, { ...msg, isMe }]);
-    if (!isMe) safePlay("playClick");
+    if (!isMe && msg.type !== "SYSTEM") safePlay("playClick");
   });
   const onRejected = useEffectEvent(({ reason }) => {
     setErrorMessage(reason || "Move rejected");

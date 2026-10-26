@@ -142,14 +142,16 @@ describe("poker tables online", () => {
     await waitFor(late, "poker_state", (v) => v.seats[2]?.inHand, 15000);
   });
 
-  it("leaving empties your seat — no CPU takes it", async () => {
+  it("leaving empties your seat — no CPU takes it — and the log says so", async () => {
     const { sock, lobbyId } = await host();
     const other = await guest();
     other.emit("join_lobby", { lobbyId });
-    await waitFor(sock, "poker_state", (v) => !!v.seats[1]);
+    const seated = await waitFor(sock, "poker_state", (v) => !!v.seats[1]);
+    const logged = waitFor(sock, "receive_chat", (m) => m.type === "SYSTEM");
     other.emit("leave_lobby", { lobbyId });
     const after = await waitFor(sock, "poker_state", (v) => v.seats[1] === null);
     expect(after.seats.filter(Boolean)).toHaveLength(1);
+    expect(await logged).toMatchObject({ kind: "table", tone: "away", text: `${seated.seats[1].name.split(" #")[0]} left the table.` });
   });
 
   it("only the host adds CPUs, starts or closes the table", async () => {
