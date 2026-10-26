@@ -45,11 +45,13 @@ function EditProfile() {
   const { identity, profile, updateProfile, signOut } = useAuth();
   const [name, setName] = useState(identity.name);
   const [tag, setTag] = useState(identity.tag);
-  const [avatar, setAvatar] = useState(String(profile?.avatar || identity.avatar));
+  // A preset ("1".."5"), or "custom:N" for the painting in slot N.
+  const savedAvatar = profile?.avatar === "custom" ? `custom:${profile.custom_slot ?? 1}` : String(profile?.avatar || identity.avatar);
+  const [avatar, setAvatar] = useState(savedAvatar);
   const [status, setStatus] = useState({ kind: "idle", text: "" });
 
   const dirty =
-    name !== identity.name || tag !== identity.tag || avatar !== String(profile?.avatar || identity.avatar);
+    name !== identity.name || tag !== identity.tag || avatar !== savedAvatar;
   const valid = name.length >= 1 && tag.length === 4;
   const { into, need } = levelProgress(identity.exp);
 
@@ -58,14 +60,21 @@ function EditProfile() {
     if (!valid) return;
     setStatus({ kind: "busy", text: "" });
     try {
-      await updateProfile({ username: name, tag, avatar });
+      const slot = avatar.startsWith("custom:") ? Number(avatar.slice(7)) : null;
+      await updateProfile({ username: name, tag, ...(slot ? { avatar: "custom", custom_slot: slot } : { avatar }) });
       setStatus({ kind: "ok", text: "Profile saved" });
     } catch (err) {
       setStatus({ kind: "error", text: err.message || "Couldn't save your profile" });
     }
   }
 
-  const options = [...PRESETS, ...(identity.customAvatar ? ["custom"] : [])];
+  const paintings = identity.avatarSlots ?? [identity.customAvatar];
+  const painted = paintings.flatMap((data, i) => (data ? [`custom:${i + 1}`] : []));
+  const options = [...PRESETS, ...painted];
+  const face = (v) =>
+    v.startsWith("custom:")
+      ? { variant: "custom", customAvatarData: paintings[Number(v.slice(7)) - 1] }
+      : { variant: Number(v), customAvatarData: null };
 
   return (
     <Panel title="Edit profile" icon="pencil" deep="#c89820" className="max-lg:shrink-0">
@@ -73,11 +82,7 @@ function EditProfile() {
         {/* Preview: exactly how other players see you. */}
         <div className="flex items-center gap-4">
           <div style={{ boxShadow: `0 0 0 4px ${INK}` }}>
-            <PixelAvatar
-              variant={avatar === "custom" ? "custom" : Number(avatar)}
-              size={102}
-              customAvatarData={identity.customAvatar}
-            />
+            <PixelAvatar {...face(avatar)} size={102} />
           </div>
           <div className="min-w-0">
             <div className="flex items-baseline gap-2">
@@ -122,18 +127,18 @@ function EditProfile() {
                   onClick={() => setAvatar(v)}
                   aria-pressed={selected}
                   className="pixel-pick"
-                  aria-label={v === "custom" ? "Your painted avatar" : `Avatar ${v}`}
+                  aria-label={
+                    v.startsWith("custom:")
+                      ? painted.length > 1 ? `Your painted avatar ${v.slice(7)}` : "Your painted avatar"
+                      : `Avatar ${v}`
+                  }
                   style={{
                     padding: 3,
                     backgroundColor: selected ? "#2a1f1a" : INK,
                     boxShadow: `0 0 0 3px ${selected ? ACCENT : "#2a234d"}`,
                   }}
                 >
-                  <PixelAvatar
-                    variant={v === "custom" ? "custom" : Number(v)}
-                    size={51}
-                    customAvatarData={identity.customAvatar}
-                  />
+                  <PixelAvatar {...face(v)} size={51} />
                 </button>
               );
             })}

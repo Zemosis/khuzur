@@ -4,6 +4,27 @@ Every version of Khuzur Card Hall, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
+## 1.4.1 — 26 October 2026
+
+### The shop is open
+- **SHOP** on the main menu opens the shop over the menu. Your gold is in its corner.
+- **Avatar slots.** Keep more than one painted avatar: **slot 2** costs **1,500 gold** and **slot 3** costs **3,000** (buy slot 2 first). Buying takes two clicks, BUY then SPEND, so nothing goes by accident.
+- **Paint and switch.** Once a slot is yours, PAINT IT opens the painter on that slot. Switch between your paintings from your player badge or your profile, and everyone at the table sees the one you wear.
+- **Avatar storage in the painter** shows all three slots. Click an empty slot you own to save your drawing there. Click a locked one and the shop opens right over the painter; PAINT IT brings you back to that slot.
+- **Buying looks like buying.** Coins fly out of your gold and drop into the slot, its padlock rattles, and the slot bursts open with an **UNLOCKED!** stamp and a chime. With animations set to REDUCED it just opens.
+- **Coming soon:** avatar borders, titles and card variants. They're in the shop now, marked SOON.
+
+### Patch notes you can browse
+- **Pick a version from the tree on the left** and read just that one on the right. Each update line (v1.4, v1.3, ...) folds open to its versions, and the version you're reading lists its sections, so you can jump to one. **OLDER** and **NEWER** at the bottom step through them.
+- **Link to a version:** the address keeps the one you're reading.
+- **FILTER** narrows the tree to the versions that mention what you type, and the notes to the lines that do, with the words marked.
+- On phones the tree folds into an **ALL VERSIONS** button above the notes.
+
+### Gold is for playing people
+- **Online games against CPUs alone no longer pay XP or gold.** They're the same as practice. A Thirteen or Muushig match pays only if at least two people (signed-in players or guests) play it to the end. A poker hand pays only if at least two people are dealt in.
+- If you end up the only person at the table, the end of the match says why it paid nothing.
+- Each rulebook's **XP, levels and gold** section says so.
+
 ## 1.4.0 — 26 October 2026
 
 ### XP, levels and gold

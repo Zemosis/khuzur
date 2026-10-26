@@ -1,7 +1,7 @@
 // MAIN MENU - Pixel Retro Landing Page
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   PixelCard,
   PixelButton,
@@ -18,10 +18,18 @@ import PlayerMenu from "../components/auth/PlayerMenu";
 import SettingsModal from "../components/SettingsModal";
 import PixelIcon from "../components/PixelIcon";
 import RulebookPicker from "../components/RulebookPicker";
+import ShopModal from "../components/shop/ShopModal";
 import { reducedMotion } from "../utils/motion";
 
 const MainMenu = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  // The shop opens over the menu at /shop, so it can be linked to and BACK closes it.
+  const shopOpen = location.pathname === "/shop";
+  const closeShop = useCallback(() => {
+    if (location.state?.back) navigate(-1);
+    else navigate("/", { replace: true });
+  }, [location.state, navigate]);
   const [hovered, setHovered] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -98,27 +106,14 @@ const MainMenu = () => {
               <span className="max-sm:hidden">Ranks</span>
             </button>
             <button
-              className="pixel-btn font-pixel-display text-xs px-4 uppercase relative max-sm:px-3"
+              onClick={() => navigate("/shop", { state: { back: true } })}
+              aria-label="Shop"
+              title="Shop: spend your gold"
+              className="pixel-btn font-pixel-display text-xs px-4 uppercase flex items-center gap-2 max-sm:px-3"
               style={{ height: 52, backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}
-              title="Coming soon — spend gold on card skins"
             >
-              Shop
-              <span
-                className="font-pixel-display"
-                style={{
-                  position: "absolute",
-                  top: -8,
-                  right: -8,
-                  fontSize: 7,
-                  padding: "2px 4px",
-                  backgroundColor: "#e85a7a",
-                  color: "#ead8b1",
-                  border: "2px solid #0a0712",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                SOON
-              </span>
+              <PixelIcon name="bag" size={12} />
+              <span className="max-sm:hidden">Shop</span>
             </button>
           </nav>
         </div>
@@ -135,7 +130,7 @@ const MainMenu = () => {
             isGuest={isGuest}
             credits={isGuest ? null : (credits?.balance ?? null)}
             rank={isGuest ? null : (credits?.rank ?? null)}
-            onSelectAvatar={(v) => updateProfile({ avatar: v }).catch(console.error)}
+            onSelectAvatar={(v, slot) => updateProfile(slot ? { avatar: v, custom_slot: slot } : { avatar: v }).catch(console.error)}
             onPaint={() => navigate("/avatar-paint")}
             onViewProfile={() => navigate("/profile")}
             onSignIn={() => setShowLogin(true)}
@@ -288,6 +283,13 @@ const MainMenu = () => {
         </div>
       </div>
 
+      {shopOpen && (
+        <ShopModal
+          onClose={closeShop}
+          onSignIn={() => setShowLogin(true)}
+          onPaint={(slot) => navigate(`/avatar-paint?slot=${slot}`, { state: { back: true } })}
+        />
+      )}
       {(showLogin || needsProfileSetup) && (
         <LoginModal
           onClose={() => setShowLogin(false)}

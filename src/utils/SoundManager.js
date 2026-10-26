@@ -140,6 +140,19 @@ class SoundManager {
     if (!this.context || this.isMuted) return;
     this.playTone(1200, "triangle", 0.05);
   }
+
+  // Two quick high notes: a coin dropping in (the shop).
+  playCoin(startTime = 0) {
+    if (!this.context || this.isMuted) return;
+    this.playTone(988, "square", 0.06, startTime);
+    this.playTone(1319, "square", 0.12, startTime + 0.06);
+  }
+
+  // A short rising run: something bought is unlocked.
+  playUnlock() {
+    if (!this.context || this.isMuted) return;
+    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => this.playTone(f, "square", 0.12, i * 0.06));
+  }
 }
 
 export const soundManager = new SoundManager();

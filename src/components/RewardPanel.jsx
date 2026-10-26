@@ -70,7 +70,8 @@ function LevelUpBanner({ level, gold }) {
 
 /**
  * The end-of-match block. `reward`: undefined while the match is being
- * saved, null when it paid you nothing (you left before the end), else the
+ * saved, null when it paid you nothing (you left before the end),
+ * { unpaid: "cpus" } when no other person played it to the end, else the
  * server's reward. A guest is asked to sign in instead.
  */
 export default function RewardPanel({ reward }) {
@@ -86,6 +87,13 @@ export default function RewardPanel({ reward }) {
     );
   }
   if (!reward) return null;
+  if (reward.unpaid) {
+    return (
+      <p className="font-pixel-display text-[9px] text-bone/70 text-center leading-relaxed">
+        NO XP OR GOLD: ONLY CPUS PLAYED TO THE END. PLAY WITH PEOPLE TO EARN.
+      </p>
+    );
+  }
   return <Earned key={`${reward.expBefore}:${reward.expAfter}`} reward={reward} />;
 }
 

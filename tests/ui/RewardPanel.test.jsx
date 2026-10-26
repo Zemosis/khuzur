@@ -60,6 +60,13 @@ describe("RewardPanel", () => {
     render(<RewardPanel reward={undefined} />);
     expect(screen.getByText("SIGN IN TO EARN XP AND GOLD")).toBeInTheDocument();
   });
+
+  it("says why a match against CPUs alone paid nothing", () => {
+    render(<RewardPanel reward={{ userId: "u1", unpaid: "cpus" }} />);
+    expect(screen.getByText(/NO XP OR GOLD: ONLY CPUS PLAYED TO THE END/)).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(auth.fetchProfile).not.toHaveBeenCalled();
+  });
 });
 
 describe("HandReward", () => {

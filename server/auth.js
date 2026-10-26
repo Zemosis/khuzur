@@ -20,7 +20,9 @@ if (pool && !JWT_SECRET) {
 
 // The only profile columns a client may write. Coins, exp, level, wins and
 // games_played are awarded by the game server alone.
-const EDITABLE_PROFILE_FIELDS = ["username", "tag", "avatar", "custom_avatar", "custom_colors"];
+const EDITABLE_PROFILE_FIELDS = ["username", "tag", "avatar", "custom_avatar", "custom_colors", "extra_avatars", "custom_slot"];
+// Columns sent as JSON.
+const JSON_PROFILE_FIELDS = new Set(["custom_avatar", "extra_avatars"]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -61,6 +63,33 @@ export function requireDb(_req, res, next) {
   next();
 }
 
+/** The painted avatar a profile row wears when its avatar is 'custom', or null. */
+function wornPainting(row) {
+  if (row?.avatar !== "custom") return null;
+  return (row.custom_slot > 1 ? row.extra_avatars?.[row.custom_slot - 2] : row.custom_avatar) ?? null;
+}
+
+const isPainting = (a) => a != null && Number(a.v) === 3 && Array.isArray(a.pixels) && a.pixels.length === 17 * 17;
+
+/**
+ * Checks a profile update's painted-avatar slots (extra_avatars, custom_slot)
+ * against the slots the player owns. Returns a message, or null if it's fine.
+ */
+async function avatarSlotsError(userId, body) {
+  if (!("extra_avatars" in body) && !("custom_slot" in body)) return null;
+  const current = await getProfile(userId);
+  const extras = "extra_avatars" in body ? body.extra_avatars : current.extra_avatars;
+  if (!Array.isArray(extras) || !extras.every((a) => a === null || isPainting(a))) return "Invalid avatar";
+  if (extras.length > current.avatar_slots - 1) return "You don't have that many avatar slots";
+  if ("custom_slot" in body) {
+    const slot = body.custom_slot;
+    if (!Number.isInteger(slot) || slot < 1 || slot > current.avatar_slots) return "You don't have that avatar slot";
+    const painted = slot === 1 ? ("custom_avatar" in body ? body.custom_avatar : current.custom_avatar) : extras[slot - 2];
+    if (!painted) return "Paint that avatar slot first";
+  }
+  return null;
+}
+
 async function getProfile(userId) {
   const { rows } = await pool.query("select * from profiles where id = $1", [userId]);
   return rows[0] || null;
@@ -73,6 +102,8 @@ function profileError(err) {
     if (err.constraint === "profiles_username_length") return "Name must be 1–6 characters";
     if (err.constraint === "profiles_tag_format") return "Tag must be 4 letters or digits";
     if (err.constraint === "profiles_custom_colors_limit") return "Too many saved colors";
+    if (err.constraint === "profiles_extra_avatars_shape") return "You don't have that many avatar slots";
+    if (err.constraint === "profiles_custom_slot_range") return "You don't have that avatar slot";
     return "Invalid profile data";
   }
   return null;
@@ -94,12 +125,15 @@ export async function socketIdentity({ token, name, tag, avatar } = {}) {
     try {
       ({
         rows: [row],
-      } = await pool.query("select username, tag, avatar, custom_avatar, level from profiles where id = $1", [user.id]));
+      } = await pool.query(
+        "select username, tag, avatar, custom_avatar, extra_avatars, custom_slot, level from profiles where id = $1",
+        [user.id],
+      ));
     } catch (err) {
       console.error("[auth] profile lookup failed:", err.message);
     }
   }
-  const custom = row?.avatar === "custom" ? row.custom_avatar : null;
+  const custom = wornPainting(row);
   const preset = String(avatar ?? "");
   return {
     userId: user?.id || null,
@@ -202,10 +236,12 @@ authRouter.patch("/profile", requireUser, async (req, res) => {
     EDITABLE_PROFILE_FIELDS.includes(key),
   );
   if (!updates.length) return res.json({ profile: await getProfile(req.user.id) });
+  const slotsError = await avatarSlotsError(req.user.id, Object.fromEntries(updates));
+  if (slotsError) return res.status(400).json({ error: slotsError });
 
   const sets = updates.map(([key], i) => `${key} = $${i + 2}`).join(", ");
   const values = updates.map(([key, value]) =>
-    key === "custom_avatar" && value != null ? JSON.stringify(value) : value,
+    JSON_PROFILE_FIELDS.has(key) && value != null ? JSON.stringify(value) : value,
   );
 
   try {

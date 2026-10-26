@@ -681,6 +681,26 @@ html[data-motion="reduced"] .countdown-tick { animation: none; }
 .result-pop { animation: result-pop 380ms ease-out; }
 html[data-motion="reduced"] .result-pop { animation: none; }
 
+/* Search boxes draw their own pixel clear button. */
+.pixel-search::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+/* Shop: what a purchase cost drops out of your gold and fades, and the
+   slot you bought rings gold as it opens. */
+@keyframes spend-float {
+  0% { opacity: 0; transform: translateY(-6px); }
+  15% { opacity: 1; transform: translateY(0); }
+  75% { opacity: 1; transform: translateY(8px); }
+  100% { opacity: 0; transform: translateY(14px); }
+}
+.spend-float { animation: spend-float 1200ms ease-out forwards; }
+@keyframes slot-unlocked {
+  0% { box-shadow: 0 0 0 3px #0a0712, 0 0 0 7px #f4c430, 0 0 28px rgba(244, 196, 48, 0.8); }
+  100% { box-shadow: 0 0 0 3px #0a0712, 0 0 0 3px rgba(244, 196, 48, 0), 0 0 0 rgba(244, 196, 48, 0); }
+}
+.slot-unlocked { animation: slot-unlocked 900ms ease-out; }
+html[data-motion="reduced"] .spend-float,
+html[data-motion="reduced"] .slot-unlocked { animation: none; }
+
 /* Poker: what a hand paid you rises off your seat and fades. */
 @keyframes reward-float {
   0% { opacity: 0; transform: translateY(6px); }

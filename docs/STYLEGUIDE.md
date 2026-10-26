@@ -152,6 +152,7 @@ Motion is dropped under `prefers-reduced-motion`; the outline remains.
 - **Backdrop.** Semi-transparent void, `rgba(10, 7, 18, 0.85)`, optionally dithered.
 - **Close button.** A small pixel button in the top right, or built into the title bar. **Escape** and a click on the backdrop close it too.
 - **Layout.** `void`-colored inner sections group inputs, and action buttons sit at the bottom, full width or side by side.
+- **Big windows.** A screen you visit and leave, like the **shop** (`components/shop/ShopModal.jsx`), opens as a large window over the darkened main menu, not a page of its own. It's up to 1040×720, fills the screen on phones, and has its own route (`/shop`) so a link or BACK works.
 
 ### Tags and badges
 

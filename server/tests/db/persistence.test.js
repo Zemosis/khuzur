@@ -246,6 +246,59 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     expect(rewards.map((r) => r.userId).sort()).toEqual([took.id, back.id].sort());
   });
 
+  it("a match against CPUs alone pays nothing, but still counts as a game played", async () => {
+    const solo = await makeUser(m.pool, "solo@test.dev");
+    const id = await session();
+    const rewards = await m.finishSession({
+      sessionId: id,
+      completed: true,
+      endedReason: "completed",
+      // Seat 2 (the winner) is the only person; the CPUs have no roster entry.
+      roster: [seat(2, { playerKey: solo.id, userId: solo.id })],
+      rounds,
+      state: finalState,
+    });
+    expect(rewards).toEqual([{ userId: solo.id, unpaid: "cpus" }]);
+    const p = (await m.pool.query("select coins_earned, exp_earned, final_position from game_players where session_id = $1", [id])).rows[0];
+    expect(p).toEqual({ coins_earned: 0, exp_earned: 0, final_position: 1 });
+    const prof = (await m.pool.query("select coins, exp, wins, games_played from profiles where id = $1", [solo.id])).rows[0];
+    expect(prof).toEqual({ coins: 0, exp: 0, wins: 1, games_played: 1 });
+  });
+
+  it("a match pays nobody once you're the only person left in it", async () => {
+    const stayed = await makeUser(m.pool, "stayed@test.dev");
+    const gone = await makeUser(m.pool, "gone@test.dev");
+    const id = await session();
+    const rewards = await m.finishSession({
+      sessionId: id,
+      completed: true,
+      endedReason: "completed",
+      roster: [
+        seat(2, { playerKey: stayed.id, userId: stayed.id }),
+        seat(0, { playerKey: gone.id, userId: gone.id, leftEarly: true, cpuTookOver: true, leftAt: new Date() }),
+      ],
+      rounds,
+      state: finalState,
+    });
+    expect(rewards).toEqual([{ userId: stayed.id, unpaid: "cpus" }]);
+    const coins = (await m.pool.query("select coins from profiles where id = any($1::uuid[])", [[stayed.id, gone.id]])).rows.map((r) => r.coins);
+    expect(coins).toEqual([0, 0]);
+  });
+
+  it("a guest at the table counts as a person", async () => {
+    const me = await makeUser(m.pool, "me@test.dev");
+    const id = await session();
+    await m.finishSession({
+      sessionId: id,
+      completed: true,
+      endedReason: "completed",
+      roster: [seat(2, { playerKey: me.id, userId: me.id }), seat(1)],
+      rounds,
+      state: finalState,
+    });
+    expect((await m.pool.query("select coins from profiles where id = $1", [me.id])).rows[0].coins).toBe(80);
+  });
+
   it("grantProgress pays XP and gold with any level-up gold", async () => {
     const ann = await makeUser(m.pool, "ann@test.dev", { coins: 10, exp: 98, level: 1 });
     const reward = await m.grantProgress(ann.id, { xp: 4, gold: 3 });

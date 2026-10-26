@@ -100,17 +100,27 @@ export default function AuthProvider({ children }) {
   // so the setup step has to be driven off the profile, not the signup flow.
   const needsProfileSetup = !!session && !loading && !profile?.username;
 
-  const customAvatar = profile?.custom_avatar ? deserializeAvatar(profile.custom_avatar) : null;
+  // Painted avatars, one per slot the player owns (null while a slot is
+  // empty); customAvatar is the one they wear when their avatar is "custom".
+  const avatarSlots = profile
+    ? Array.from({ length: profile.avatar_slots ?? 1 }, (_, i) =>
+        deserializeAvatar(i === 0 ? profile.custom_avatar : profile.extra_avatars?.[i - 1]),
+      )
+    : [null];
+  const customSlot = profile?.custom_slot ?? 1;
+  const customAvatar = avatarSlots[customSlot - 1] ?? null;
 
   const customColors = profile?.custom_colors || [];
 
   const identity = isGuest
-    ? { name: guest.name, tag: guest.tag, avatar: guest.avatar, customAvatar: null, customColors: [], level: 1, exp: 0, gold: 0, wins: 0, gamesPlayed: 0 }
+    ? { name: guest.name, tag: guest.tag, avatar: guest.avatar, customAvatar: null, avatarSlots: [null], customSlot: 1, customColors: [], level: 1, exp: 0, gold: 0, wins: 0, gamesPlayed: 0 }
     : {
         name: profile?.username || guest.name,
         tag: profile?.tag || guest.tag,
         avatar: profile?.avatar || guest.avatar,
         customAvatar,
+        avatarSlots,
+        customSlot,
         customColors,
         level: profile?.level ?? 1,
         exp: profile?.exp ?? 0,
@@ -136,6 +146,8 @@ export default function AuthProvider({ children }) {
         updateProfile,
         createProfile,
         fetchProfile,
+        // For routes that answer with the updated profile (a shop purchase).
+        applyProfile: setProfile,
       }}
     >
       {children}

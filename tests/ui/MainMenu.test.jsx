@@ -6,7 +6,7 @@ import MainMenu from "../../src/pages/MainMenu";
 import { VERSION } from "../../src/utils/changelog";
 
 let stats;
-const { auth } = vi.hoisted(() => ({ auth: { isGuest: true, updateProfile: null, signOut: null } }));
+const { auth } = vi.hoisted(() => ({ auth: { isGuest: true, updateProfile: null, signOut: null, extra: {} } }));
 
 vi.mock("../../src/utils/socket", () => ({ socket: {}, connectSocket: () => {} }));
 const { credits } = vi.hoisted(() => ({ credits: { balance: 2340, notice: null } }));
@@ -18,7 +18,7 @@ vi.mock("../../src/lib/api", () => ({
 vi.mock("../../src/hooks/useServerStats", () => ({ useServerStats: () => stats }));
 vi.mock("../../src/hooks/useAuth", () => ({
   useAuth: () => ({
-    identity: { name: "TESTER", tag: "0001", avatar: "1", level: 2, exp: 130, gold: 1250 },
+    identity: { name: "TESTER", tag: "0001", avatar: "1", level: 2, exp: 130, gold: 1250, ...auth.extra },
     isGuest: auth.isGuest,
     needsProfileSetup: false,
     signOut: auth.signOut,
@@ -35,6 +35,7 @@ const renderMenu = () =>
 
 beforeEach(() => {
   auth.isGuest = true;
+  auth.extra = {};
   auth.updateProfile = vi.fn(async () => {});
   auth.signOut = vi.fn();
   stats = { connected: true, online: 3, tables: 2, ping: 12, lobbies: { thirteen: 2, muushig: 0 } };
@@ -112,6 +113,44 @@ describe("MainMenu", () => {
     await user.click(screen.getByRole("menuitemradio", { name: "Avatar 3" }));
     expect(auth.updateProfile).toHaveBeenCalledWith({ avatar: "3" });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("lists each painted slot in the player menu, and wears the one you pick", async () => {
+    const user = userEvent.setup();
+    auth.isGuest = false;
+    const art = { pixels: Array.from({ length: 17 }, () => Array(17).fill("#f4c430")) };
+    auth.extra = { avatar: "custom", customSlot: 1, customAvatar: art, avatarSlots: [art, null, art] };
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: /TESTER #0001/ }));
+    expect(screen.getByRole("menuitemradio", { name: "Painted avatar 1" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByRole("menuitemradio", { name: "Painted avatar 2" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("menuitemradio", { name: "Painted avatar 3" }));
+    expect(auth.updateProfile).toHaveBeenCalledWith({ avatar: "custom", custom_slot: 3 });
+  });
+
+  it("SHOP opens the shop over the menu, and closing it goes back", async () => {
+    const user = userEvent.setup();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: "Shop" }));
+    expect(screen.getByRole("dialog", { name: "Shop" })).toBeInTheDocument();
+    expect(screen.getByText("CHOOSE YOUR GAME")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close the shop" }));
+    expect(screen.queryByRole("dialog", { name: "Shop" })).not.toBeInTheDocument();
+  });
+
+  it("a link to /shop opens the menu with the shop on top", async () => {
+    render(
+      <MemoryRouter initialEntries={["/shop"]}>
+        <Routes>
+          <Route path="/" element={<MainMenu />} />
+          <Route path="/shop" element={<MainMenu />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("dialog", { name: "Shop" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Shop" })).not.toBeInTheDocument();
+    expect(screen.getByText("CHOOSE YOUR GAME")).toBeInTheDocument();
   });
 
   it("a guest's menu explains avatars need an account, and still links the profile", async () => {

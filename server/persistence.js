@@ -112,7 +112,8 @@ export function rankSeats(state) {
  * @param {Array}   rec.rounds - per-round summaries from the engine
  * @param {Object}  rec.state - final game state
  * @returns {Promise<Array>} what each signed-in player earned (see applyGain),
- *          as [{ userId, xp, gold, levelUpGold, expBefore, expAfter, levelBefore, levelAfter }]
+ *          as [{ userId, xp, gold, levelUpGold, expBefore, expAfter, levelBefore, levelAfter }],
+ *          or [{ userId, unpaid: "cpus" }] when no other person played it to the end
  */
 export async function finishSession(rec) {
   if (!pool || !rec.sessionId) return [];
@@ -222,10 +223,14 @@ export async function finishSession(rec) {
     }
 
     const seats = state?.players?.length ?? roster.length;
+    // A match pays only if at least two people (signed in or guests) played
+    // it to the end. Alone against CPUs it's the same as practice, which pays
+    // nothing.
+    const withPeople = roster.filter((s) => !s.leftEarly).length >= 2;
     const rows = roster.map((seat) => {
       const position = completed ? positionBySeat[seat.seatIndex] ?? null : null;
       // A player who left and didn't come back earns nothing: the CPU played their seat.
-      const reward = completed && position && !seat.leftEarly ? matchReward({ place: position, players: seats }) : null;
+      const reward = withPeople && completed && position && !seat.leftEarly ? matchReward({ place: position, players: seats }) : null;
       const roundStats = poker ? { roundsWon: seat.poker?.hands_won ?? 0, stats: seat.poker ?? null } : roundStatsFor(seat.seatIndex);
 
       return {
@@ -287,6 +292,7 @@ export async function finishSession(rec) {
       );
       // A player who left earns nothing, so there's no reward to show them.
       if (row.exp_earned) rewards.push({ userId: row.player_id, ...gain });
+      else if (!withPeople && !row.left_early) rewards.push({ userId: row.player_id, unpaid: "cpus" });
     }
     return { rows, rewards };
   });

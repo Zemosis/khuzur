@@ -218,6 +218,24 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables over sockets (Postgres)", () 
     expect((await economy()).ok).toBe(true);
   });
 
+  it("a free table against CPUs alone pays no XP or gold", async () => {
+    const ann = await player();
+    const a = await client(ann);
+    a.emit("create_lobby", { gameType: "poker", lobbyName: "Solo" });
+    const { lobbyId } = await waitFor(a, "lobby_joined");
+    await waitFor(a, "poker_state", (v) => v.mySeat === 0 && !!v.seats[0]);
+    const paid = [];
+    a.on("progress_reward", (r) => paid.push(r));
+    a.emit("add_cpu", { lobbyId, seat: 1, level: "EASY" });
+    autoPlay(lobbyId, a);
+    a.emit("start_game", { lobbyId });
+    await waitFor(a, "poker_state", (v) => v.handNumber >= 3, 15000);
+    expect(paid).toEqual([]);
+    const { rows: [prof] } = await m.pool.query("select exp, coins from profiles where id = $1", [ann]);
+    expect(prof).toEqual({ exp: 0, coins: 0 });
+    a.emit("leave_lobby", { lobbyId });
+  });
+
   it("hands pay XP and gold as they end, but only one every 30 seconds", async () => {
     const ann = await player();
     const bob = await player();

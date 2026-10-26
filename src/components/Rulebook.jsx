@@ -128,17 +128,19 @@ export function XpRules({ n, poker = false }) {
         ["A HAND", `${hand.xp} XP and ${hand.gold} gold for each hand you're dealt into`],
         ["A WON HAND", `${won.xp} XP and ${won.gold} gold`],
         ["HOW OFTEN", `At most one hand every ${POKER_REWARD_SPACING_MS / 1000} seconds pays, so folding hand after hand earns little`],
+        ["CPUS ONLY", "A hand pays only if another person is dealt in too"],
       ]
     : [
         ["THE WINNER", `${win.xp} XP and ${win.gold} gold`],
         ["LAST PLACE", `${last.xp} XP and ${last.gold} gold. The places between are spread evenly`],
         ["LEAVING", "Leave before the end and don't come back, and the match pays you nothing"],
+        ["CPUS ONLY", "A match pays only if another person plays it to the end with you"],
       ];
   return (
     <Section id="xp" n={n} title="XP, levels and gold">
       <p>
-        Signed in, every online {poker ? "table" : "match"} pays <Key>XP</Key> and <Key>gold</Key>, at free and credit tables alike. Practice
-        games against CPUs don't.
+        Signed in, online {poker ? "poker" : "matches"} against other people pay <Key>XP</Key> and <Key>gold</Key>, at free and credit
+        tables alike. Playing CPUs alone doesn't, online or in practice.
       </p>
       <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
         {rows.map(([k, v]) => (
@@ -154,7 +156,7 @@ export function XpRules({ n, poker = false }) {
         pays double: level 5 pays {levelUpGold(5)}.
       </p>
       <Callout tone="tip" title="GOLD ISN'T CREDITS">
-        Gold is for the shop, coming soon. Credits are what you stake, and what the leaderboard ranks.
+        Spend gold in the <Key>SHOP</Key> on the main menu. Credits are what you stake, and what the leaderboard ranks.
       </Callout>
     </Section>
   );

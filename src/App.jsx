@@ -29,6 +29,7 @@ function App() {
           <Suspense>
             <Routes>
               <Route path="/" element={<MainMenu />} />
+              <Route path="/shop" element={<MainMenu />} />
               <Route path="/lobby-13" element={<LobbySelection />} />
               <Route path="/game-13" element={<GameThirteen />} />
               <Route path="/lobby-muushig" element={<LobbyMuushig />} />

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PixelButton, PixelPanel } from "../components/PixelCard";
 import CustomAvatarCanvas from "../components/CustomAvatarCanvas";
 import ColorPickerModal from "../components/auth/ColorPickerModal";
+import ShopModal from "../components/shop/ShopModal";
 import { useAuth } from "../hooks/useAuth";
 import {
   BASIC_COLORS,
@@ -11,6 +12,9 @@ import {
   serializeAvatar,
 } from "../utils/avatarConstants";
 import PixelIcon from "../components/PixelIcon";
+import Coin from "../components/Coin";
+import { MAX_AVATAR_SLOTS, SHOP_ITEMS } from "../utils/shop";
+import { fmt } from "../utils/poker/tiers";
 
 const MAX_CUSTOM_COLORS = 8;
 const SIDE_LEFT = 320;
@@ -38,8 +42,12 @@ function fitCanvas() {
 
 const AvatarPaint = () => {
   const navigate = useNavigate();
-  const { isGuest, identity, updateProfile, loading } = useAuth();
+  const { isGuest, identity, profile, updateProfile, loading } = useAuth();
+  const [params] = useSearchParams();
   const canvasRef = useRef(null);
+  // Painted-avatar slots: everyone owns the first; more come from the shop.
+  const slots = identity.avatarSlots ?? [identity.customAvatar];
+  const [slot, setSlot] = useState(1); // the slot SAVE writes to
 
   const [pixels, setPixels] = useState(createEmptyGrid);
   const [initialized, setInitialized] = useState(false);
@@ -50,6 +58,9 @@ const AvatarPaint = () => {
   const [dirty, setDirty] = useState(false);
   const [customColors, setCustomColors] = useState([]);
   const [showPicker, setShowPicker] = useState(false);
+  // A locked slot opens the shop over the painter, so you come straight back.
+  const [showShop, setShowShop] = useState(false);
+  const closeShop = useCallback(() => setShowShop(false), []);
   const [canvasFit, setCanvasFit] = useState(fitCanvas);
 
   useEffect(() => {
@@ -58,10 +69,14 @@ const AvatarPaint = () => {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Once the profile has loaded, start from the saved avatar.
+  // Once the profile has loaded, open the slot asked for (?slot=2, from the
+  // shop), else the one you wear.
   if (!loading && !initialized) {
-    if (identity.customAvatar?.pixels) {
-      setPixels(identity.customAvatar.pixels.map((row) => [...row]));
+    const asked = Number(params.get("slot"));
+    const start = asked >= 1 && asked <= slots.length ? asked : identity.avatar === "custom" ? identity.customSlot ?? 1 : 1;
+    setSlot(start);
+    if (slots[start - 1]?.pixels) {
+      setPixels(slots[start - 1].pixels.map((row) => [...row]));
     }
     setCustomColors(identity.customColors || []);
     setInitialized(true);
@@ -145,10 +160,13 @@ const AvatarPaint = () => {
   async function handleSave() {
     setSaving(true);
     try {
-      await updateProfile({
-        custom_avatar: serializeAvatar(pixels),
-        avatar: "custom",
-      });
+      if (slot === 1) {
+        await updateProfile({ custom_avatar: serializeAvatar(pixels), avatar: "custom", custom_slot: 1 });
+      } else {
+        const extras = Array.from({ length: slots.length - 1 }, (_, i) => profile?.extra_avatars?.[i] ?? null);
+        extras[slot - 2] = serializeAvatar(pixels);
+        await updateProfile({ extra_avatars: extras, avatar: "custom", custom_slot: slot });
+      }
       navigate(-1);
     } catch (err) {
       console.error("Failed to save avatar:", err);
@@ -169,10 +187,15 @@ const AvatarPaint = () => {
     }
   }
 
-  function handleLoadAvatar() {
-    if (identity.customAvatar?.pixels) {
-      setPixels(identity.customAvatar.pixels.map((row) => [...row]));
+  // A painted slot opens its drawing; an empty one keeps the canvas, so
+  // SAVE puts the drawing there.
+  function handleOpenSlot(n) {
+    setSlot(n);
+    if (slots[n - 1]?.pixels) {
+      setPixels(slots[n - 1].pixels.map((row) => [...row]));
       setDirty(false);
+    } else {
+      setDirty(true);
     }
   }
 
@@ -380,71 +403,58 @@ const AvatarPaint = () => {
 
         {/* RIGHT — Storage, Preview & Actions */}
         <div className={`flex flex-col gap-4 ${STACKED_COL}`} style={{ "--col-w": `${SIDE_RIGHT}px` }}>
-          {/* Avatar Storage */}
+          {/* Avatar Storage: your slots, the one SAVE writes to outlined in gold. */}
           <PixelPanel accent="cyan" title="AVATAR STORAGE">
             <div className="p-3">
               <div className="flex gap-2">
-                {/* Slot 1 — saved avatar */}
-                {identity.customAvatar ? (
-                  <button
-                    onClick={handleLoadAvatar}
-                    style={{
-                      cursor: "pointer",
-                      border: "2px solid #2a8a8c",
-                      background: "none",
-                      padding: 0,
-                      transition: "border-color 120ms ease",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#f4c430")}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#2a8a8c")}
-                    title="Load saved avatar"
-                  >
-                    <CustomAvatarCanvas avatarData={identity.customAvatar} size={68} />
-                  </button>
-                ) : (
-                  <div
-                    style={{
-                      width: 68,
-                      height: 68,
-                      border: "2px dashed #463a78",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <span className="font-pixel-display text-[10px] text-bone/50">EMPTY</span>
-                  </div>
-                )}
-                {/* Future slots (locked) */}
-                <div
-                  style={{
-                    width: 68,
-                    height: 68,
-                    border: "2px dashed #1f1a3d",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: 0.4,
-                  }}
-                  title="Unlock with gold (coming soon)"
-                >
-                  <span className="text-bone/30"><PixelIcon name="lock" size={12} title="Locked" /></span>
-                </div>
-                <div
-                  style={{
-                    width: 68,
-                    height: 68,
-                    border: "2px dashed #1f1a3d",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: 0.4,
-                  }}
-                  title="Unlock with gold (coming soon)"
-                >
-                  <span className="text-bone/30"><PixelIcon name="lock" size={12} title="Locked" /></span>
-                </div>
+                {Array.from({ length: MAX_AVATAR_SLOTS }, (_, i) => i + 1).map((n) => {
+                  if (n > slots.length) {
+                    const item = SHOP_ITEMS.find((it) => it.avatarSlot === n);
+                    return (
+                      <button
+                        key={n}
+                        onClick={() => setShowShop(true)}
+                        className="pixel-pick flex flex-col items-center justify-center gap-1.5"
+                        style={{ width: 68, height: 68, border: "2px dashed #463a78", backgroundColor: "transparent" }}
+                        aria-label={`Slot ${n} is locked: buy it in the shop for ${fmt(item?.price ?? 0)} gold`}
+                        title="Buy this slot in the shop"
+                      >
+                        <span className="text-bone/50"><PixelIcon name="lock" size={12} /></span>
+                        <span className="flex items-center gap-1 font-pixel-display text-[8px] text-glow-gold">
+                          <Coin size={6} />
+                          {fmt(item?.price ?? 0)}
+                        </span>
+                      </button>
+                    );
+                  }
+                  const editing = slot === n;
+                  return (
+                    <button
+                      key={n}
+                      onClick={() => handleOpenSlot(n)}
+                      aria-pressed={editing}
+                      aria-label={slots[n - 1] ? `Open slot ${n}` : `Save to empty slot ${n}`}
+                      title={slots[n - 1] ? `Slot ${n}` : `Slot ${n} (empty): SAVE puts your drawing here`}
+                      className="pixel-pick flex items-center justify-center"
+                      style={{
+                        width: 68,
+                        height: 68,
+                        padding: 0,
+                        background: "none",
+                        border: `2px ${slots[n - 1] ? "solid" : "dashed"} ${editing ? "#f4c430" : "#2a8a8c"}`,
+                        boxShadow: editing ? "0 0 10px rgba(244,196,48,0.5)" : "none",
+                      }}
+                    >
+                      {slots[n - 1] ? (
+                        <CustomAvatarCanvas avatarData={slots[n - 1]} size={51} />
+                      ) : (
+                        <span className="font-pixel-display text-[10px] text-bone/50">EMPTY</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
+              <div className="font-pixel-body text-[18px] text-bone/70 mt-2">Saving to slot {slot}</div>
               <div className="mt-2">
                 <PixelButton color="cyan" size="sm" onClick={handleNewAvatar} className="w-full">
                   + NEW
@@ -489,6 +499,16 @@ const AvatarPaint = () => {
         </div>
       </div>
 
+      {showShop && (
+        <ShopModal
+          onClose={closeShop}
+          onSignIn={closeShop}
+          onPaint={(n) => {
+            setShowShop(false);
+            handleOpenSlot(n);
+          }}
+        />
+      )}
       {showPicker && (
         <ColorPickerModal
           initialColor={selectedColor}

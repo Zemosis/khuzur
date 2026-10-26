@@ -1,6 +1,7 @@
 // PLAYER MENU — the main menu's player badge. The whole badge (avatar, name,
 // tag) is one button; it opens a menu with the quick avatar switch (presets,
-// your painted avatar, + to paint one) and a link to your profile and stats.
+// your painted avatars, one per slot, + to paint one) and a link to your
+// profile and stats.
 // It's as tall as the menu's buttons, and fills its row on phones. Signed
 // in, it also shows your level, your gold and credits, and your rank when
 // it's in the top 500. Your XP bar lives on the profile page.
@@ -10,6 +11,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PixelAvatar } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
+import Coin from "../Coin";
 import { fmt } from "../../utils/poker/tiers";
 import { useCountUp } from "../../hooks/useCountUp";
 import { levelProgress } from "../../utils/progression";
@@ -28,15 +30,6 @@ const pickStyle = (selected) => ({
 
 // Your leaderboard rank shows beside your credits only near the top.
 const SHOWN_RANKS = 500;
-
-/** A pixel coin: gold, lit top-left, shaded bottom-right. */
-const Coin = () => (
-  <span
-    aria-hidden
-    className="inline-block shrink-0"
-    style={{ width: 8, height: 8, backgroundColor: "#f4c430", boxShadow: "inset -2px -2px 0 #c89820, inset 2px 2px 0 #ffe066, 0 0 0 1px #0a0712" }}
-  />
-);
 
 export default function PlayerMenu({ identity, isGuest, credits = null, rank = null, onSelectAvatar, onPaint, onViewProfile, onSignIn, onSignOut }) {
   const [open, setOpen] = useState(false);
@@ -58,10 +51,15 @@ export default function PlayerMenu({ identity, isGuest, credits = null, rank = n
     };
   }, [open]);
 
-  const pick = (variant) => {
+  // pick("custom", slot) wears a painted slot.
+  const pick = (variant, slot) => {
     setOpen(false);
-    onSelectAvatar(variant);
+    onSelectAvatar(variant, slot);
   };
+  const painted = (identity.avatarSlots ?? [identity.customAvatar])
+    .map((data, i) => ({ data, slot: i + 1 }))
+    .filter((p) => p.data);
+  const wornSlot = identity.customSlot ?? 1;
 
   return (
     <div ref={ref} className="relative max-sm:flex-1 max-sm:min-w-0">
@@ -158,18 +156,22 @@ export default function PlayerMenu({ identity, isGuest, credits = null, rank = n
                 ))}
               </div>
               <div className="flex gap-1.5">
-                {identity.customAvatar && (
-                  <button
-                    role="menuitemradio"
-                    aria-checked={current === "custom"}
-                    aria-label="Painted avatar"
-                    onClick={() => pick("custom")}
-                    className="pixel-pick"
-                    style={pickStyle(current === "custom")}
-                  >
-                    <PixelAvatar variant="custom" size={34} customAvatarData={identity.customAvatar} />
-                  </button>
-                )}
+                {painted.map(({ data, slot }) => {
+                  const worn = current === "custom" && wornSlot === slot;
+                  return (
+                    <button
+                      key={slot}
+                      role="menuitemradio"
+                      aria-checked={worn}
+                      aria-label={painted.length > 1 ? `Painted avatar ${slot}` : "Painted avatar"}
+                      onClick={() => pick("custom", slot)}
+                      className="pixel-pick"
+                      style={pickStyle(worn)}
+                    >
+                      <PixelAvatar variant="custom" size={34} customAvatarData={data} />
+                    </button>
+                  );
+                })}
                 <button
                   role="menuitem"
                   aria-label="Paint your avatar"

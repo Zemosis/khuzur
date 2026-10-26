@@ -59,7 +59,7 @@ Honest status, as of October 2026.
 | **Muushig** | **Playable online and in practice.** Online: server-authoritative, up to 5 humans with CPUs in the empty seats, reconnect handling, match recording. Practice: 4 CPUs (Easy/Medium/Hard) in the browser |
 | **Poker** | **Playable online and in practice.** Free chips, 2–6 players, CPUs at free tables, joining between hands, recorded with its own stats |
 | **Credits** | **Built.** Balances with a daily CLAIM, credit poker tables (LOW / MID / HIGH, humans only), an all-time leaderboard, a ledger of every credit movement, pair flags and an admin page (§5 Credits) |
-| Shop / economy | Not started; gold (the `coins` column) accrues from matches, poker hands and level-ups (credits are separate) |
+| Shop / economy | **Started.** The shop opens over the main menu at `/shop`. It sells extra painted-avatar slots for gold. Borders, titles and card variants show as SOON. Pricing and the economy rules: [`gold-economy.md`](gold-economy.md) |
 | Deployment | **Live** at https://khuzur.onrender.com — Render (site + game server) and Supabase (Postgres). See §9 |
 
 **Muushig runs in both places.** The rules are pure functions in
@@ -424,8 +424,11 @@ a Google or Discord sign-in, which skips the signup form, reaches setup.
 | `id` | `uuid` PK | → `users(id)`, `on delete cascade` |
 | `username` | `text` | NULL until setup; 1–6 chars |
 | `tag` | `text` | NULL until setup; `^[A-Z0-9]{4}$` |
-| `avatar` | `text` | `'1'`–`'5'`, or `'custom'` |
-| `custom_avatar` | `jsonb` | `{v:2, pixels:[…256]}` from `serializeAvatar()` |
+| `avatar` | `text` | `'1'`–`'5'`, or `'custom'` (wears the painting in `custom_slot`) |
+| `custom_avatar` | `jsonb` | Slot 1's painting, `{v:3, pixels:[…289]}` from `serializeAvatar()` |
+| `avatar_slots` | `smallint` | Painted-avatar slots owned, 1–3. Bought in the shop |
+| `extra_avatars` | `jsonb` | Slots 2 and 3's paintings, in order (null while a slot is empty) |
+| `custom_slot` | `smallint` | Which slot `'custom'` wears |
 | `custom_colors` | `text[]` | max 8 |
 | `coins`, `exp`, `level`, `wins`, `games_played` | `integer` | **server-owned** |
 | `created_at`, `updated_at` | `timestamptz` | `updated_at` set by trigger |
@@ -572,6 +575,14 @@ buy_in, top_up, cash_out, restart_return, the admin kinds) and
 credit table's session, and `player_poker_stats` groups by `stakes`
 (`free` | `credits`). The invariant:
 `sum(balance) + sum(stack + pending) = granted + claimed − removed`.
+
+### `shop_purchases`
+
+`015_shop.sql`. One row per item a player owns: `item_id`, `price`, and
+`gold_after`. It's unique per player and item. `POST /api/shop/buy`
+(`server/shop.js`) locks the profile row, checks the item against the server's
+catalog (`server/game/shop.js`), takes the gold and writes the row in one
+transaction.
 
 ### `leaderboards`
 
@@ -790,5 +801,6 @@ Roughly in dependency order:
    database plan that doesn't pause (§9), once real players arrive.
 2. **Password reset and email confirmation** — needs an email-sending
    service; would also let a Google-linked account set a password again.
-3. **Shop and economy** — gold already accrues; nothing spends it.
+3. **More for the shop** — avatar borders, titles and card variants, priced
+   by [`gold-economy.md`](gold-economy.md).
 4. **A fourth game** — the main menu's fourth slot is a locked placeholder.

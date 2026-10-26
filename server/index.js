@@ -20,6 +20,7 @@ import { authRouter, socketIdentity } from "./auth.js";
 import { oauthRouter } from "./oauth.js";
 import { createChatGuard, cleanChat } from "./chatGuard.js";
 import { matchesRouter } from "./matches.js";
+import { shopRouter } from "./shop.js";
 import { migrate, pool } from "./db/index.js";
 import { CreditTable, returnSeatsAfterRestart } from "./credits/tables.js";
 import { CreditMatch } from "./credits/matchTables.js";
@@ -113,6 +114,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/credits", creditsRouter({ onTableFor, rejoinFor }));
 app.use("/api/admin", adminRouter({ standUp: standUpCreditPlayer }));
 app.use("/api/matches", matchesRouter());
+app.use("/api/shop", shopRouter());
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -150,7 +152,7 @@ const lobbies = new Map();
 // the table. Read from the profile when they connect, and kept up to date as
 // matches and poker hands pay them (noteLevel).
 const xpLevels = new Map();
-const noteLevel = (reward) => reward && xpLevels.set(reward.userId, reward.levelAfter);
+const noteLevel = (reward) => reward?.levelAfter && xpLevels.set(reward.userId, reward.levelAfter);
 const levelOf = (member) => (member?.userId && xpLevels.get(member.userId)) || null;
 
 /** Each seated player's level for the game state: { seat: level }, people only. */
@@ -753,6 +755,8 @@ function sitAtPoker(lobby, member) {
 /**
  * A poker hand is over: keep it for the record, add it to each player's
  * tally at this table (see pokerTally.js), and pay the signed-in players.
+ * A hand pays only if at least two people were dealt in: against CPUs alone
+ * it's the same as practice, which pays nothing.
  */
 function recordHand(lobby, hand) {
   if (!lobby.sessionPromise) return;
@@ -761,11 +765,12 @@ function recordHand(lobby, hand) {
     // Player keys stay in the roster, and hole cards with their own player.
     seatResults: hand.seatResults.map(({ player_key: _key, hole: _hole, ...result }) => result),
   });
+  const withPeople = hand.seatResults.filter((r) => r.player_key && !r.cpu).length >= 2;
   for (const r of hand.seatResults) {
     const entry = r.player_key && lobby.roster.get(r.player_key);
     if (!entry) continue;
     entry.poker = tallyHand(entry.poker, hand, r);
-    payPokerHand(lobby, entry, r.won > 0);
+    if (withPeople) payPokerHand(lobby, entry, r.won > 0);
   }
 }
 
