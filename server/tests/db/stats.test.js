@@ -177,6 +177,43 @@ describe.skipIf(!TEST_DATABASE_URL)("solo matches and per-game stats (Postgres)"
     expect((await forStakes("nonsense")).stakes).toBe("all");
   });
 
+  it("overall counts poker tables in recent play, time, credits and a summary, but not in wins or places", async () => {
+    await report(thirteen(1, 60));
+    const {
+      rows: [me],
+    } = await m.pool.query("select id from users where email = 'solo@test.dev'");
+    const table = async (minutesAgo, creditTier, tally) => {
+      const id = await m.createSession({ gameType: "poker", lobbyId: `PUB-PK${minutesAgo}`, lobbyName: "Felt", isPrivate: false, hostDisplayName: "ME #0001", maxPlayers: 6, startedAt: new Date(Date.now() - (minutesAgo + 30) * 60_000), creditTier });
+      await m.finishSession({
+        sessionId: id,
+        gameType: "poker",
+        completed: true,
+        endedReason: "completed",
+        finishedAt: new Date(Date.now() - minutesAgo * 60_000),
+        roster: [{ playerKey: me.id, userId: me.id, name: "ME", tag: "0001", seatIndex: 0, joinedAt: null, leftAt: null, leftEarly: false, cpuTookOver: false, disconnectCount: 0, poker: tally }],
+        rounds: [],
+        state: null,
+      });
+    };
+    await table(30, null, { hands_played: 20, hands_won: 5, net: 150, biggest_pot: 300 });
+    await table(10, "LOW", { hands_played: 12, hands_won: 4, net: -80, biggest_pot: 120 });
+
+    const all = await stats();
+    expect(all.overall).toMatchObject({ games: 1, wins: 1, poker: { tables: 2, hands: 32, net: 70 } });
+    expect(all.overall.credits).toMatchObject({ games: 1, net: -80, potsWon: 4, biggestPot: 120 });
+    expect(all.overall.recent.map((r) => [r.game, r.tier, r.net, r.hands])).toEqual([
+      ["poker", "LOW", -80, 12],
+      ["poker", null, 150, 20],
+      ["thirteen", null, null, undefined],
+    ]);
+    expect(all.overall.time.totalSeconds).toBeGreaterThanOrEqual(60 * 60);
+    expect(all.thirteen.recent).toHaveLength(1); // the games' own views stay theirs
+
+    const free = (await request(app).get("/api/auth/stats?stakes=free").set(auth())).body;
+    expect(free.overall.poker).toMatchObject({ tables: 1, net: 150 });
+    expect(free.overall.credits.games).toBe(0);
+  });
+
   it("never exposes rating", async () => {
     await report(thirteen(1));
     expect(JSON.stringify(await stats())).not.toMatch(/rating/i);

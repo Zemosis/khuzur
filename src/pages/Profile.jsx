@@ -269,28 +269,32 @@ function RecentList({ matches }) {
     <div className="flex flex-col">
       {matches.map((m, i) => {
         const Row = m.solo ? "div" : "button";
+        const poker = m.game === "poker";
         return (
         <Row
           key={m.id}
           {...(m.solo ? {} : { onClick: () => navigate(`/match/${m.id}`), title: "See how this match went" })}
           className={`grid items-center gap-3 px-3 font-pixel-body text-[20px] text-left w-full ${m.solo ? "" : "pixel-hbtn cursor-pointer"}`}
-          style={{ gridTemplateColumns: "96px minmax(0,1fr) 80px 80px 70px 110px", minHeight: 44, backgroundColor: i % 2 ? "#181432" : "transparent" }}
+          style={{ gridTemplateColumns: "96px minmax(0,1fr) 110px 90px 70px 110px", minHeight: 44, backgroundColor: i % 2 ? "#181432" : "transparent" }}
         >
           <span
             className="font-pixel-display text-[10px] text-center py-1"
-            style={{ backgroundColor: m.won ? ACCENT : INK, color: m.won ? INK : "#ead8b1", boxShadow: "0 0 0 2px #2a234d" }}
+            style={{ backgroundColor: m.won ? ACCENT : INK, color: m.won ? INK : poker ? (m.net > 0 ? "#9bd14f" : m.net < 0 ? "#e85a7a" : "#ead8b1") : "#ead8b1", boxShadow: "0 0 0 2px #2a234d" }}
           >
-            {m.leftEarly ? "Quit" : m.place ? `${ordinal(m.place)} of ${m.of}` : "-"}
+            {/* A poker table has no place: what it came to instead. */}
+            {poker ? `${m.net > 0 ? "+" : ""}${fmt(m.net)}` : m.leftEarly ? "Quit" : m.place ? `${ordinal(m.place)} of ${m.of}` : "-"}
           </span>
           <span className="text-parchment truncate">{GAME_NAMES[m.game] || m.game}</span>
-          {m.tier ? (
+          {poker ? (
+            <span className="text-bone/80">{m.tier ? `${m.tier} credits` : "Free chips"}</span>
+          ) : m.tier ? (
             <span className="tabular-nums whitespace-nowrap" style={{ color: m.net > 0 ? "#f4c430" : m.net < 0 ? "#e85a7a" : "#ead8b1" }} title={`A ${m.tier} credit match`}>
               {m.net == null ? m.tier : `${m.net > 0 ? "+" : ""}${m.net} CR`}
             </span>
           ) : (
             <span className="text-bone/80">{m.solo ? "vs CPU" : "Online"}</span>
           )}
-          <span className="text-bone text-right tabular-nums">{m.score ?? "-"} pts</span>
+          <span className="text-bone text-right tabular-nums">{poker ? `${m.hands} hands` : `${m.score ?? "-"} pts`}</span>
           <span className="text-bone/80 text-right tabular-nums">{formatDuration(m.seconds)}</span>
           <span className="text-bone/70 text-right">{new Date(m.finishedAt).toLocaleDateString()}</span>
         </Row>
@@ -451,6 +455,7 @@ function StatsSheet({ data, stakes, onStakes, dim = false }) {
   const places = PLACES[filter] || Math.max(4, ...v.placements.map((p) => p.place));
 
   const c = v.credits ?? { games: 0 };
+  const overall = filter === "overall";
   return (
     // Dimmed while these are another stakes' figures, until this one's arrive.
     <div className="flex-1 flex flex-col gap-6 p-4 overflow-y-auto min-h-0" style={{ opacity: dim ? 0.45 : 1, transition: "opacity 150ms" }}>
@@ -459,10 +464,11 @@ function StatsSheet({ data, stakes, onStakes, dim = false }) {
 
       {stakes !== "free" && c.games > 0 && (
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          <StatTile label="Credit matches" value={c.games} note={stakes === "all" ? `of ${v.games} games` : "played for a stake"} />
+          {/* Overall counts credit poker tables too (their hands won are pots). */}
+          <StatTile label={overall ? "Credit games" : "Credit matches"} value={c.games} note={overall ? "matches and poker tables" : stakes === "all" ? `of ${v.games} games` : "played for a stake"} />
           <StatTile label="Credits" value={`${c.net > 0 ? "+" : ""}${fmt(c.net)}`} note="won or lost" />
-          <StatTile label="Pots won" value={c.potsWon} note={`${Math.round((c.potsWon / c.games) * 100)}% of credit matches`} />
-          <StatTile label="Biggest pot" value={fmt(c.biggestPot)} note="won in one match" />
+          <StatTile label="Pots won" value={c.potsWon} note={overall ? "match pots and poker hands" : `${Math.round((c.potsWon / c.games) * 100)}% of credit matches`} />
+          <StatTile label="Biggest pot" value={fmt(c.biggestPot)} note={overall ? "won in one match or hand" : "won in one match"} />
         </div>
       )}
       {stakes === "credits" && c.games === 0 && (
@@ -487,6 +493,7 @@ function StatsSheet({ data, stakes, onStakes, dim = false }) {
         />
         <StatTile label="Rounds won" value={v.rounds.won} note={`of ${v.rounds.played} played`} />
       </div>
+      {overall && <p className="font-pixel-body text-[18px] text-bone/60 -mt-3">Wins, places and streaks count Thirteen and Muushig: a poker table has no places.</p>}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Section title="Finishing places">
@@ -495,13 +502,26 @@ function StatsSheet({ data, stakes, onStakes, dim = false }) {
         <Section title="Time">
           <Facts
             rows={[
-              ["Time played", formatDuration(v.time.totalSeconds)],
+              [overall ? "Time played, poker too" : "Time played", formatDuration(v.time.totalSeconds)],
               ["Avg match", v.time.avgSeconds == null ? "-" : formatDuration(v.time.avgSeconds)],
               ["Last played", v.time.lastPlayedAt ? new Date(v.time.lastPlayedAt).toLocaleDateString() : "-"],
             ]}
           />
         </Section>
       </div>
+
+      {overall && v.poker?.tables > 0 && (
+        <Section title="Poker" right={<HeaderBtn onClick={() => setFilter("poker")} bg="#9bd14f">Poker stats</HeaderBtn>}>
+          <Facts
+            rows={[
+              ["Tables", v.poker.tables],
+              ["Hands played", v.poker.hands],
+              [stakes === "credits" ? "Credits won or lost" : stakes === "free" ? "Chips won or lost" : "Chips and credits won or lost", `${v.poker.net > 0 ? "+" : ""}${fmt(v.poker.net)}`],
+              ["Time at tables", formatDuration(v.poker.seconds)],
+            ]}
+          />
+        </Section>
+      )}
 
       {filter === "thirteen" && (
         <div className="grid gap-6 xl:grid-cols-2">

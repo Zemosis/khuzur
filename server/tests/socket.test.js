@@ -942,8 +942,10 @@ describe("muushig tables", () => {
     host.emit("muushig_move", { lobbyId, move: { type: "drawForDeal", depth: 2 } });
     expect((await drew).dealDraws.find((d) => d.seat === myDraw.mySeat).depth).toBe(2);
 
+    // A second draw is refused: still in the draw it's not your turn, and if the
+    // CPUs have already finished drawing, the deal is running.
     host.emit("muushig_move", { lobbyId, move: { type: "drawForDeal", depth: 1 } });
-    expect((await next(host, "move_rejected")).reason).toMatch(/Not the DRAW phase|Not your turn/);
+    expect((await next(host, "move_rejected")).reason).toMatch(/Not the DRAW phase|Not your turn|Still dealing/);
     // Thirteen's move event does nothing at a Muushig table.
     const before = host.muushig.length;
     host.emit("request_move", { lobbyId, action: "pass" });

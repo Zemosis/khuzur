@@ -129,6 +129,21 @@ beforeEach(() => {
 });
 
 describe("Profile stats", () => {
+  it("overall lists poker tables with what they came to, sums them up, and says wins and places leave poker out", async () => {
+    const pokerRow = { id: "pk-1", game: "poker", place: null, of: null, won: false, leftEarly: false, solo: false, score: null, hands: 30, seconds: 1800, finishedAt: new Date().toISOString(), tier: null, net: 250 };
+    await renderProfile({ ...played, poker: { free: pokerView(), credits: pokerView() }, overall: { ...played.overall, poker: { tables: 3, hands: 90, net: 250, seconds: 5400 }, recent: [pokerRow, ...played.overall.recent] } });
+    expect(screen.getByText("Wins, places and streaks count Thirteen and Muushig: a poker table has no places.")).toBeInTheDocument();
+    const recent = section("Recent matches");
+    expect(within(recent).getByText("+250")).toBeInTheDocument();
+    expect(within(recent).getByText("Free chips")).toBeInTheDocument();
+    expect(within(recent).getByText("30 hands")).toBeInTheDocument();
+    const poker = section("Poker");
+    expect(poker).toHaveTextContent("Tables3");
+    expect(poker).toHaveTextContent("Hands played90");
+    await userEvent.click(within(poker).getByRole("button", { name: "Poker stats" }));
+    expect(within(screen.getByRole("group", { name: "Game" })).getByRole("button", { name: "Poker" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("opens on the figures kept from last time, with UPDATING in the corner until the fresh ones land", async () => {
     localStorage.setItem("khuzur_stats:me:all", JSON.stringify({ ...played, overall: view({ games: 3, wins: 1, losses: 2 }) }));
     let answer;

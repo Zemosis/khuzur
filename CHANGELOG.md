@@ -4,6 +4,10 @@ Every version of Khuzur Card Hall, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
+## 1.3.2 — 21 October 2026
+
+- **Poker on your Overall stats.** Recent matches list your poker tables with the chips or credits each came to. Time played and your credit figures count poker too, and a new **Poker** box sums up your tables. Wins, places and streaks still count Thirteen and Muushig only, since a poker table has no places.
+
 ## 1.3.1 — 21 October 2026
 
 - **Profile stats open at once.** Your stats show straight away with the figures from your last visit, and a small **UPDATING** box in the corner refreshes them behind the scenes.
