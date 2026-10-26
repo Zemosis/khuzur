@@ -5,7 +5,7 @@
 // all three. Examples are drawn with real PixelCards.
 
 import React from "react";
-import Rulebook, { Callout, CardRow, Cards, CpuLevels, Hi, Kbd, Key, Section, Steps, Versus } from "../Rulebook";
+import Rulebook, { Callout, CardRow, Cards, CpuLevels, Hi, Kbd, Key, Section, Steps, Versus, XpRules } from "../Rulebook";
 import { MAX_DRAW_DEPTH, MAX_FOLDS_IN_A_ROW, MIN_PLAYING, START_SCORE, TRICKS_PER_ROUND, ZERO_PILES_PENALTY } from "../../utils/muushig/engine";
 import { FORFEIT_ROUNDS, MIN_STAKED, STAKES } from "../../utils/stakes";
 import { fmt } from "../../utils/poker/tiers";
@@ -20,6 +20,7 @@ const SECTIONS = [
   ["scoring", "Scoring"],
   ["cpus", "CPU levels"],
   ["credits", "Playing for credits"],
+  ["xp", "XP, levels and gold"],
   ["controls", "Controls"],
 ];
 
@@ -291,7 +292,9 @@ export default function MuushigRules({ onClose }) {
         </Callout>
       </Section>
 
-      <Section id="controls" n={10} title="Controls">
+      <XpRules n={10} />
+
+      <Section id="controls" n={11} title="Controls">
         <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
           {[
             [<>DEPTH − / +</>, "Drawing for the deal: how deep into the pile to take your card (or ← →)"],

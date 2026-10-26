@@ -2,7 +2,8 @@
 // summary and the timeline are about; yours is marked YOU. A player who left
 // shows as LEFT, and the CPU that finished their seat gets its own row. At a
 // credit match each staked player's row ends with the credits they won or
-// lost (nets, by seat).
+// lost (nets, by seat). A signed-in player's level (as it is now) sits by
+// their name.
 
 import React from "react";
 import { INK } from "../pixelTokens";
@@ -10,6 +11,7 @@ import { ordinal } from "../profile/ordinal";
 import { seatName } from "../../utils/matchSummary";
 import { seatColor } from "./seatColors";
 import { signed } from "../credits/signed";
+import LevelTag from "../LevelTag";
 
 const ACCENT = "#f4c430";
 
@@ -55,6 +57,7 @@ export default function Standings({ standings, you, picked, onPick, nets = null 
                 <span aria-hidden className="shrink-0" style={{ width: 12, height: 12, backgroundColor: seatColor(s.seat), boxShadow: `0 0 0 2px ${INK}` }} />
                 <span className="truncate text-parchment">{seatName(s)}</span>
                 {tag && <span className="text-bone/50 text-[18px] shrink-0">#{tag}</span>}
+                <LevelTag level={s.xpLevel} />
               </span>
               {s.seat === you && s.kind === "human" && <Chip bg="#5fd4d6">YOU</Chip>}
               {s.kind === "cpu" && <Chip bg="#463a78" fg="#ead8b1">{s.level ? `CPU · ${s.level}` : "CPU"}</Chip>}

@@ -18,7 +18,7 @@ vi.mock("../../src/lib/api", () => ({
 vi.mock("../../src/hooks/useServerStats", () => ({ useServerStats: () => stats }));
 vi.mock("../../src/hooks/useAuth", () => ({
   useAuth: () => ({
-    identity: { name: "TESTER", tag: "0001", avatar: "1" },
+    identity: { name: "TESTER", tag: "0001", avatar: "1", level: 2, exp: 130, gold: 1250 },
     isGuest: auth.isGuest,
     needsProfileSetup: false,
     signOut: auth.signOut,
@@ -47,10 +47,12 @@ describe("MainMenu", () => {
     expect(screen.getByRole("link", { name: "Patch notes" })).toHaveAttribute("href", "/patch-notes");
   });
 
-  it("is branded Khuzur, with a Card Hall kicker and no per-game kickers", () => {
+  it("is branded Khuzur, with no kicker, tagline or per-game kickers", () => {
     renderMenu();
     expect(screen.getByText("KHUZUR")).toBeInTheDocument();
-    expect(screen.getByText("Card Hall")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "CHOOSE YOUR GAME" })).toBeInTheDocument();
+    expect(screen.queryByText("Card Hall")).not.toBeInTheDocument();
+    expect(screen.queryByText(/dungeon-master/)).not.toBeInTheDocument();
     expect(screen.queryByText(/CARD-LORE/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Tien Len/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Mongolian Trickster/)).not.toBeInTheDocument();
@@ -199,17 +201,37 @@ describe("MainMenu", () => {
   it("a guest's badge has no balance", () => {
     renderMenu();
     expect(screen.queryByText(/ CR$/)).toBeNull();
+    expect(screen.queryByTitle("Gold")).toBeNull();
+    expect(screen.queryByText(/^LV /)).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+
+  it("signed in, the badge shows your level and your gold, and leaves the XP bar to the profile", () => {
+    auth.isGuest = false;
+    renderMenu();
+    const badge = screen.getByRole("button", { name: /TESTER/ });
+    expect(within(badge).getByText("LV 2")).toBeInTheDocument();
+    expect(within(badge).queryByRole("progressbar")).toBeNull();
+    expect(within(badge).getByTitle("Gold")).toHaveTextContent("1,250 gold");
   });
 
   it("shows your leaderboard rank beside your balance", async () => {
     auth.isGuest = false;
     credits.rank = 57;
     renderMenu();
-    expect(await screen.findByText("2,340 CR · #57")).toBeInTheDocument();
+    expect(await screen.findByTitle("Credits")).toHaveTextContent("2,340 CR · #57");
     credits.rank = null;
   });
 
-  it("claiming tops you up: the loader, the amount floats off, and the strip says FULL", async () => {
+  it("leaves the rank off outside the top 500", async () => {
+    auth.isGuest = false;
+    credits.rank = 501;
+    renderMenu();
+    expect(await screen.findByTitle("Credits")).toHaveTextContent(/^2,340 CR$/);
+    credits.rank = null;
+  });
+
+  it("claiming tops you up: the loader, the amount floats off, and the chip locks", async () => {
     auth.isGuest = false;
     credits.balance = 240;
     credits.claim = { state: "ready", amount: 760 };
@@ -221,16 +243,16 @@ describe("MainMenu", () => {
     expect(await screen.findByText("1,000 CR")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("+760 CR");
     expect(screen.queryByRole("button", { name: /CLAIM/ })).toBeNull();
-    expect(screen.getByText("FULL · CLAIM UNDER 1,000")).toBeInTheDocument();
+    expect(screen.getByText(/full, claim under 1,000/)).toBeInTheDocument();
     credits.balance = 2340;
     credits.claim = undefined;
   });
 
-  it("the claim strip is always there: FULL over 1,000, a countdown while you wait, nothing for guests", async () => {
+  it("the claim chip is always there: locked over 1,000, a countdown while you wait, nothing for guests", async () => {
     auth.isGuest = false;
     credits.claim = { state: "over" };
     const { unmount } = renderMenu();
-    expect(await screen.findByText("FULL · CLAIM UNDER 1,000")).toBeInTheDocument();
+    expect(await screen.findByText(/full, claim under 1,000/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /CLAIM/ })).toBeNull();
     unmount();
     credits.claim = { state: "wait", nextAt: new Date(Date.now() + 3_600_000).toISOString() };
@@ -240,7 +262,7 @@ describe("MainMenu", () => {
     auth.isGuest = true;
     renderMenu();
     expect(screen.queryByRole("timer")).toBeNull();
-    expect(screen.queryByText(/FULL/)).toBeNull();
+    expect(screen.queryByText(/full, claim under/)).toBeNull();
     credits.claim = undefined;
   });
 

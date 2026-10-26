@@ -80,7 +80,8 @@ function profileError(err) {
 
 /**
  * Who a socket is, from its handshake { token, name, tag, avatar }: returns
- * { userId, name, tag, avatar } with avatar as { variant, custom }.
+ * { userId, name, tag, avatar, level } with avatar as { variant, custom } and
+ * level the account's (null for guests).
  * A signed-in player is named and drawn from their profile: the browser may
  * connect before its profile has loaded, still sending its stand-in guest
  * name. The handshake's name only counts for guests, and for signed-in players
@@ -93,7 +94,7 @@ export async function socketIdentity({ token, name, tag, avatar } = {}) {
     try {
       ({
         rows: [row],
-      } = await pool.query("select username, tag, avatar, custom_avatar from profiles where id = $1", [user.id]));
+      } = await pool.query("select username, tag, avatar, custom_avatar, level from profiles where id = $1", [user.id]));
     } catch (err) {
       console.error("[auth] profile lookup failed:", err.message);
     }
@@ -107,6 +108,7 @@ export async function socketIdentity({ token, name, tag, avatar } = {}) {
     avatar: row
       ? { variant: custom ? "custom" : row.avatar, custom }
       : { variant: PRESET_AVATARS.has(preset) ? preset : "1", custom: null },
+    level: row?.level ?? null,
   };
 }
 

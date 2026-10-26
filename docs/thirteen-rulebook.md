@@ -23,7 +23,8 @@ A shedding game for 2 to 4 players, in the style of Vietnam's *Tiến lên*. Bea
 5. [Scoring](#5-scoring)
 6. [CPU levels](#6-cpu-levels)
 7. [Playing for credits](#7-playing-for-credits)
-8. [Controls](#8-controls)
+8. [XP, levels and gold](#8-xp-levels-and-gold)
+9. [Controls](#9-controls)
 
 ### Words used in this rulebook
 
@@ -184,7 +185,25 @@ If the server restarts mid-match, the match doesn't count and every stake goes b
 
 ---
 
-## 8. Controls
+## 8. XP, levels and gold
+
+Signed in, every online match pays **XP** and **gold**, at free and credit tables alike. Practice games against CPUs don't.
+
+| | |
+| --- | --- |
+| **The winner** | 70 XP and 80 gold |
+| **Last place** | 30 XP and 20 gold. The places between are spread evenly |
+| **Leaving** | Leave before the end and don't come back, and the match pays you nothing |
+
+**Levels.** Level 2 takes **100 XP**, and each level after takes 50 more, up to 1,500 a level. Every new level pays **25 gold × the level**, and every 5th pays double: level 5 pays 250, level 10 pays 500.
+
+> **Gold isn't credits.** Gold is for the shop, coming soon. Credits are what you stake, and what the leaderboard ranks.
+
+The end of a match shows what it paid you: the XP and gold, your XP bar filling, and **LEVEL UP!** with the level's gold when you reach one.
+
+---
+
+## 9. Controls
 
 | Action | How |
 | --- | --- |
@@ -197,4 +216,4 @@ If the server restarts mid-match, the match doesn't count and every stake goes b
 
 ---
 
-<sub>**For contributors:** the game enforces these rules in `src/utils/handEvaluator.js` and `src/utils/gameLogic.js`, the CPU players live in `src/utils/aiPlayer.js`, and the credit stakes in `src/utils/stakes.js`. The server runs copies of all of them in `server/game/`. The in-game rulebook is `src/components/thirteen/RulesModal.jsx`. Change all of them together.</sub>
+<sub>**For contributors:** the game enforces these rules in `src/utils/handEvaluator.js` and `src/utils/gameLogic.js`, the CPU players live in `src/utils/aiPlayer.js`, and the credit stakes in `src/utils/stakes.js`. The server runs copies of all of them in `server/game/`. The in-game rulebook is `src/components/thirteen/RulesModal.jsx`. XP, levels and gold are `src/utils/progression.js`, copied to `server/game/progression.js`. Change all of them together.</sub>

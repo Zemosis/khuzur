@@ -1,5 +1,6 @@
 // OPPONENT SEAT — one player around the table: a name plate plus a preview of
-// the cards they hold, always on the table side of the plate.
+// the cards they hold, always on the table side of the plate. A signed-in
+// player's level (xpLevel) shows beside their name.
 //
 // Every seat uses the same plate and the same preview, so the table reads as
 // symmetric: left and right are exact mirrors with tall plates, the top seat
@@ -20,6 +21,7 @@ import { PixelAvatar, PixelCard } from "../PixelCard";
 import Callout from "../Callout";
 import ChatBubble from "../ChatBubble";
 import PixelIcon from "../PixelIcon";
+import LevelTag from "../LevelTag";
 import { reducedMotion } from "../../utils/motion";
 
 const CARD_W = 44;
@@ -155,6 +157,7 @@ const OpponentSection = ({
   dimmed = false,
   bubble = null,
   bubbleAt,
+  xpLevel = null,
 }) => {
   const { name, hand, isEliminated } = player;
   const count = hand.length;
@@ -238,7 +241,10 @@ const OpponentSection = ({
           eliminated={isEliminated && !announcing}
         />
         <div className={`min-w-0 max-w-full ${strip ? "w-full" : compact ? "flex-1" : ""}`}>
-          <div className={`font-pixel-display text-parchment truncate ${compact ? "text-[10px]" : "text-[11px]"}`}>{name.split(" #")[0]}</div>
+          <div className={`flex items-center gap-1.5 min-w-0 ${strip || (vertical && !compact) ? "justify-center" : ""}`}>
+            <span className={`font-pixel-display text-parchment truncate ${compact ? "text-[10px]" : "text-[11px]"}`}>{name.split(" #")[0]}</span>
+            <LevelTag level={xpLevel} />
+          </div>
           {/* Compact, the deal lands on the card count: there is no fan. */}
           {compact ? <div data-deal-seat={dealSeat ?? position}>{detail ?? cardCount}</div> : (detail ?? cardCount)}
         </div>

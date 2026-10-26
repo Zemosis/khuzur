@@ -875,6 +875,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
         bubbleAt={seats === "strip" ? undefined : BUBBLE_AT[posOf(index)]}
         position={position}
         face={faceFor(index)}
+        xpLevel={online ? game.levels?.[index] : null}
         dealSeat={posOf(index)}
         chip={
           drawing
@@ -1191,6 +1192,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
           onRematch={onRematch}
           onExit={onExit}
           credit={credit && { stake: credit.stake, result: credit.result, onPlayAgain, error: playAgainError }}
+          paid={online ? { reward: game.reward } : null}
         />
       )}
 

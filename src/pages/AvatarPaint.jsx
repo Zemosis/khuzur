@@ -426,7 +426,7 @@ const AvatarPaint = () => {
                     justifyContent: "center",
                     opacity: 0.4,
                   }}
-                  title="Unlock with coins (coming soon)"
+                  title="Unlock with gold (coming soon)"
                 >
                   <span className="text-bone/30"><PixelIcon name="lock" size={12} title="Locked" /></span>
                 </div>
@@ -440,7 +440,7 @@ const AvatarPaint = () => {
                     justifyContent: "center",
                     opacity: 0.4,
                   }}
-                  title="Unlock with coins (coming soon)"
+                  title="Unlock with gold (coming soon)"
                 >
                   <span className="text-bone/30"><PixelIcon name="lock" size={12} title="Locked" /></span>
                 </div>

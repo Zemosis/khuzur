@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import RulesModal from "../../src/components/thirteen/RulesModal";
 
-const SECTIONS = ["The goal", "Card order", "Playing a round", "Combinations", "5-card hands", "Breaking ties", "Scoring", "CPU levels", "Playing for credits", "Controls"];
+const SECTIONS = ["The goal", "Card order", "Playing a round", "Combinations", "5-card hands", "Breaking ties", "Scoring", "CPU levels", "Playing for credits", "XP, levels and gold", "Controls"];
 
 describe("RulesModal", () => {
   it("is a labelled dialog with every section in the nav and the body", () => {
@@ -29,6 +29,14 @@ describe("RulesModal", () => {
     const section = screen.getByRole("heading", { name: /CPU levels/ }).closest("section");
     ["EASY", "MEDIUM", "HARD"].forEach((level) => expect(within(section).getAllByText(level).length).toBeGreaterThan(0));
     expect(within(section).getByText("NO PEEKING")).toBeInTheDocument();
+  });
+
+  it("says what a match pays in XP and gold, and what levels cost", () => {
+    render(<RulesModal onClose={() => {}} />);
+    const section = screen.getByRole("heading", { name: /XP, levels and gold/ }).closest("section");
+    expect(within(section).getByText("70 XP and 80 gold")).toBeInTheDocument();
+    expect(section).toHaveTextContent("Level 2 takes 100 XP, and each level after takes 50 more, up to 1,500 a level");
+    expect(section).toHaveTextContent("level 5 pays 250");
   });
 
   it("states the scoring thresholds from GAME_SETTINGS", () => {

@@ -13,8 +13,9 @@ import { MuushigGame, muushigView, DEFAULT_MUUSHIG_DELAYS } from "./game/muushig
 import { PokerTable, DEFAULT_POKER_DELAYS } from "./game/poker/table.js";
 import { viewFor } from "./game/poker/engine.js";
 import { tallyHand } from "./game/pokerTally.js";
+import { pokerHandReward, POKER_REWARD_SPACING_MS } from "./game/progression.js";
 import { BOT_NAMES } from "./game/constants.js";
-import { createSession, finishSession, closeOrphanedSessions } from "./persistence.js";
+import { createSession, finishSession, closeOrphanedSessions, grantProgress } from "./persistence.js";
 import { authRouter, socketIdentity } from "./auth.js";
 import { oauthRouter } from "./oauth.js";
 import { createChatGuard, cleanChat } from "./chatGuard.js";
@@ -145,11 +146,26 @@ const io = new Server(server, {
  */
 const lobbies = new Map();
 
+// Each signed-in player's level (userId → level), shown beside their name at
+// the table. Read from the profile when they connect, and kept up to date as
+// matches and poker hands pay them (noteLevel).
+const xpLevels = new Map();
+const noteLevel = (reward) => reward && xpLevels.set(reward.userId, reward.levelAfter);
+const levelOf = (member) => (member?.userId && xpLevels.get(member.userId)) || null;
+
+/** Each seated player's level for the game state: { seat: level }, people only. */
+function levelsOf(lobby) {
+  const levels = {};
+  for (const m of lobby.members.values()) if (m.seatIndex != null && levelOf(m)) levels[m.seatIndex] = levelOf(m);
+  return levels;
+}
+
 // ---------- AUTH MIDDLEWARE ----------
 // Signed-in players pass their JWT from /api/auth; guests pass name + tag.
 // Identity (playerKey) is what survives refreshes and reconnects.
 io.use(async (socket, next) => {
-  const { userId, name, tag, avatar } = await socketIdentity(socket.handshake.auth);
+  const { userId, name, tag, avatar, level } = await socketIdentity(socket.handshake.auth);
+  if (userId && level) xpLevels.set(userId, level);
   socket.data.userId = userId;
   socket.data.name = name;
   socket.data.tag = tag;
@@ -219,6 +235,7 @@ function tableViewFor(lobby, member) {
         kind: "human",
         name: m?.displayName || "?",
         avatar: m?.avatar || null,
+        xpLevel: levelOf(m),
         isHost: lobby.hostKey === s.key,
         connected: !!m?.connected,
       };
@@ -321,6 +338,8 @@ function broadcastState(lobby, game = lobby.game) {
       amHost: lobby.hostKey === member.key,
       dealMsLeft: game.dealMsLeft(),
       ...creditViewOf(lobby),
+      ...rewardViewOf(lobby, member),
+      levels: levelsOf(lobby),
     });
   }
 }
@@ -334,6 +353,8 @@ function sendStateTo(lobby, socket) {
     amHost: !!member && lobby.hostKey === member.key,
     dealMsLeft: lobby.game.dealMsLeft(),
     ...creditViewOf(lobby),
+    ...rewardViewOf(lobby, member),
+    levels: levelsOf(lobby),
   });
 }
 
@@ -356,6 +377,14 @@ function tableLog(lobby, text, tone) {
 
 /** A credit match's stake, pot, covered seats and result, for the game state. */
 const creditViewOf = (lobby) => (isCreditMatch(lobby) ? { credit: lobby.credits.view() } : {});
+
+/**
+ * What the match paid this member, once it's saved (see closeSession):
+ * { reward } with their XP and gold, or { reward: null } if it paid them
+ * nothing. Before then, nothing, which the browser reads as "adding up".
+ */
+const rewardViewOf = (lobby, member) =>
+  lobby.rewards ? { reward: (member?.userId && lobby.rewards.get(member.userId)) || null } : {};
 
 /** Adds (or refreshes) a seat in the recording ledger. Never removes. */
 function rosterEnter(lobby, member) {
@@ -396,7 +425,7 @@ function rosterLeave(lobby, member, { cpuTookOver = false } = {}) {
  * lobby dies first, so an abandoned match still leaves a record.
  */
 function closeSession(lobby, { completed, endedReason }) {
-  if (!lobby.sessionPromise || lobby.recorded) return;
+  if (!lobby.sessionPromise || lobby.recorded) return Promise.resolve([]);
   lobby.recorded = true;
 
   // Snapshot now: the lobby may be torn down before the insert resolves.
@@ -410,9 +439,28 @@ function closeSession(lobby, { completed, endedReason }) {
     state: lobby.game?.state || null,
   };
 
-  lobby.sessionPromise
-    .then((sessionId) => sessionId && finishSession({ sessionId, ...snapshot }))
-    .catch((err) => console.error("[db] finishSession failed:", err));
+  // → what each signed-in player earned; never rejects.
+  return lobby.sessionPromise
+    .then((sessionId) => (sessionId ? finishSession({ sessionId, ...snapshot }) : []))
+    .catch((err) => {
+      console.error("[db] finishSession failed:", err);
+      return [];
+    });
+}
+
+/**
+ * The match is over: save it, then show each player what it paid them. The
+ * rewards stay on the lobby until the next match's session opens, so a
+ * player who reconnects still sees them.
+ */
+function recordMatch(lobby, game) {
+  const session = lobby.sessionPromise;
+  lobby.rewardsSaved = closeSession(lobby, { completed: true, endedReason: "completed" }).then((rewards) => {
+    rewards.forEach(noteLevel);
+    if (lobby.sessionPromise !== session) return; // a rematch already began
+    lobby.rewards = new Map(rewards.map((r) => [r.userId, r]));
+    if (lobby.game === game) broadcastState(lobby, game);
+  });
 }
 
 /**
@@ -427,6 +475,7 @@ function beginSession(lobby) {
   lobby.roster.clear();
   lobby.rounds = [];
   lobby.recorded = false;
+  lobby.rewards = null;
   for (const member of lobby.members.values()) rosterEnter(lobby, member);
 
   const host = lobby.members.get(lobby.hostKey);
@@ -494,8 +543,8 @@ function startGame(lobby) {
         tableLog(lobby, `${name} was away ${FORFEIT_ROUNDS} rounds: the seat is the bot's now, and the stake stays in the pot.`, "gone");
       }
     },
-    onGameOver: () => {
-      closeSession(lobby, { completed: true, endedReason: "completed" });
+    onGameOver: (game) => {
+      recordMatch(lobby, game);
       if (isCreditMatch(lobby)) settleCreditMatch(lobby);
     },
     // A credit table's CPUs, and any that covers a player who left, play HARD.
@@ -643,6 +692,7 @@ async function settleCreditMatch(lobby) {
   broadcastState(lobby, game); // "Saving…"
   const sessionId = await (lobby.sessionPromise ?? null);
   await lobby.credits.settle(game.state, { sessionId, rounds: lobby.rounds });
+  await lobby.rewardsSaved; // the last state this table sends has the rewards too
   broadcastState(lobby, game);
   game.destroy();
   if (lobby.game !== game) return;
@@ -701,8 +751,8 @@ function sitAtPoker(lobby, member) {
 }
 
 /**
- * A poker hand is over: keep it for the record, and add it to each player's
- * tally at this table (see pokerTally.js).
+ * A poker hand is over: keep it for the record, add it to each player's
+ * tally at this table (see pokerTally.js), and pay the signed-in players.
  */
 function recordHand(lobby, hand) {
   if (!lobby.sessionPromise) return;
@@ -713,8 +763,29 @@ function recordHand(lobby, hand) {
   });
   for (const r of hand.seatResults) {
     const entry = r.player_key && lobby.roster.get(r.player_key);
-    if (entry) entry.poker = tallyHand(entry.poker, hand, r);
+    if (!entry) continue;
+    entry.poker = tallyHand(entry.poker, hand, r);
+    payPokerHand(lobby, entry, r.won > 0);
   }
+}
+
+/**
+ * A poker hand's XP and gold, paid at once and sent to the player as
+ * `progress_reward`. A hand pays only if it ends POKER_REWARD_SPACING_MS
+ * after their last paid one here, so folding hand after hand earns little.
+ */
+function payPokerHand(lobby, entry, won, now = Date.now()) {
+  if (!entry.userId || now - (entry.lastPaidAt ?? -Infinity) < POKER_REWARD_SPACING_MS) return;
+  entry.lastPaidAt = now;
+  const pay = pokerHandReward({ won });
+  entry.earned = { xp: (entry.earned?.xp ?? 0) + pay.xp, gold: (entry.earned?.gold ?? 0) + pay.gold };
+  grantProgress(entry.userId, pay)
+    .then((reward) => {
+      noteLevel(reward);
+      const member = lobby.members.get(entry.playerKey);
+      if (reward && member?.connected && member.socketId) io.to(member.socketId).emit("progress_reward", reward);
+    })
+    .catch((err) => console.error("[db] grantProgress failed:", err));
 }
 
 function removeMember(lobby, member, { convertSeat = true } = {}) {
@@ -1225,8 +1296,12 @@ io.on("connection", (socket) => {
       socket.emit("move_rejected", { reason: "Only the host can start a rematch" });
       return;
     }
+    // The rematch's first state goes out from rematch(), so the last match's rewards go first.
+    const rewards = lobby.rewards;
+    lobby.rewards = null;
     const result = lobby.game.rematch();
     if (!result.ok) {
+      lobby.rewards = rewards;
       socket.emit("move_rejected", { reason: result.error });
       return;
     }

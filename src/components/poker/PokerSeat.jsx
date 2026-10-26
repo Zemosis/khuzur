@@ -16,6 +16,7 @@
 import React, { useState } from "react";
 import { PixelAvatar, PixelCard } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
+import LevelTag from "../LevelTag";
 import { LEVEL_COLOR } from "./seatInfo";
 import { useMuck } from "./cardMotion";
 
@@ -64,7 +65,7 @@ export default function PokerSeat({ layout = "full", position = "left", ...props
   return <TakenSeat layout={layout} position={position} plate={plate} {...props} />;
 }
 
-function TakenSeat({ player, face, rel, layout, position, plate, tags = [], isTurn = false, place = null, clockMs = null, clockKey, best = [], winner = false, isHost = false, onRemoveCpu }) {
+function TakenSeat({ player, face, rel, layout, position, plate, tags = [], isTurn = false, place = null, clockMs = null, clockKey, best = [], winner = false, isHost = false, onRemoveCpu, xpLevel = null }) {
   const [showCards, cardsRef] = useMuck(player.inHand && !player.folded && player.hole.length > 0, player.folded);
   const strip = layout === "strip";
   const slim = layout === "row";
@@ -125,8 +126,11 @@ function TakenSeat({ player, face, rel, layout, position, plate, tags = [], isTu
         )}
         <PixelAvatar variant={face?.variant} customAvatarData={face?.customAvatarData} size={plate.face} active={isTurn} eliminated={player.folded} />
         <div className={`min-w-0 ${tall || strip ? "w-full" : "flex-1"}`}>
-          <div className={`font-pixel-display text-parchment truncate ${strip ? "text-[8px]" : "text-[10px]"}`} title={short(player.name)}>
-            {short(player.name)}
+          <div className={`flex items-center gap-1 min-w-0 ${tall || strip ? "justify-center" : ""}`}>
+            <span className={`font-pixel-display text-parchment truncate ${strip ? "text-[8px]" : "text-[10px]"}`} title={short(player.name)}>
+              {short(player.name)}
+            </span>
+            {!strip && <LevelTag level={xpLevel} />}
           </div>
           <div className={`font-pixel-body leading-none mt-1 text-glow-gold tabular-nums ${strip ? "text-[16px]" : "text-[20px]"}`}>{player.stack}</div>
           {level && !strip && !slim && (

@@ -23,9 +23,9 @@ import { fmt } from "../utils/poker/tiers";
 import { api } from "../lib/api";
 import { connectSocket } from "../utils/socket";
 import UpdatingChip from "../components/UpdatingChip";
+import { levelProgress } from "../utils/progression";
 
 const ACCENT = "#f4c430";
-const EXP_PER_LEVEL = 100;
 const PRESETS = ["1", "2", "3", "4", "5"];
 const GAME_NAMES = { thirteen: "Thirteen", muushig: "Muushig", poker: "Poker" };
 
@@ -51,7 +51,7 @@ function EditProfile() {
   const dirty =
     name !== identity.name || tag !== identity.tag || avatar !== String(profile?.avatar || identity.avatar);
   const valid = name.length >= 1 && tag.length === 4;
-  const expIntoLevel = identity.exp % EXP_PER_LEVEL;
+  const { into, need } = levelProgress(identity.exp);
 
   async function save(e) {
     e.preventDefault();
@@ -92,10 +92,21 @@ function EditProfile() {
                 LV {identity.level}
               </span>
               <span className="font-pixel-body text-[20px] text-bone">
-                {expIntoLevel}/{EXP_PER_LEVEL} XP to level {identity.level + 1}
+                {into}/{need} XP to level {identity.level + 1}
               </span>
             </div>
-            <div className="font-pixel-body text-[20px] text-bone/70 mt-1">{identity.coins} coins</div>
+            <div
+              role="progressbar"
+              aria-label="Experience toward next level"
+              aria-valuenow={into}
+              aria-valuemin={0}
+              aria-valuemax={need}
+              className="mt-2 h-2"
+              style={{ backgroundColor: "#2a234d", boxShadow: `0 0 0 2px ${INK}` }}
+            >
+              <div className="h-full" style={{ width: `${(into / need) * 100}%`, backgroundColor: ACCENT }} />
+            </div>
+            <div className="font-pixel-body text-[20px] text-bone/70 mt-1">{fmt(identity.gold)} gold</div>
           </div>
         </div>
 
@@ -462,11 +473,13 @@ function StatsSheet({ data, stakes, onStakes, dim = false }) {
       <Toggle label="Game" options={FILTERS} value={filter} onChange={setFilter} />
       <Toggle label="Stakes" options={MATCH_STAKES} value={stakes} onChange={onStakes} />
 
-      {stakes !== "free" && c.games > 0 && (
+      {/* What credit play came to: only under CREDITS, where Games below
+          already counts the credit matches. */}
+      {stakes === "credits" && c.games > 0 && (
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           {/* Overall counts credit poker tables too (their hands won are pots). */}
-          <StatTile label={overall ? "Credit games" : "Credit matches"} value={c.games} note={overall ? "matches and poker tables" : stakes === "all" ? `of ${v.games} games` : "played for a stake"} />
           <StatTile label="Credits" value={`${c.net > 0 ? "+" : ""}${fmt(c.net)}`} note="won or lost" />
+          <StatTile label="Per game" value={`${c.net > 0 ? "+" : ""}${fmt(Math.round(c.net / c.games))}`} note={overall ? "per match or poker table" : "per credit match"} />
           <StatTile label="Pots won" value={c.potsWon} note={overall ? "match pots and poker hands" : `${Math.round((c.potsWon / c.games) * 100)}% of credit matches`} />
           <StatTile label="Biggest pot" value={fmt(c.biggestPot)} note={overall ? "won in one match or hand" : "won in one match"} />
         </div>
@@ -509,19 +522,6 @@ function StatsSheet({ data, stakes, onStakes, dim = false }) {
           />
         </Section>
       </div>
-
-      {overall && v.poker?.tables > 0 && (
-        <Section title="Poker" right={<HeaderBtn onClick={() => setFilter("poker")} bg="#9bd14f">Poker stats</HeaderBtn>}>
-          <Facts
-            rows={[
-              ["Tables", v.poker.tables],
-              ["Hands played", v.poker.hands],
-              [stakes === "credits" ? "Credits won or lost" : stakes === "free" ? "Chips won or lost" : "Chips and credits won or lost", `${v.poker.net > 0 ? "+" : ""}${fmt(v.poker.net)}`],
-              ["Time at tables", formatDuration(v.poker.seconds)],
-            ]}
-          />
-        </Section>
-      )}
 
       {filter === "thirteen" && (
         <div className="grid gap-6 xl:grid-cols-2">

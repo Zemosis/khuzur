@@ -3,8 +3,9 @@ import express from "express";
 import request from "supertest";
 import { TEST_DATABASE_URL, loadDb, truncateAll } from "./setup.js";
 
-// A poker table's record: each player's chips and tally of hands, no places
-// or rewards, kept out of the placement stats and read back by /stats.
+// A poker table's record: each player's chips, tally of hands and the XP and
+// gold its hands paid (paid hand by hand, not here), no places, kept out of
+// the placement stats and read back by /stats.
 describe.skipIf(!TEST_DATABASE_URL)("poker tables (Postgres)", () => {
   let m;
   let app;
@@ -52,20 +53,23 @@ describe.skipIf(!TEST_DATABASE_URL)("poker tables (Postgres)", () => {
       gameType: "poker",
       completed: true,
       endedReason: "completed",
-      roster: [entry(0, { playerKey: userId, userId, poker: tally() }), entry(1, { poker: tally({ net: -250, hands_won: 6 }) })],
+      roster: [
+        entry(0, { playerKey: userId, userId, poker: tally(), earned: { xp: 22, gold: 31 } }),
+        entry(1, { poker: tally({ net: -250, hands_won: 6 }) }),
+      ],
       rounds: [{ roundNumber: 1, winnerSeat: 0, seatResults: [{ seat_index: 0, net: 15 }, { seat_index: 1, net: -15 }] }],
       state: { handNumber: 10 },
     });
     return sessionId;
   }
 
-  it("records chips won or lost and the hands tally, with no places, coins or exp", async () => {
+  it("records chips won or lost, the hands tally and what the hands paid, with no places", async () => {
     const before = (await m.pool.query("select coins, exp, games_played from profiles where id = $1", [userId])).rows[0];
     const sessionId = await recordTable();
     const { rows: [session] } = await m.pool.query("select status, round_count from game_sessions where id = $1", [sessionId]);
     expect(session).toEqual({ status: "finished", round_count: 10 });
     const { rows: [me] } = await m.pool.query("select * from game_players where player_id = $1", [userId]);
-    expect(me).toMatchObject({ final_score: 250, final_position: null, is_winner: false, coins_earned: 0, exp_earned: 0, rounds_won: 4 });
+    expect(me).toMatchObject({ final_score: 250, final_position: null, is_winner: false, coins_earned: 31, exp_earned: 22, rounds_won: 4 });
     expect(me.stats).toEqual(tally());
     const after = (await m.pool.query("select coins, exp, games_played from profiles where id = $1", [userId])).rows[0];
     expect(after).toEqual(before);

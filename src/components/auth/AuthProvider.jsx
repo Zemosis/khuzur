@@ -105,7 +105,7 @@ export default function AuthProvider({ children }) {
   const customColors = profile?.custom_colors || [];
 
   const identity = isGuest
-    ? { name: guest.name, tag: guest.tag, avatar: guest.avatar, customAvatar: null, customColors: [], level: 1, exp: 0, coins: 0, wins: 0, gamesPlayed: 0 }
+    ? { name: guest.name, tag: guest.tag, avatar: guest.avatar, customAvatar: null, customColors: [], level: 1, exp: 0, gold: 0, wins: 0, gamesPlayed: 0 }
     : {
         name: profile?.username || guest.name,
         tag: profile?.tag || guest.tag,
@@ -114,7 +114,7 @@ export default function AuthProvider({ children }) {
         customColors,
         level: profile?.level ?? 1,
         exp: profile?.exp ?? 0,
-        coins: profile?.coins ?? 0,
+        gold: profile?.coins ?? 0, // kept in the profile's coins column
         wins: profile?.wins ?? 0,
         gamesPlayed: profile?.games_played ?? 0,
       };

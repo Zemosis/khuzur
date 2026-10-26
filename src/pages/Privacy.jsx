@@ -70,7 +70,7 @@ export default function Privacy() {
                     "Your Google or Discord account ID",
                     "if you sign in with them, so the same account opens next time. We ask them for your email address and nothing else: not your contacts, your friends or your messages.",
                   ],
-                  ["Your profile", "the name, tag and avatar you pick, plus coins, experience and level."],
+                  ["Your profile", "the name, tag and avatar you pick, plus gold, experience and level."],
                   [
                     "Your matches",
                     "who played, the scores, placings and times, so your stats and history work. Guests appear in these records by their guest name only.",

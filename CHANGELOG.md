@@ -4,6 +4,29 @@ Every version of Khuzur Card Hall, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
+## 1.4.0 — 26 October 2026
+
+### XP, levels and gold
+- **Coins are now gold.** Same balance, new name. Gold is for the shop (coming soon), and it isn't credits.
+- **See what you earned.** The end of every online Thirteen and Muushig match shows the XP and gold it paid you, your XP bar filling up, and **LEVEL UP!** when you reach a new level.
+- **What a match pays:** the winner gets 70 XP and 80 gold, last place 30 XP and 20 gold, and the places between are spread evenly. Free and credit matches pay the same.
+- **Poker pays too.** Each hand you're dealt into pays 4 XP and 3 gold (6 XP and 8 gold if you win it), at most one hand every 30 seconds.
+- **New level curve.** Early levels come quickly; each level takes 50 XP more than the last, up to 1,500. Everyone keeps the level they had.
+- **Level-ups pay gold:** 25 × the new level, doubled on every 5th (level 5 pays 250, level 10 pays 500).
+- **Leaving early earns nothing.** If you leave a match and don't come back, the CPU playing your seat earns nothing for you. Come back before the end and you're paid in full.
+- **Your level, XP and gold on the main menu.** Your player badge shows your level, and your gold (the coin) beside your credits. The gold rolls up after a match. Your leaderboard rank shows there only while you're in the top 500. The lobby's Adventurer card shows your gold too, and your profile shows your XP as a bar filling toward the next level.
+- **Everyone's level at the table.** Signed-in players have a gold **LV** tag beside their name at Thirteen, Muushig and Poker tables, at the waiting table, and on match pages.
+- Each rulebook has a new **XP, levels and gold** section.
+
+### A tidier main menu
+- **The top bar has two sides.** Rules, Ranks and Shop sit by the Khuzur logo on the left; your claim, your player badge and Settings sit on the right.
+- **CLAIM is a small button now,** beside your badge instead of a strip across the top. When you're at 1,000 or more it's a dim, locked CLAIM (hidden on phones); while you wait it counts down.
+- The "Card Hall" line and the tagline above the games are gone. It's just **CHOOSE YOUR GAME**.
+
+### Cleaner profile stats
+- **Credit figures only under CREDITS.** The ALL view no longer repeats your credit games in their own row. Under CREDITS you get what credit play came to: credits won or lost, per game, pots won and your biggest pot (no more "Credit games" beside "Games").
+- **Overall no longer has a Poker section.** Poker's figures live on the POKER tab.
+
 ## 1.3.3 — 26 October 2026
 
 - **The log follows the table.** It now says when a player leaves and a CPU plays their seat (at a credit match, how many rounds they have to come back), when they come back, when someone joins by taking over a CPU's seat, and when a seat is forfeited. At a poker table it says who left.

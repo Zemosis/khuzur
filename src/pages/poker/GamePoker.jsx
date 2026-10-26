@@ -39,6 +39,7 @@ import { evaluate } from "../../utils/poker/hands";
 import { eventEntry } from "../../utils/poker/log";
 import BuyInPanel from "../../components/credits/BuyInPanel";
 import Modal from "../../components/credits/Modal";
+import { HandReward } from "../../components/RewardPanel";
 import { useCredits } from "../../hooks/useCredits";
 import { TIERS, buyInRange, fmt, topUpRange } from "../../utils/poker/tiers";
 
@@ -122,6 +123,9 @@ function OnlinePoker({ lobbyId, playerName }) {
   const { credits, refresh: refreshCredits } = useCredits({ enabled: false });
   // The buy-in panel at a credit table: { mode: "sit" | "add" | "rebuy", tier, tableName?, busy, error }.
   const [buyIn, setBuyIn] = useState(null);
+  // What the last hand paid you (progress_reward), while it shows.
+  const [handReward, setHandReward] = useState(null);
+  const clearHandReward = useCallback(() => setHandReward(null), []);
   const buyInRef = useRef(null); // the socket handlers read the panel without re-subscribing
   useEffect(() => {
     buyInRef.current = buyIn;
@@ -153,6 +157,7 @@ function OnlinePoker({ lobbyId, playerName }) {
     };
     // Sat out too long, or the host closed the table.
     const onLeft = () => navigate("/lobby-poker", tierRef.current ? { state: { tab: "credits" } } : undefined);
+    const onReward = (reward) => setHandReward(reward);
     socket.on("connect", join);
     socket.on("poker_state", onState);
     socket.on("receive_chat", onChat);
@@ -160,6 +165,7 @@ function OnlinePoker({ lobbyId, playerName }) {
     socket.on("error_message", onError);
     socket.on("table_left", onLeft);
     socket.on("credit_table_info", onTableInfo);
+    socket.on("progress_reward", onReward);
     connectSocket(identity).then(() => {
       if (socket.connected) join();
     });
@@ -171,6 +177,7 @@ function OnlinePoker({ lobbyId, playerName }) {
       socket.off("error_message", onError);
       socket.off("table_left", onLeft);
       socket.off("credit_table_info", onTableInfo);
+      socket.off("progress_reward", onReward);
       // Left without EXIT (browser Back): the seat is held for the grace period.
       socket.emit("leave_page", { lobbyId });
     };
@@ -233,6 +240,11 @@ function OnlinePoker({ lobbyId, playerName }) {
     return (
       <>
         <PokerScreen view={view} online={{ lobbyId, chatLimit }} actions={actions} messages={messages} setMessages={setMessages} warning={rejection} />
+        {handReward && (
+          <div className="fixed left-1/2 -translate-x-1/2 z-40" style={{ bottom: "32%" }}>
+            <HandReward key={`${handReward.expAfter}`} reward={handReward} onDone={clearHandReward} />
+          </div>
+        )}
         {panel}
       </>
     );
@@ -420,6 +432,7 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
           clockKey={`${view.received}-${view.turn}`}
           best={best}
           winner={winners.has(seat)}
+          xpLevel={online ? view.levels?.[seat] : null}
           layout={layout}
           position={position}
           isHost={isHost}

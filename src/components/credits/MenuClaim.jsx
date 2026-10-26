@@ -1,12 +1,14 @@
-// MENU CLAIM — the main menu's claim strip, under the top-bar buttons. It's
-// always there for a signed-in player and says what CLAIM can do right now:
+// MENU CLAIM — the main menu's claim chip, beside the player badge and as
+// tall as it. It's always there for a signed-in player and says what CLAIM
+// can do right now:
 //   ready      under 1,000 and a day since the last claim: CLAIM +N CR, with a
 //              soft glow and a pixel shine sweeping across now and then
 //   wait       under 1,000 but claimed in the last day: a ticking countdown
 //              and a bar filling toward ready; it turns into CLAIM at zero
-//   over       1,000 or more: FULL, nothing to press
+//   over       1,000 or more: a dim, locked CLAIM, nothing to press (hidden
+//              on phones, where it would take a whole row)
 //   (claiming) the pixel loader, held long enough to see (useCredits)
-// After a claim the amount floats up off the strip toward the balance badge,
+// After a claim the amount floats up off the chip toward the balance badge,
 // which counts up (PlayerMenu). Frozen accounts and guests get nothing.
 // Every state is the same height, so the bar never jumps.
 
@@ -18,7 +20,7 @@ import { INK } from "../pixelTokens";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FLOAT_MS = 900;
-const HEIGHT = 40;
+const HEIGHT = 52;
 
 const two = (n) => String(n).padStart(2, "0");
 /** 3_602_000 -> "01:00:02". */
@@ -56,7 +58,7 @@ export default function MenuClaim({ claim, onClaim, busy = false, error = "" }) 
   const left = waiting ? Date.parse(claim.nextAt) - now : 0;
   const state = busy ? "busy" : claim.state === "ready" || (waiting && left <= 0) ? "ready" : claim.state;
   const amount = claim.state === "ready" && claim.amount ? ` +${fmt(claim.amount)} CR` : "";
-  const box = "claim-swap w-full flex items-center justify-center gap-2 font-pixel-display text-[10px] uppercase whitespace-nowrap";
+  const box = "claim-swap w-full flex items-center justify-center gap-2 px-4 font-pixel-display text-[10px] uppercase whitespace-nowrap";
 
   let body;
   if (state === "ready" || state === "busy") {
@@ -97,8 +99,10 @@ export default function MenuClaim({ claim, onClaim, busy = false, error = "" }) 
         className={`relative ${box} text-bone`}
         style={{ height: HEIGHT, backgroundColor: "#1f1a3d", boxShadow: `0 0 0 3px ${INK}` }}
       >
-        <span className="text-bone/70">NEXT CLAIM</span>{" "}
-        <span className="text-[12px] text-parchment tabular-nums">{clock(left)}</span>
+        <span className="flex flex-col items-center gap-1.5 leading-none">
+          <span className="text-[7px] text-bone/70">NEXT CLAIM</span>{" "}
+          <span className="text-parchment tabular-nums">{clock(left)}</span>
+        </span>
         <span
           role="progressbar"
           aria-label="Until the next claim"
@@ -114,12 +118,13 @@ export default function MenuClaim({ claim, onClaim, busy = false, error = "" }) 
     body = (
       <div
         key="over"
-        className={`${box} text-bone/60`}
+        className={`${box} text-bone/40 max-sm:hidden`}
         style={{ height: HEIGHT, backgroundColor: INK, boxShadow: "0 0 0 3px #2a234d" }}
         title="CLAIM tops you back up to 1,000 once a day, when you're below it"
       >
         <PixelIcon name="lock" size={10} />
-        FULL · CLAIM UNDER 1,000
+        CLAIM
+        <span className="sr-only"> — full, claim under 1,000</span>
       </div>
     );
   }

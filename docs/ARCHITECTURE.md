@@ -59,7 +59,7 @@ Honest status, as of October 2026.
 | **Muushig** | **Playable online and in practice.** Online: server-authoritative, up to 5 humans with CPUs in the empty seats, reconnect handling, match recording. Practice: 4 CPUs (Easy/Medium/Hard) in the browser |
 | **Poker** | **Playable online and in practice.** Free chips, 2–6 players, CPUs at free tables, joining between hands, recorded with its own stats |
 | **Credits** | **Built.** Balances with a daily CLAIM, credit poker tables (LOW / MID / HIGH, humans only), an all-time leaderboard, a ledger of every credit movement, pair flags and an admin page (§5 Credits) |
-| Shop / economy | Not started; `coins` accrues in the DB (credits are separate) |
+| Shop / economy | Not started; gold (the `coins` column) accrues from matches, poker hands and level-ups (credits are separate) |
 | Deployment | **Live** at https://khuzur.onrender.com — Render (site + game server) and Supabase (Postgres). See §9 |
 
 **Muushig runs in both places.** The rules are pure functions in
@@ -460,10 +460,27 @@ Columns that exist so a result can be judged fairly later:
 where someone rage-quit and a CPU finished the hand is indistinguishable from a
 loss they played out.
 
-Rewards by final placement: 100/50/25/10 coins, 60/35/20/10 exp;
-`level = exp/100 + 1`. Rewards apply **only** to matches that
-actually finished — an abandoned match records what happened but yields no
-result.
+Rewards (XP and **gold**; gold is kept in the `coins` columns) come from
+`server/game/progression.js`, a copy of `src/utils/progression.js`:
+
+* **A match** pays by place out of all its seats, CPUs included: the winner
+  70 XP / 80 gold, last place 30 / 20, the places between spread evenly. A seat
+  whose player left and didn't come back (`left_early`) is paid nothing, so a
+  seat taken over mid-match pays only the player in it at the end.
+* **Levels** cost `min(100 + 50·(L−1), 1500)` XP each; `profiles.exp` is the
+  total and `level` follows from it. Every level reached pays `25 × level`
+  gold, doubled on every 5th.
+* `finishSession` returns what each signed-in player earned; `recordMatch` in
+  `server/index.js` puts it on the lobby and every member's next state carries
+  their own `reward` (absent while it's saved, `null` if it paid them nothing).
+  The browser shows it with `RewardPanel`.
+* **Levels at the table**: `xpLevels` in `server/index.js` keeps each
+  signed-in player's level (read at connect, updated as rewards land); every
+  game state carries `levels` ({ seat: level }) and a waiting table's seats
+  `xpLevel`, drawn as `LevelTag`. Match pages show each player's level now.
+
+Rewards apply **only** to matches that actually finished — an abandoned match
+records what happened but yields no result.
 
 ### No rating
 
@@ -499,14 +516,17 @@ eaten in the last round (as `rankSolo`); `stats` holds the same tallies a solo
 report sends (`rounds_played`, `rounds_won`, `eaten`, `gone_in`, `folded`,
 `sweeps`), read from the event log; each round's `seat_results` carry `eaten`
 and `folded`, `winner_seat` is the seat that swept all 5 piles (or null).
-Rewards are Thirteen's table; 5th place gets 4th's.
+Rewards are paid the same way, by place out of 5.
 
 **Poker** is recorded per table: one session from START until everyone leaves
 (`ended_reason = 'completed'`), a `game_rounds` row per hand, and per player
 `final_score` = net chips and `stats` = the hand tally (`hands_played`,
 `hands_won`, `net`, `biggest_pot`, `vpip_hands`, `showdowns`,
 `showdowns_won`), built up hand by hand in the roster (`recordHand`). There
-are no places, coins or exp. `008_poker_stats.sql` keeps poker out of
+are no places. Each hand pays its signed-in players at once
+(`payPokerHand` → `grantProgress`, sent as `progress_reward`), at most one hand
+per player every 30 s, and the table's `exp_earned` / `coins_earned` record the
+sum. `008_poker_stats.sql` keeps poker out of
 `player_match_history` and adds `player_poker_stats`.
 
 ### Deriving stats
@@ -770,5 +790,5 @@ Roughly in dependency order:
    database plan that doesn't pause (§9), once real players arrive.
 2. **Password reset and email confirmation** — needs an email-sending
    service; would also let a Google-linked account set a password again.
-3. **Shop and economy** — `coins` already accrues; nothing spends it.
+3. **Shop and economy** — gold already accrues; nothing spends it.
 4. **A fourth game** — the main menu's fourth slot is a locked placeholder.

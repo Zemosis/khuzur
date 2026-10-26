@@ -6,7 +6,7 @@
 // all three. Examples are drawn with real PixelCards.
 
 import React from "react";
-import Rulebook, { Callout, CardRow, CpuLevels, Hi, Kbd, Key, Section, Steps } from "../Rulebook";
+import Rulebook, { Callout, CardRow, CpuLevels, Hi, Kbd, Key, Section, Steps, XpRules } from "../Rulebook";
 import { BIG_BLIND, BUY_IN, MAX_SEATS, SMALL_BLIND } from "../../utils/poker/engine";
 import { DEFAULT_POKER_DELAYS, MAX_TIMEOUTS } from "../../utils/poker/table";
 import { TIERS, fmt } from "../../utils/poker/tiers";
@@ -28,6 +28,7 @@ const SECTIONS = [
   ["cpus", "CPU levels"],
   ["controls", "Controls"],
   ["credits", "Credit tables"],
+  ["xp", "XP, levels and gold"],
 ];
 
 // How each CPU level plays (utils/poker/ai.js).
@@ -228,6 +229,8 @@ export default function PokerRules({ onClose }) {
           ]}
         />
       </Section>
+
+      <XpRules n={11} poker />
     </Rulebook>
   );
 }

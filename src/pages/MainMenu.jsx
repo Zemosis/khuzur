@@ -55,9 +55,11 @@ const MainMenu = () => {
       />
       <Mountains />
 
-      {/* TOP BAR */}
-      {/* Top-aligned: the claim strip under the buttons makes that column taller. */}
-      <div className="relative flex flex-wrap items-start justify-between gap-3 px-4 sm:px-8 py-3">
+      {/* TOP BAR: the hall on the left (where you can go), you on the right
+          (your claim, your badge, settings). Everything is 52 tall. On phones
+          the hall keeps the first row and your side takes the second, with
+          the claim under it. */}
+      <header className="relative flex flex-wrap items-center gap-x-3 gap-y-3 px-4 sm:px-8 py-3">
         <div className="flex items-center gap-3 mr-auto">
           <div
             style={{
@@ -78,95 +80,93 @@ const MainMenu = () => {
           >
             ♠
           </div>
-          <div className="font-pixel-display text-[14px] tracking-wider text-glow-gold">
+          <div className="font-pixel-display text-[14px] tracking-wider text-glow-gold max-[399px]:hidden">
             KHUZUR
           </div>
+          <span aria-hidden className="self-stretch w-[3px] mx-1 sm:mx-2 max-[399px]:hidden" style={{ backgroundColor: "#2a234d" }} />
+          <nav aria-label="Hall" className="flex items-center gap-2 sm:gap-3">
+            <RulebookPicker />
+            {/* Credits are the ranking: everyone's balance, best first. */}
+            <button
+              onClick={() => navigate("/leaderboard")}
+              aria-label="Leaderboard"
+              title="Leaderboard: everyone's credits"
+              className="pixel-btn font-pixel-display text-xs px-4 uppercase flex items-center gap-2 max-sm:px-3"
+              style={{ height: 52, backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}
+            >
+              <PixelIcon name="crown" size={12} />
+              <span className="max-sm:hidden">Ranks</span>
+            </button>
+            <button
+              className="pixel-btn font-pixel-display text-xs px-4 uppercase relative max-sm:px-3"
+              style={{ height: 52, backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}
+              title="Coming soon — spend gold on card skins"
+            >
+              Shop
+              <span
+                className="font-pixel-display"
+                style={{
+                  position: "absolute",
+                  top: -8,
+                  right: -8,
+                  fontSize: 7,
+                  padding: "2px 4px",
+                  backgroundColor: "#e85a7a",
+                  color: "#ead8b1",
+                  border: "2px solid #0a0712",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                SOON
+              </span>
+            </button>
+          </nav>
         </div>
 
-        {/* On phones the badge stays beside the logo and the buttons take
-            their own row. */}
-        <PlayerMenu
-          identity={identity}
-          isGuest={isGuest}
-          credits={isGuest ? null : (credits?.balance ?? null)}
-          rank={isGuest ? null : (credits?.rank ?? null)}
-          onSelectAvatar={(v) => updateProfile({ avatar: v }).catch(console.error)}
-          onPaint={() => navigate("/avatar-paint")}
-          onViewProfile={() => navigate("/profile")}
-          onSignIn={() => setShowLogin(true)}
-          onSignOut={signOut}
-        />
-        {/* Signing in and out lives in the player menu and in Settings. The
-            claim strip hangs under the buttons, as wide as they are. */}
-        <div className="flex flex-col gap-3 max-sm:w-full">
-        <div className="flex items-center gap-2 sm:gap-3 max-sm:justify-between">
-          <RulebookPicker />
-          {/* Credits are the ranking: everyone's balance, best first. */}
-          <button
-            onClick={() => navigate("/leaderboard")}
-            aria-label="Leaderboard"
-            title="Leaderboard: everyone's credits"
-            className="pixel-btn font-pixel-display text-xs px-4 py-2.5 uppercase flex items-center gap-2 max-sm:px-3"
-            style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}
-          >
-            <PixelIcon name="crown" size={12} />
-            <span className="max-sm:hidden">Ranks</span>
-          </button>
-          <button
-            className="pixel-btn font-pixel-display text-xs px-4 py-2.5 uppercase relative max-sm:px-3 max-[359px]:hidden"
-            style={{
-              backgroundColor: "#463a78",
-              borderColor: "#2a234d",
-              color: "#ead8b1",
-            }}
-            title="Coming soon — spend coins on card skins"
-          >
-            Shop
-            <span
-              className="font-pixel-display"
-              style={{
-                position: "absolute",
-                top: -8,
-                right: -8,
-                fontSize: 7,
-                padding: "2px 4px",
-                backgroundColor: "#e85a7a",
-                color: "#ead8b1",
-                border: "2px solid #0a0712",
-                letterSpacing: "0.05em",
-              }}
-            >
-              SOON
-            </span>
-          </button>
+        {/* Signing in and out lives in the player menu and in Settings. */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 max-sm:w-full">
+          {!isGuest && (
+            <div className="max-sm:order-last max-sm:w-full">
+              <MenuClaim claim={credits?.claim} onClaim={claim} busy={claiming} error={creditsError} />
+            </div>
+          )}
+          <PlayerMenu
+            identity={identity}
+            isGuest={isGuest}
+            credits={isGuest ? null : (credits?.balance ?? null)}
+            rank={isGuest ? null : (credits?.rank ?? null)}
+            onSelectAvatar={(v) => updateProfile({ avatar: v }).catch(console.error)}
+            onPaint={() => navigate("/avatar-paint")}
+            onViewProfile={() => navigate("/profile")}
+            onSignIn={() => setShowLogin(true)}
+            onSignOut={signOut}
+          />
           <button
             onClick={() => setShowSettings(true)}
-            className="pixel-btn font-pixel-display"
+            className="pixel-btn font-pixel-display shrink-0"
             style={{
               backgroundColor: "#463a78",
               borderColor: "#2a234d",
               color: "#ead8b1",
-              width: 44,
-              height: 44,
+              width: 52,
+              height: 52,
               padding: 0,
               fontSize: 16,
             }}
             title="Settings"
+            aria-label="Settings"
           >
             <PixelIcon name="gear" size={16} className="mx-auto" />
           </button>
         </div>
-        {!isGuest && <MenuClaim claim={credits?.claim} onClaim={claim} busy={claiming} error={creditsError} />}
-        </div>
-      </div>
+      </header>
 
+      {/* The hero and the game row sit centred between the top bar and the footer. */}
+      <main className="relative flex-1 flex flex-col justify-center pt-6 pb-10">
       {/* HERO */}
-      <div className="relative flex flex-col items-center text-center px-4 pt-4 pb-2">
-        <div className="font-pixel-body text-bone text-sm tracking-[0.4em] uppercase mb-1">
-          Card Hall
-        </div>
+      <div className="relative flex flex-col items-center text-center px-4 pb-2">
         <h1
-          className="font-pixel-display text-[22px] sm:text-[30px] md:text-[36px] leading-tight mb-1"
+          className="font-pixel-display text-[22px] sm:text-[30px] md:text-[36px] leading-tight"
           style={{
             color: "#fff7d8",
             textShadow:
@@ -175,9 +175,6 @@ const MainMenu = () => {
         >
           CHOOSE YOUR GAME
         </h1>
-        <div className="font-pixel-body text-lg sm:text-xl text-parchment/70">
-          The dungeon-master deals tonight. Pick a table, summon your wits.
-        </div>
       </div>
 
       {/* GAME CARDS: one row that scrolls sideways once the games outgrow it */}
@@ -255,6 +252,7 @@ const MainMenu = () => {
           onMouseLeave={() => setHovered(null)}
         />
       </GameRail>
+      </main>
 
       {/* FOOTER */}
       <div className="relative">
@@ -365,7 +363,7 @@ function GameRail({ children }) {
   );
 
   return (
-    <div className="relative flex-1 flex items-start gap-2 sm:gap-4 px-2 sm:px-6 pt-2 pb-8 min-w-0">
+    <div className="relative flex items-start gap-2 sm:gap-4 px-2 sm:px-6 pt-2 min-w-0">
       {arrow(-1)}
       {/* Padding inside the rail leaves room for the tiles' lift and outline. */}
       <div

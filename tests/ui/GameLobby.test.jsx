@@ -20,10 +20,39 @@ const { handlers, fakeSocket } = vi.hoisted(() => {
 });
 
 vi.mock("../../src/utils/socket", () => ({ socket: fakeSocket, connectSocket: () => Promise.resolve() }));
+const auth = vi.hoisted(() => ({ isGuest: true }));
 vi.mock("../../src/hooks/useAuth", () => ({
-  useAuth: () => ({ identity: { name: "LOOKER", tag: "0009", avatar: "1" }, isGuest: true, updateProfile: async () => {} }),
+  useAuth: () => ({ identity: { name: "LOOKER", tag: "0009", avatar: "1", level: 3, exp: 300, gold: 1250 }, isGuest: auth.isGuest, updateProfile: async () => {} }),
 }));
+vi.mock("../../src/lib/api", () => ({ api: vi.fn(async () => ({ balance: 1000, onTable: 0, claim: { state: "over" } })) }));
 vi.mock("../../src/hooks/useServerStats", () => ({ useServerStats: () => ({ connected: true, online: 2 }) }));
+
+describe("GameLobby adventurer card", () => {
+  it("shows your level, the XP into it and your gold; a guest gets no gold", () => {
+    auth.isGuest = false;
+    try {
+      render(
+        <MemoryRouter>
+          <LobbySelection />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText("LV 3")).toBeInTheDocument();
+      expect(screen.getByText("50/200 XP")).toBeInTheDocument(); // level 3 starts at 250 XP and costs 200
+      expect(screen.getByText("1,250 GOLD")).toBeInTheDocument();
+    } finally {
+      auth.isGuest = true;
+    }
+  });
+
+  it("a guest's card has no gold", () => {
+    render(
+      <MemoryRouter>
+        <LobbySelection />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/GOLD$/)).not.toBeInTheDocument();
+  });
+});
 
 describe("GameLobby open tables", () => {
   it("tags each table WAITING or PLAYING", () => {

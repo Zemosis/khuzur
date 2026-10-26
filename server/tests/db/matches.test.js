@@ -17,7 +17,8 @@ describe.skipIf(!TEST_DATABASE_URL)("match page (Postgres)", () => {
   });
   beforeEach(async () => {
     await truncateAll(m.pool);
-    alice = await makeUser(m.pool, "alice@test.dev", { username: "ALICE", tag: "0001" });
+    // 1,350 XP is the start of level 7.
+    alice = await makeUser(m.pool, "alice@test.dev", { username: "ALICE", tag: "0001", exp: 1350, level: 7 });
     bob = await makeUser(m.pool, "bob@test.dev", { username: "BOB", tag: "0002" });
   });
   afterAll(() => m?.pool.end());
@@ -109,6 +110,8 @@ describe.skipIf(!TEST_DATABASE_URL)("match page (Postgres)", () => {
       [4, 2, "Bot Saturn", "cpu", "EASY"],
       [5, 4, "Bot Mars", "cpu", "MEDIUM"],
     ]);
+    // Signed-in players show their level; guests and CPUs have none.
+    expect(res.body.standings.map((s) => s.xpLevel)).toEqual([null, null, 7, null, null]);
     expect(res.body.standings[0]).toMatchObject({ score: 0, roundsWon: 2, stats: null }); // most piles in both rounds (a tie counts)
     expect(res.body.rounds).toHaveLength(2);
     expect(res.body.rounds[0]).toMatchObject({
@@ -262,9 +265,9 @@ describe.skipIf(!TEST_DATABASE_URL)("match page (Postgres)", () => {
     expect(t.you.seconds).toBeGreaterThan(0);
     expect(t.you.hands.map((h) => h.hole)).toEqual([["A♠", "A♦"], ["7♣", "2♦"]]);
     expect(t.players).toEqual([
-      { name: "ALICE #0001", kind: "human", net: 30, hands: 2, you: true },
-      { name: "Bot Saturn", kind: "cpu", net: 10, hands: 2, you: false },
-      { name: "BOB #0002", kind: "human", net: -40, hands: 2, you: false },
+      { name: "ALICE #0001", kind: "human", xpLevel: 7, net: 30, hands: 2, you: true },
+      { name: "Bot Saturn", kind: "cpu", xpLevel: null, net: 10, hands: 2, you: false },
+      { name: "BOB #0002", kind: "human", xpLevel: 1, net: -40, hands: 2, you: false },
     ]);
     // Bob sees his own page, never alice's cards.
     const bob_ = (await get(id, bob)).body;

@@ -24,8 +24,9 @@ No-limit Texas Hold'em, as Khuzur plays it. Make the best 5-card hand from your 
 8. [CPU levels](#8-cpu-levels)
 9. [Controls](#9-controls)
 10. [Credit tables](#10-credit-tables)
+11. [XP, levels and gold](#11-xp-levels-and-gold)
 
-Sections 1–9 are the game as every table plays it. Section 10 adds what changes at credit tables.
+Sections 1–9 are the game as every table plays it. Section 10 adds what changes at credit tables, and section 11 is what tables pay in XP and gold.
 
 ---
 
@@ -178,4 +179,22 @@ The host picks the stakes. Credit tables are for people only: no CPUs.
 
 ---
 
-<sub>**For contributors:** the engine (`src/utils/poker/engine.js`) and the in-game rulebook (`src/components/poker/PokerRules.jsx`) follow this document section by section, and the CPU players live in `src/utils/poker/ai.js`; the server runs copies of the engine and the CPUs in `server/game/poker/`. Change all of them together.</sub>
+## 11. XP, levels and gold
+
+Signed in, every online table pays **XP** and **gold**, at free and credit tables alike. Practice tables don't.
+
+| | |
+| --- | --- |
+| **A hand** | 4 XP and 3 gold for each hand you're dealt into |
+| **A won hand** | 6 XP and 8 gold |
+| **How often** | At most one hand every 30 seconds pays, so folding hand after hand earns little |
+
+What a hand paid you rises off the table as it ends.
+
+**Levels.** Level 2 takes **100 XP**, and each level after takes 50 more, up to 1,500 a level. Every new level pays **25 gold × the level**, and every 5th pays double: level 5 pays 250, level 10 pays 500.
+
+> **Gold isn't credits.** Gold is for the shop, coming soon. Credits are what you stake, and what the leaderboard ranks.
+
+---
+
+<sub>**For contributors:** the engine (`src/utils/poker/engine.js`) and the in-game rulebook (`src/components/poker/PokerRules.jsx`) follow this document section by section, and the CPU players live in `src/utils/poker/ai.js`; the server runs copies of the engine and the CPUs in `server/game/poker/`. XP, levels and gold are `src/utils/progression.js`, copied to `server/game/progression.js`. Change all of them together.</sub>

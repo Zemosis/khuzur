@@ -27,9 +27,9 @@ describe("menu claim strip", () => {
     expect(screen.getByRole("button", { name: "CLAIM" })).toBeEnabled();
   });
 
-  it("1,000 or more: says it's full, nothing to press", () => {
+  it("1,000 or more: a locked CLAIM that says it's full, nothing to press", () => {
     render(<MenuClaim claim={{ state: "over" }} onClaim={async () => true} />);
-    expect(screen.getByText("FULL · CLAIM UNDER 1,000")).toBeInTheDocument();
+    expect(screen.getByText(/full, claim under 1,000/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -47,10 +47,10 @@ describe("menu claim strip", () => {
     await act(async () => screen.getByRole("button", { name: "CLAIM +760 CR" }).click());
     rerender(<MenuClaim claim={{ state: "ready", amount: 760 }} onClaim={onClaim} busy />);
     expect(screen.getByRole("button", { name: "Claiming" })).toBeDisabled();
-    // The claim lands: the server now says 1,000, so FULL.
+    // The claim lands: the server now says 1,000, so it locks.
     rerender(<MenuClaim claim={{ state: "over" }} onClaim={onClaim} />);
     await act(async () => finish(true));
     expect(screen.getByRole("status")).toHaveTextContent("+760 CR");
-    expect(screen.getByText("FULL · CLAIM UNDER 1,000")).toBeInTheDocument();
+    expect(screen.getByText(/full, claim under 1,000/)).toBeInTheDocument();
   });
 });

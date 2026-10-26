@@ -815,6 +815,7 @@ describe("a whole match over sockets", () => {
     host.on("move_rejected", ({ reason }) => rejections.push(reason));
 
     const over = next(host, "game_state_update", (s) => s.gameState === "GAME_OVER", 25000);
+    const saved = next(host, "game_state_update", (s) => "reward" in s, 25000);
     for (const seat of [1, 2, 3]) host.emit("add_cpu", { lobbyId, seat });
     host.emit("start_game", { lobbyId });
     const final = await over;
@@ -822,6 +823,9 @@ describe("a whole match over sockets", () => {
     expect(final.matchWins.reduce((a, b) => a + b, 0)).toBe(1);
     expect(final.roundNumber).toBeGreaterThan(1);
     expect(rejections).toEqual([]);
+    // Once the match is saved, the state says what it paid: nothing, for a guest.
+    expect(final).not.toHaveProperty("reward");
+    expect((await saved).reward).toBeNull();
 
     host.off("game_state_update", autoplay);
     const rematch = next(host, "game_state_update", (s) => s.matchNumber === 2);
@@ -830,6 +834,7 @@ describe("a whole match over sockets", () => {
     expect(second).toMatchObject({ gameState: "PLAYING", roundNumber: 1 });
     expect(second.matchWins).toEqual(final.matchWins);
     expect(second.players.every((p) => p.score === 0)).toBe(true);
+    expect(second).not.toHaveProperty("reward"); // a new match, not yet paid
   }, 30000);
 });
 

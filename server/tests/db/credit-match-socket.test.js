@@ -222,6 +222,9 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
     const paid = Object.fromEntries(payouts.map((p) => [p.seat, p.amount]));
     expect([await balance(ann), await balance(bob)]).toEqual([900 + (paid[0] ?? 0), 900 + (paid[1] ?? 0)]);
     expect(payouts.reduce((t, p) => t + p.amount, 0) + cpuTake).toBe(200);
+    expect(end.reward).toMatchObject({ userId: ann, expBefore: 0 });
+    const { rows: [prof] } = await m.pool.query("select exp from profiles where id = $1", [ann]);
+    expect(prof.exp).toBe(end.reward.expAfter);
     expect(await economy()).toMatchObject({ ok: true });
     // Back at the waiting table, nobody seated until they stake again.
     const waiting = await waitFor(a, "table_update", (t) => t.mySeat == null && t.credit.deciding === 2);
@@ -327,6 +330,8 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
     it("two players play it out: only they are dealt in, the last one standing takes the pot", async () => {
       const ann = await player();
       const bob = await player();
+      // Ann is 5 XP short of level 2, so any finish takes her there.
+      await m.pool.query("update profiles set exp = 95 where id = $1", [ann]);
       const { sock: a, lobbyId } = await host13(ann);
       const b = await join(bob, lobbyId);
       autoplay13(a, lobbyId);
@@ -334,6 +339,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
       a.emit("start_game", { lobbyId });
       const first = await waitFor(a, "game_state_update");
       expect(first.players).toHaveLength(2);
+      expect(first.levels).toEqual({ 0: 1, 1: 1 }); // each seat's level, beside their name
       expect(first.credit).toMatchObject({ stake: 100, pot: 200, staked: 2, botsFill: false });
       const end = await waitFor(a, "game_state_update", settled, 60000);
       const winner = end.players.findIndex((p) => !p.isEliminated);
@@ -341,6 +347,10 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
       const winnerId = end.players[winner].socketId === a.id ? ann : bob;
       expect(await balance(winnerId)).toBe(1100);
       expect(await balance(winnerId === ann ? bob : ann)).toBe(900);
+      // The same state carries what the match paid each of them in XP and gold.
+      const annWon = winnerId === ann;
+      expect(end.reward).toMatchObject({ userId: ann, xp: annWon ? 70 : 30, gold: annWon ? 80 : 20, expBefore: 95, levelBefore: 1, levelAfter: 2, levelUpGold: 50 });
+      expect(end.levels[0]).toBe(2); // the table sees her new level at once
       expect(await economy()).toMatchObject({ ok: true });
       b.tables.length = 0;
       b.emit("credit_restake", { lobbyId });

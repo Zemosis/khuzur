@@ -3,11 +3,13 @@
 // callouts and card examples drawn with real PixelCards.
 //
 // Same look as Thirteen's RulesModal; Muushig's and Poker's rules are built on
-// this, and every game's CPU levels show through CpuLevels.
+// this, every game's CPU levels show through CpuLevels, and every game's
+// XP and gold through XpRules.
 
 import React, { useEffect, useRef, useState } from "react";
 import { PixelCard } from "./PixelCard";
 import PixelIcon from "./PixelIcon";
+import { POKER_REWARD_SPACING_MS, levelUpGold, matchReward, pokerHandReward, xpToNext } from "../utils/progression";
 
 // "10♥ J♥" → card objects for PixelCard.
 const parse = (spec) => spec.split(" ").map((c) => ({ rank: c.slice(0, -1), suit: c.slice(-1), id: c }));
@@ -115,6 +117,49 @@ export function CardRow({ name, spec, text, extra }) {
 const LEVEL_COLORS = { EASY: "#9bd14f", MEDIUM: "#f4c430", HARD: "#e85a7a" };
 
 /** The CPU levels side by side. levels: [{ id: "EASY", who: "A beginner", traits: [text] }]. */
+/** The "XP, levels and gold" section: what a match (or a poker hand) pays, and what a level costs and pays. */
+export function XpRules({ n, poker = false }) {
+  const win = matchReward({ place: 1, players: 2 });
+  const last = matchReward({ place: 2, players: 2 });
+  const hand = pokerHandReward({ won: false });
+  const won = pokerHandReward({ won: true });
+  const rows = poker
+    ? [
+        ["A HAND", `${hand.xp} XP and ${hand.gold} gold for each hand you're dealt into`],
+        ["A WON HAND", `${won.xp} XP and ${won.gold} gold`],
+        ["HOW OFTEN", `At most one hand every ${POKER_REWARD_SPACING_MS / 1000} seconds pays, so folding hand after hand earns little`],
+      ]
+    : [
+        ["THE WINNER", `${win.xp} XP and ${win.gold} gold`],
+        ["LAST PLACE", `${last.xp} XP and ${last.gold} gold. The places between are spread evenly`],
+        ["LEAVING", "Leave before the end and don't come back, and the match pays you nothing"],
+      ];
+  return (
+    <Section id="xp" n={n} title="XP, levels and gold">
+      <p>
+        Signed in, every online {poker ? "table" : "match"} pays <Key>XP</Key> and <Key>gold</Key>, at free and credit tables alike. Practice
+        games against CPUs don't.
+      </p>
+      <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
+        {rows.map(([k, v]) => (
+          <React.Fragment key={k}>
+            <div className="font-pixel-display text-[10px] text-parchment flex items-center">{k}</div>
+            <div className="text-bone/80">{v}</div>
+          </React.Fragment>
+        ))}
+      </div>
+      <p>
+        Level 2 takes <Key>{xpToNext(1)} XP</Key>, and each level after takes {xpToNext(2) - xpToNext(1)} more, up to{" "}
+        {xpToNext(99).toLocaleString("en-US")} a level. Every new level pays <Key>{levelUpGold(2) / 2} gold × the level</Key>, and every 5th
+        pays double: level 5 pays {levelUpGold(5)}.
+      </p>
+      <Callout tone="tip" title="GOLD ISN'T CREDITS">
+        Gold is for the shop, coming soon. Credits are what you stake, and what the leaderboard ranks.
+      </Callout>
+    </Section>
+  );
+}
+
 export function CpuLevels({ levels }) {
   return (
     <div className="grid gap-3 lg:grid-cols-3">

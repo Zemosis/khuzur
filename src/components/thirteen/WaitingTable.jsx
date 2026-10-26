@@ -17,6 +17,7 @@
 import React, { useCallback, useState } from "react";
 import { PixelAvatar } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
+import LevelTag from "../LevelTag";
 import GameChat from "./GameChat";
 import { seatAvatar } from "../../utils/avatarConstants";
 import { positionOf } from "../../utils/seatPosition";
@@ -139,8 +140,9 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
         </button>
       )}
       <PixelAvatar variant={avatar.variant} customAvatarData={avatar.customAvatarData} size={51} />
-      <div className="font-pixel-display text-[10px] text-parchment truncate max-w-full">
-        {isCpu ? seat.name : shortName(seat.name)}
+      <div className="flex items-center justify-center gap-1.5 min-w-0 max-w-full">
+        <span className="font-pixel-display text-[10px] text-parchment truncate">{isCpu ? seat.name : shortName(seat.name)}</span>
+        {!isCpu && <LevelTag level={seat.xpLevel} />}
       </div>
       {isCpu &&
         (isHost ? (

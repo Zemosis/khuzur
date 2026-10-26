@@ -162,7 +162,7 @@ describe.skipIf(!TEST_DATABASE_URL)("accounts API (Postgres)", () => {
       const { body } = await signup();
       await request(app).patch("/api/auth/profile").set(bearer(body.token)).send({ username: "ZEHTA", tag: "Z123", avatar: "4" });
       const who = await m.socketIdentity({ token: body.token, name: "FLINT", tag: "AB12", avatar: "2" });
-      expect(who).toEqual({ userId: body.user.id, name: "ZEHTA", tag: "Z123", avatar: { variant: "4", custom: null } });
+      expect(who).toEqual({ userId: body.user.id, name: "ZEHTA", tag: "Z123", avatar: { variant: "4", custom: null }, level: 1 });
     });
 
     it("before profile setup, a signed-in player keeps the name they sent", async () => {
@@ -177,6 +177,7 @@ describe.skipIf(!TEST_DATABASE_URL)("accounts API (Postgres)", () => {
         name: "WAYTOOLONGNA",
         tag: "1234",
         avatar: { variant: "3", custom: null },
+        level: null, // guests have no level
       });
       expect(await m.socketIdentity({ token: "garbage" })).toMatchObject({ userId: null, name: "PLAYER", tag: "0000" });
     });

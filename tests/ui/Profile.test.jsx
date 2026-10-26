@@ -12,7 +12,7 @@ vi.mock("../../src/hooks/useAuth", () => ({
   useAuth: () => ({
     isGuest: false,
     loading: false,
-    identity: { name: "KINGER", tag: "123A", avatar: "1", customAvatar: null, level: 1, exp: 0, coins: 0 },
+    identity: { name: "KINGER", tag: "123A", avatar: "1", customAvatar: null, level: 2, exp: 130, gold: 1250 },
     profile: { avatar: "1" },
     updateProfile: async () => {},
     signOut: () => {},
@@ -129,7 +129,7 @@ beforeEach(() => {
 });
 
 describe("Profile stats", () => {
-  it("overall lists poker tables with what they came to, sums them up, and says wins and places leave poker out", async () => {
+  it("overall lists poker tables with what they came to, and says wins and places leave poker out", async () => {
     const pokerRow = { id: "pk-1", game: "poker", place: null, of: null, won: false, leftEarly: false, solo: false, score: null, hands: 30, seconds: 1800, finishedAt: new Date().toISOString(), tier: null, net: 250 };
     await renderProfile({ ...played, poker: { free: pokerView(), credits: pokerView() }, overall: { ...played.overall, poker: { tables: 3, hands: 90, net: 250, seconds: 5400 }, recent: [pokerRow, ...played.overall.recent] } });
     expect(screen.getByText("Wins, places and streaks count Thirteen and Muushig: a poker table has no places.")).toBeInTheDocument();
@@ -137,11 +137,8 @@ describe("Profile stats", () => {
     expect(within(recent).getByText("+250")).toBeInTheDocument();
     expect(within(recent).getByText("Free chips")).toBeInTheDocument();
     expect(within(recent).getByText("30 hands")).toBeInTheDocument();
-    const poker = section("Poker");
-    expect(poker).toHaveTextContent("Tables3");
-    expect(poker).toHaveTextContent("Hands played90");
-    await userEvent.click(within(poker).getByRole("button", { name: "Poker stats" }));
-    expect(within(screen.getByRole("group", { name: "Game" })).getByRole("button", { name: "Poker" })).toHaveAttribute("aria-pressed", "true");
+    // Poker's own figures live on the Poker tab, not here.
+    expect(screen.queryByRole("heading", { name: "Poker" })).toBeNull();
   });
 
   it("opens on the figures kept from last time, with UPDATING in the corner until the fresh ones land", async () => {
@@ -202,7 +199,11 @@ describe("Profile stats", () => {
     expect(await screen.findByText("Pots won")).toBeInTheDocument();
     expect(api).toHaveBeenCalledWith("/stats?stakes=credits");
     expect(tile("Credits")).toHaveTextContent("+500");
+    expect(tile("Per game")).toHaveTextContent("+250");
     expect(tile("Biggest pot")).toHaveTextContent("1,500");
+    // Games already counts the credit matches here.
+    expect(screen.queryByText("Credit games")).toBeNull();
+    expect(screen.queryByText("Credit matches")).toBeNull();
     expect(screen.getByText("+1000 CR")).toBeInTheDocument();
   });
 
@@ -215,6 +216,16 @@ describe("Profile stats", () => {
     expect(tile("Win rate")).toHaveTextContent("-");
     expect(within(section("Recent matches")).getByText("No matches yet")).toBeInTheDocument();
     expect(screen.queryByText(/rating/i)).not.toBeInTheDocument();
+  });
+
+  it("shows your level, the XP into it and your gold", async () => {
+    await renderProfile(empty);
+    expect(screen.getByText("LV 2")).toBeInTheDocument();
+    expect(screen.getByText("30/150 XP to level 3")).toBeInTheDocument(); // level 2 starts at 100 XP and costs 150
+    const bar = screen.getByRole("progressbar", { name: "Experience toward next level" });
+    expect(bar).toHaveAttribute("aria-valuenow", "30");
+    expect(bar).toHaveAttribute("aria-valuemax", "150");
+    expect(screen.getByText("1,250 gold")).toBeInTheDocument();
   });
 
   it("shows the overall view first and switches per game", async () => {

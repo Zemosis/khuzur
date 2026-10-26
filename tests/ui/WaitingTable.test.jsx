@@ -59,6 +59,12 @@ describe("a five-seat (Muushig) table", () => {
     expect(screen.queryByRole("button", { name: /add \w+ cpu/i })).toBeNull();
     expect(screen.getByText(/waiting for ANN to start/i)).toBeInTheDocument();
   });
+
+  it("shows a signed-in player's level by their name; a guest's seat has none", () => {
+    const seats = [human("ANN #0001", { isHost: true, xpLevel: 8 }), null, human("ME #0003"), { kind: "cpu", name: "Bot Saturn" }, null];
+    render(<WaitingTable {...props({ table: five({ seats }) })} title="MUUSHIG" />);
+    expect(screen.getAllByText(/^LV /).map((el) => el.textContent)).toEqual(["LV 8"]);
+  });
 });
 
 describe("positionOf", () => {

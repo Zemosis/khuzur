@@ -97,7 +97,7 @@ export async function matchDetail(id, viewerId = null) {
   const { rows: players } = await pool.query(
     `select gp.seat_index, gp.player_id, gp.guest_name, gp.guest_tag, gp.final_score, gp.final_position,
             gp.left_early, gp.cpu_took_over, gp.rounds_won, gp.stats,
-            p.username, p.tag
+            p.username, p.tag, p.level as xp_level
        from game_players gp
        left join profiles p on p.id = gp.player_id
       where gp.session_id = $1
@@ -133,6 +133,7 @@ export async function matchDetail(id, viewerId = null) {
     name: p.username ? `${p.username} #${p.tag}` : p.guest_name ? `${p.guest_name} #${p.guest_tag}` : seatInfo(p.seat_index)?.name ?? null,
     kind: "human",
     level: null,
+    xpLevel: p.player_id ? p.xp_level : null, // their level now, not when they played
     place: p.final_position,
     score: p.final_score,
     roundsWon: p.rounds_won,
@@ -152,6 +153,7 @@ export async function matchDetail(id, viewerId = null) {
       name: info?.kind === "cpu" ? info.name : null,
       kind: "cpu",
       level: info?.kind === "cpu" ? info.level : null,
+      xpLevel: null,
       place: int(places[seat]),
       score: last.find((r) => r.seat === seat)?.scoreAfter ?? null,
       roundsWon: roundsWonBy(s.game_type, rounds, seat),
@@ -193,7 +195,8 @@ const secondsAt = (p, s) => {
 async function pokerTable(s, viewerId) {
   if (!viewerId) return null;
   const { rows: players } = await pool.query(
-    `select gp.player_id, gp.guest_name, gp.guest_tag, gp.final_score, gp.joined_at, gp.left_at, gp.stats, p.username, p.tag
+    `select gp.player_id, gp.guest_name, gp.guest_tag, gp.final_score, gp.joined_at, gp.left_at, gp.stats, p.username, p.tag,
+            p.level as xp_level
        from game_players gp
        left join profiles p on p.id = gp.player_id
       where gp.session_id = $1`,
@@ -206,6 +209,7 @@ async function pokerTable(s, viewerId) {
   const table = players.map((p) => ({
     name: playerName(p),
     kind: "human",
+    xpLevel: p.player_id ? p.xp_level : null,
     net: int(p.final_score) ?? 0,
     hands: int(p.stats?.hands_played) ?? 0,
     you: p === mine,
@@ -213,7 +217,7 @@ async function pokerTable(s, viewerId) {
   const cpus = new Map();
   for (const r of hands.flatMap((h) => h.seat_results)) {
     if (!r.cpu || !r.name) continue;
-    const cpu = cpus.get(r.name) ?? { name: r.name, kind: "cpu", net: 0, hands: 0, you: false };
+    const cpu = cpus.get(r.name) ?? { name: r.name, kind: "cpu", xpLevel: null, net: 0, hands: 0, you: false };
     cpu.net += r.net ?? 0;
     cpu.hands += 1;
     cpus.set(r.name, cpu);

@@ -28,7 +28,8 @@ describe("without a database", () => {
   it("recording functions are safe no-ops", async () => {
     await expect(persistence.createSession({ lobbyId: "X" })).resolves.toBeNull();
     await expect(persistence.closeOrphanedSessions()).resolves.toBeUndefined();
-    await expect(persistence.finishSession({ sessionId: "abc", roster: [] })).resolves.toBeUndefined();
+    await expect(persistence.finishSession({ sessionId: "abc", roster: [] })).resolves.toEqual([]);
+    await expect(persistence.grantProgress("u1", { xp: 4, gold: 3 })).resolves.toBeNull();
   });
 
   it("account routes answer 503", async () => {

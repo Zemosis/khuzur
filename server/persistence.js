@@ -11,15 +11,11 @@ import { pool, withTransaction } from "./db/index.js";
 import { rankSolo } from "./solo.js";
 import { muushigPlaces, muushigSeatStats } from "./game/muushigStats.js";
 
-// Rewards by final position (1st..4th). Level-ups come from exp: 100 exp/level.
-const REWARDS = [
-  { coins: 100, exp: 60 },
-  { coins: 50, exp: 35 },
-  { coins: 25, exp: 20 },
-  { coins: 10, exp: 10 },
-];
+import { applyGain, matchReward } from "./game/progression.js";
 
-const levelForExp = (exp) => Math.floor(exp / 100) + 1;
+// Gold is kept in the `coins` columns (profiles.coins, game_players.coins_earned):
+// the players' name changed, the columns didn't. XP, levels and what each
+// match pays are in game/progression.js.
 
 /**
  * Inserts the session row at match start. Returns the new session id, or null
@@ -110,13 +106,16 @@ export function rankSeats(state) {
  * @param {Date}    rec.finishedAt
  * @param {Array}   rec.roster - every seat ever occupied: { playerKey, userId,
  *                  name, tag, seatIndex, joinedAt, leftAt, leftEarly,
- *                  cpuTookOver, disconnectCount, poker? }  (poker: the
- *                  player's tally of hands, see recordHand in index.js)
+ *                  cpuTookOver, disconnectCount, poker?, earned? }  (poker:
+ *                  the player's tally of hands, and earned: the XP and gold
+ *                  its hands paid them; see recordHand in index.js)
  * @param {Array}   rec.rounds - per-round summaries from the engine
  * @param {Object}  rec.state - final game state
+ * @returns {Promise<Array>} what each signed-in player earned (see applyGain),
+ *          as [{ userId, xp, gold, levelUpGold, expBefore, expAfter, levelBefore, levelAfter }]
  */
 export async function finishSession(rec) {
-  if (!pool || !rec.sessionId) return;
+  if (!pool || !rec.sessionId) return [];
 
   const { state, roster, completed } = rec;
   const muushig = rec.gameType === "muushig";
@@ -181,7 +180,7 @@ export async function finishSession(rec) {
   // One transaction for the whole result: a match is recorded entirely or not
   // at all, and the profile rows are locked so two matches finishing at once
   // cannot lose each other's coins.
-  const playerRows = await withTransaction(async (client) => {
+  const { rows: playerRows, rewards } = await withTransaction(async (client) => {
     await client.query(
       `update game_sessions
           set status = $2, ended_reason = $3, round_count = $4,
@@ -222,9 +221,11 @@ export async function finishSession(rec) {
       for (const p of rows) profiles.set(p.id, p);
     }
 
+    const seats = state?.players?.length ?? roster.length;
     const rows = roster.map((seat) => {
       const position = completed ? positionBySeat[seat.seatIndex] ?? null : null;
-      const reward = completed && position ? REWARDS[position - 1] || REWARDS.at(-1) : null;
+      // A player who left and didn't come back earns nothing: the CPU played their seat.
+      const reward = completed && position && !seat.leftEarly ? matchReward({ place: position, players: seats }) : null;
       const roundStats = poker ? { roundsWon: seat.poker?.hands_won ?? 0, stats: seat.poker ?? null } : roundStatsFor(seat.seatIndex);
 
       return {
@@ -236,8 +237,8 @@ export async function finishSession(rec) {
         final_score: poker ? (seat.poker?.net ?? 0) : (state?.players?.[seat.seatIndex]?.score ?? null),
         final_position: position,
         is_winner: position === 1,
-        coins_earned: reward?.coins ?? 0,
-        exp_earned: reward?.exp ?? 0,
+        coins_earned: poker ? (seat.earned?.gold ?? 0) : (reward?.gold ?? 0),
+        exp_earned: poker ? (seat.earned?.xp ?? 0) : (reward?.xp ?? 0),
         joined_at: seat.joinedAt ? new Date(seat.joinedAt) : null,
         left_at: seat.leftAt ? new Date(seat.leftAt) : null,
         left_early: !!seat.leftEarly,
@@ -247,7 +248,8 @@ export async function finishSession(rec) {
         stats: roundStats.stats ? JSON.stringify(roundStats.stats) : null,
       };
     });
-    // Poker chips are free: no coins, exp or games played until credits.
+    // Poker pays XP and gold hand by hand (grantProgress), so its rows only
+    // record what each seat earned, and it counts no games played.
 
     for (const row of rows) {
       const cols = Object.keys(row);
@@ -260,35 +262,38 @@ export async function finishSession(rec) {
       );
     }
 
-    if (!completed || poker) return rows;
+    if (!completed || poker) return { rows, rewards: [] };
 
     // Progression for signed-in players.
+    const rewards = [];
     for (const row of rows) {
       if (!row.player_id) continue;
       const profile = profiles.get(row.player_id);
       if (!profile) continue;
 
-      const exp = profile.exp + row.exp_earned;
+      const gain = applyGain(profile.exp, { xp: row.exp_earned, gold: row.coins_earned });
       await client.query(
         `update profiles
             set coins = $2, exp = $3, level = $4, wins = $5, games_played = $6
           where id = $1`,
         [
           row.player_id,
-          profile.coins + row.coins_earned,
-          exp,
-          levelForExp(exp),
+          profile.coins + gain.gold + gain.levelUpGold,
+          gain.expAfter,
+          gain.levelAfter,
           profile.wins + (row.is_winner ? 1 : 0),
           profile.games_played + 1,
         ],
       );
+      // A player who left earns nothing, so there's no reward to show them.
+      if (row.exp_earned) rewards.push({ userId: row.player_id, ...gain });
     }
-    return rows;
+    return { rows, rewards };
   });
 
   if (!completed) {
     console.log(`[db] session ${rec.sessionId} closed as abandoned`);
-    return;
+    return [];
   }
 
   console.log(
@@ -296,6 +301,7 @@ export async function finishSession(rec) {
       `${rounds.length} rounds, ` +
       `${playerRows.filter((r) => r.left_early).length} left early)`,
   );
+  return rewards;
 }
 
 /**
@@ -357,5 +363,28 @@ export async function recordSoloMatch(userId, report) {
       ],
     );
     return { recorded: true, place };
+  });
+}
+
+/**
+ * Pays a signed-in player XP and gold outside a match's record (a poker hand),
+ * with any level-up gold. → what applyGain reports, plus userId; or null when
+ * there's no database or no such profile.
+ */
+export async function grantProgress(userId, { xp, gold }) {
+  if (!pool || !userId) return null;
+  return withTransaction(async (client) => {
+    const {
+      rows: [profile],
+    } = await client.query("select coins, exp from profiles where id = $1 for update", [userId]);
+    if (!profile) return null;
+    const gain = applyGain(profile.exp, { xp, gold });
+    await client.query("update profiles set coins = $2, exp = $3, level = $4 where id = $1", [
+      userId,
+      profile.coins + gain.gold + gain.levelUpGold,
+      gain.expAfter,
+      gain.levelAfter,
+    ]);
+    return { userId, ...gain };
   });
 }

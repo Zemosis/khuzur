@@ -4,12 +4,14 @@
 // score. A player who ate all 5 gets ROUND WON; at match end the winner is
 // named and the host can start a rematch. At a credit match the end says who
 // took the pot, each staked seat shows what it won or lost, and everyone
-// gets PLAY AGAIN (a new stake) in place of the host's REMATCH.
+// gets PLAY AGAIN (a new stake) in place of the host's REMATCH. Online, the
+// end also shows the XP and gold the match paid you.
 
 import React from "react";
 import { PixelAvatar } from "../PixelCard";
 import { fmt } from "../../utils/poker/tiers";
 import { signed } from "../credits/signed";
+import RewardPanel from "../RewardPanel";
 
 const baseName = (name = "") => name.split(" #")[0];
 
@@ -58,8 +60,9 @@ function potLine(result, players) {
  * onNext: deals the next round (practice); without it the round closes by
  * itself (online). onRematch: absent for an online player who isn't the host.
  * credit: at a credit match, { stake, result (null while it's saved), onPlayAgain, error }.
+ * paid: online, { reward } for RewardPanel (practice pays nothing).
  */
-const RoundResults = ({ round, results, players, faceFor, matchWinner = null, onNext, onRematch, onExit, credit = null }) => {
+const RoundResults = ({ round, results, players, faceFor, matchWinner = null, onNext, onRematch, onExit, credit = null, paid = null }) => {
   const over = matchWinner !== null;
   const result = over ? credit?.result : null;
   // Each staked seat's net once the pot is paid: its payout less its stake.
@@ -100,6 +103,7 @@ const RoundResults = ({ round, results, players, faceFor, matchWinner = null, on
             <Row key={r.seat} place={i + 1} r={r} player={players[r.seat]} face={faceFor(r.seat)} net={netOf(r.seat)} />
           ))}
         </div>
+        {over && paid && <RewardPanel reward={paid.reward} />}
         <div className="flex justify-center items-center gap-3 mt-1">
           {over ? (
             <>

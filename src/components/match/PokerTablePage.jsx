@@ -9,6 +9,7 @@ import { Panel } from "../PixelUI";
 import CardChip from "../CardChip";
 import ChipTimeline from "./ChipTimeline";
 import ShowdownHands from "../profile/ShowdownHands";
+import LevelTag from "../LevelTag";
 
 const TIER_TONE = { LOW: "#9bd14f", MID: "#f4c430", HIGH: "#e85a7a" };
 const UP = "#9bd14f";
@@ -136,6 +137,7 @@ function Players({ players }) {
           <span className="font-pixel-display text-[10px] text-bone/60">{i + 1}</span>
           <span className="flex items-center gap-2 min-w-0">
             <span className="truncate text-parchment">{p.name ? short(p.name) : "Someone"}</span>
+            <LevelTag level={p.xpLevel} />
             {p.kind === "cpu" && <span className="font-pixel-display text-[8px] px-1 py-0.5" style={{ backgroundColor: "#2a234d", color: "#ead8b1" }}>CPU</span>}
             {p.you && <span className="font-pixel-display text-[8px] px-1 py-0.5" style={{ backgroundColor: "#f4c430", color: "#1a1024" }}>YOU</span>}
           </span>

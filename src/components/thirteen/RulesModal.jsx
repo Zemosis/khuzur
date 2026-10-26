@@ -7,7 +7,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PixelCard } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
-import { CpuLevels } from "../Rulebook";
+import { CpuLevels, XpRules } from "../Rulebook";
 import { GAME_SETTINGS } from "../../utils/constants";
 import { FORFEIT_ROUNDS, MIN_STAKED, STAKES } from "../../utils/stakes";
 import { fmt } from "../../utils/poker/tiers";
@@ -25,6 +25,7 @@ const SECTIONS = [
   ["scoring", "Scoring"],
   ["cpus", "CPU levels"],
   ["credits", "Playing for credits"],
+  ["xp", "XP, levels and gold"],
   ["controls", "Controls"],
 ];
 
@@ -478,7 +479,9 @@ export default function RulesModal({ onClose }) {
               </Callout>
             </Section>
 
-            <Section id="controls" n={10} title="Controls">
+            <XpRules n={10} />
+
+            <Section id="controls" n={11} title="Controls">
               <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
                 {[
                   [<>Click a card</>, "Select or deselect it"],

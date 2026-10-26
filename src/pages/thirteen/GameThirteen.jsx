@@ -54,6 +54,7 @@ import { signed } from "../../components/credits/signed";
 import { fmt } from "../../utils/poker/tiers";
 import { FORFEIT_ROUNDS } from "../../utils/stakes";
 import { potText } from "../../components/credits/potText";
+import RewardPanel from "../../components/RewardPanel";
 
 const AVATAR_COLOR = { 1: "#f4c430", 2: "#5fd4d6", 3: "#e85a7a", 4: "#9bd14f", 5: "#c5a8ff", custom: "#ead8b1" };
 
@@ -774,6 +775,7 @@ const GameThirteen = () => {
         position={position}
         face={faceFor(player.id)}
         layout={seats}
+        xpLevel={isSoloGame ? null : gameState.levels?.[player.id]}
       />
     );
 
@@ -1177,6 +1179,8 @@ const GameThirteen = () => {
                   </div>
                 ))}
             </div>
+
+            {roundEndData.isGameOver && !isSoloGame && <div className="w-full mt-2"><RewardPanel reward={gameState?.reward} /></div>}
 
             {roundEndData.isGameOver && credit ? (
               <div className="flex flex-col items-center gap-3 mt-4">

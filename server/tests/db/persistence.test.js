@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
+import fs from "node:fs";
 import { TEST_DATABASE_URL, loadDb, truncateAll, makeUser } from "./setup.js";
+import { levelStart } from "../../game/progression.js";
 
 describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
   let m;
@@ -69,7 +71,7 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     const alice = await makeUser(m.pool, "alice@test.dev");
     const bob = await makeUser(m.pool, "bob@test.dev", { coins: 5, exp: 90 });
     const id = await session({ hostUserId: alice.id });
-    await m.finishSession({
+    const rewards = await m.finishSession({
       sessionId: id,
       completed: true,
       endedReason: "completed",
@@ -90,7 +92,9 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     const players = (await m.pool.query("select * from game_players where session_id = $1 order by seat_index", [id])).rows;
     expect(players.map((p) => p.final_position)).toEqual([2, 4, 1, 3]);
     expect(players.map((p) => p.is_winner)).toEqual([false, false, true, false]);
-    expect(players.map((p) => p.coins_earned)).toEqual([50, 10, 100, 25]);
+    // Gold by place out of 4; seat 1 left, so the CPU's 4th place pays nobody.
+    expect(players.map((p) => p.coins_earned)).toEqual([60, 0, 80, 40]);
+    expect(players.map((p) => p.exp_earned)).toEqual([57, 0, 70, 43]);
     expect(players[1]).toMatchObject({ guest_name: "P1", guest_tag: "0001", left_early: true, cpu_took_over: true, disconnect_count: 2, player_id: null });
     expect(players[2]).toMatchObject({ player_id: bob.id, rounds_won: 3 });
     expect(Object.keys(players[2]).some((k) => k.includes("rating"))).toBe(false); // credits are the ranked play
@@ -98,8 +102,16 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     expect(players[3].stats.eliminated_at_round).toBe(3);
 
     const profiles = Object.fromEntries((await m.pool.query("select * from profiles")).rows.map((p) => [p.id, p]));
-    expect(profiles[bob.id]).toMatchObject({ coins: 105, exp: 150, level: 2, wins: 1, games_played: 1 });
-    expect(profiles[alice.id]).toMatchObject({ coins: 50, exp: 35, level: 1, wins: 0, games_played: 1 });
+    // Bob crosses into level 2, which pays 50 gold more.
+    expect(profiles[bob.id]).toMatchObject({ coins: 5 + 80 + 50, exp: 160, level: 2, wins: 1, games_played: 1 });
+    expect(profiles[alice.id]).toMatchObject({ coins: 60, exp: 57, level: 1, wins: 0, games_played: 1 });
+    expect(rewards).toEqual(
+      expect.arrayContaining([
+        { userId: bob.id, xp: 70, gold: 80, levelUpGold: 50, expBefore: 90, expAfter: 160, levelBefore: 1, levelAfter: 2 },
+        { userId: alice.id, xp: 57, gold: 60, levelUpGold: 0, expBefore: 0, expAfter: 57, levelBefore: 1, levelAfter: 1 },
+      ]),
+    );
+    expect(rewards).toHaveLength(2);
     expect(profiles[bob.id]).not.toHaveProperty("rating");
 
     const r = (await m.pool.query("select * from game_rounds where session_id = $1 order by round_number", [id])).rows;
@@ -152,7 +164,7 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     const players = (await m.pool.query("select * from game_players where session_id = $1 order by seat_index", [id])).rows;
     expect(players.map((p) => p.final_position)).toEqual([3, 2, 4, 1, 5]);
     expect(players.map((p) => p.is_winner)).toEqual([false, false, false, true, false]);
-    expect(players.map((p) => p.coins_earned)).toEqual([25, 50, 10, 100, 10]); // 5th gets the last reward
+    expect(players.map((p) => p.coins_earned)).toEqual([50, 65, 35, 80, 20]); // places out of 5
     expect(players[3]).toMatchObject({ player_id: carol.id, rounds_won: 2, final_score: 0 });
     expect(players[3].stats).toEqual({ rounds_played: 2, rounds_won: 2, eaten: 8, gone_in: 2, folded: 0, sweeps: 1 });
     expect(players[4].stats).toEqual({ rounds_played: 2, rounds_won: 0, eaten: 0, gone_in: 1, folded: 1, sweeps: 0 });
@@ -204,6 +216,53 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     expect(p).toMatchObject({ final_position: null, is_winner: false, coins_earned: 0, stats: null });
     const prof = (await m.pool.query("select * from profiles where id = $1", [alice.id])).rows[0];
     expect(prof).toMatchObject({ coins: 0, games_played: 0 });
+  });
+
+  it("a seat taken over mid-match pays only the player still in it, and a comeback is paid in full", async () => {
+    const left = await makeUser(m.pool, "left@test.dev");
+    const took = await makeUser(m.pool, "took@test.dev");
+    const back = await makeUser(m.pool, "back@test.dev");
+    const id = await session();
+    const rewards = await m.finishSession({
+      sessionId: id,
+      completed: true,
+      endedReason: "completed",
+      roster: [
+        // Seat 2 (the winner) was left, played by a CPU, then taken over.
+        seat(2, { playerKey: left.id, userId: left.id, leftEarly: true, cpuTookOver: true, leftAt: new Date() }),
+        seat(2, { playerKey: took.id, userId: took.id }),
+        // Seat 0 left and came back: rosterEnter cleared leftEarly.
+        seat(0, { playerKey: back.id, userId: back.id, cpuTookOver: true }),
+        seat(1),
+        seat(3),
+      ],
+      rounds,
+      state: finalState,
+    });
+    const profiles = Object.fromEntries((await m.pool.query("select * from profiles")).rows.map((p) => [p.id, p]));
+    expect(profiles[left.id]).toMatchObject({ coins: 0, exp: 0 });
+    expect(profiles[took.id]).toMatchObject({ coins: 80, exp: 70 });
+    expect(profiles[back.id]).toMatchObject({ coins: 60, exp: 57 });
+    expect(rewards.map((r) => r.userId).sort()).toEqual([took.id, back.id].sort());
+  });
+
+  it("grantProgress pays XP and gold with any level-up gold", async () => {
+    const ann = await makeUser(m.pool, "ann@test.dev", { coins: 10, exp: 98, level: 1 });
+    const reward = await m.grantProgress(ann.id, { xp: 4, gold: 3 });
+    expect(reward).toEqual({ userId: ann.id, xp: 4, gold: 3, levelUpGold: 50, expBefore: 98, expAfter: 102, levelBefore: 1, levelAfter: 2 });
+    const prof = (await m.pool.query("select coins, exp, level from profiles where id = $1", [ann.id])).rows[0];
+    expect(prof).toEqual({ coins: 10 + 3 + 50, exp: 102, level: 2 });
+    expect(await m.grantProgress("00000000-0000-0000-0000-000000000000", { xp: 4, gold: 3 })).toBeNull();
+  });
+
+  it("migration 014 keeps every player's level on the new XP curve", async () => {
+    // On the old curve (100 XP a level): level 1 with 40 XP, level 6 with 537.
+    const a = await makeUser(m.pool, "a@test.dev", { exp: 40, level: 1 });
+    const b = await makeUser(m.pool, "b@test.dev", { exp: 537, level: 6 });
+    await m.pool.query(fs.readFileSync(new URL("../../db/migrations/014_progression_curve.sql", import.meta.url), "utf8"));
+    const exp = Object.fromEntries((await m.pool.query("select id, exp from profiles")).rows.map((p) => [p.id, p.exp]));
+    expect(exp[a.id]).toBe(40);
+    expect(exp[b.id]).toBe(levelStart(6) + 37);
   });
 
   it("closeOrphanedSessions closes only in-progress sessions", async () => {

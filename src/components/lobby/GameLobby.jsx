@@ -34,12 +34,12 @@ import ClaimButton from "../credits/ClaimButton";
 import { useCredits } from "../../hooks/useCredits";
 import { TIERS, buyInRange, fmt } from "../../utils/poker/tiers";
 import { STAKES, STAKE_TIERS } from "../../utils/stakes";
+import { levelProgress } from "../../utils/progression";
 
 // A stake game's tier buttons: the one amount everyone at the table stakes.
 const STAKE_BUTTONS = STAKE_TIERS.map((id) => ({ id, label: fmt(STAKES[id]), title: `Everyone stakes ${fmt(STAKES[id])}; the winner takes the pot` }));
 
 const CODE_LENGTH = 6;
-const EXP_PER_LEVEL = 100;
 
 const DIFFICULTIES = [
   { id: "EASY", label: "Easy", color: "#9bd14f", deep: "#6a9a30", skulls: 1 },
@@ -52,8 +52,8 @@ const DIFFICULTIES = [
 function AdventurerCard({ game, onSignIn }) {
   const navigate = useNavigate();
   const { identity, isGuest } = useAuth();
-  const expIntoLevel = identity.exp % EXP_PER_LEVEL;
-  const pct = (expIntoLevel / EXP_PER_LEVEL) * 100;
+  const { into, need } = levelProgress(identity.exp);
+  const pct = (into / need) * 100;
 
   // The one action lives in the header so the body stays a single tight row.
   const action = isGuest ? (
@@ -80,8 +80,10 @@ function AdventurerCard({ game, onSignIn }) {
               {identity.name}
             </span>
             <span className="font-pixel-body text-[22px] text-bone leading-none">#{identity.tag}</span>
-            {isGuest && (
+            {isGuest ? (
               <span className="ml-auto font-pixel-display text-[9px] uppercase text-bone/60">Guest</span>
+            ) : (
+              <span className="ml-auto font-pixel-display text-[9px] text-glow-gold tabular-nums whitespace-nowrap">{fmt(identity.gold ?? 0)} GOLD</span>
             )}
           </div>
 
@@ -97,9 +99,9 @@ function AdventurerCard({ game, onSignIn }) {
               style={{ height: 12, backgroundColor: INK, boxShadow: "0 0 0 2px #2a234d" }}
               role="progressbar"
               aria-label="Experience toward next level"
-              aria-valuenow={expIntoLevel}
+              aria-valuenow={into}
               aria-valuemin={0}
-              aria-valuemax={EXP_PER_LEVEL}
+              aria-valuemax={need}
             >
               <div
                 style={{
@@ -111,7 +113,7 @@ function AdventurerCard({ game, onSignIn }) {
               />
             </div>
             <span className="font-pixel-body text-[20px] text-bone leading-none shrink-0">
-              {expIntoLevel}/{EXP_PER_LEVEL} XP
+              {into}/{need} XP
             </span>
           </div>
         </div>

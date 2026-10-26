@@ -15,6 +15,14 @@ describe("poker rules", () => {
     expect(within(dialog).getByText("HIGH: blinds 100/200, buy in 4,000–20,000. People only, no CPUs.")).toBeInTheDocument();
   });
 
+  it("says what a hand pays in XP and gold, one hand every 30 seconds", () => {
+    render(<PokerRules onClose={() => {}} />);
+    const section = screen.getByRole("heading", { name: /XP, levels and gold/ }).closest("section");
+    expect(within(section).getByText("4 XP and 3 gold for each hand you're dealt into")).toBeInTheDocument();
+    expect(within(section).getByText("6 XP and 8 gold")).toBeInTheDocument();
+    expect(section).toHaveTextContent("At most one hand every 30 seconds pays");
+  });
+
   it("describes the three CPU levels, and that they never see your cards", () => {
     render(<PokerRules onClose={() => {}} />);
     const dialog = screen.getByRole("dialog", { name: "HOW TO PLAY POKER" });

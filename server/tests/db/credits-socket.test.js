@@ -218,6 +218,30 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables over sockets (Postgres)", () 
     expect((await economy()).ok).toBe(true);
   });
 
+  it("hands pay XP and gold as they end, but only one every 30 seconds", async () => {
+    const ann = await player();
+    const bob = await player();
+    const { sock: a, lobbyId } = await hostTable(ann);
+    const b = await joinTable(bob, lobbyId);
+    const paid = [];
+    a.on("progress_reward", (r) => paid.push(r));
+    autoPlay(lobbyId, a, b);
+    a.emit("start_game", { lobbyId });
+    const first = await waitFor(a, "progress_reward");
+    expect(first).toMatchObject({ userId: ann, expBefore: 0, levelBefore: 1 });
+    expect([4, 6]).toContain(first.xp);
+    await waitFor(a, "poker_state", (v) => v.handNumber >= 4, 15000);
+    expect(paid).toHaveLength(1); // the hands after it came too soon
+    const { rows: [prof] } = await m.pool.query("select exp, coins from profiles where id = $1", [ann]);
+    expect(prof).toEqual({ exp: first.xp, coins: first.gold });
+    a.emit("leave_lobby", { lobbyId });
+    b.emit("leave_lobby", { lobbyId });
+    const row = await until(async () =>
+      (await m.pool.query("select exp_earned, coins_earned from game_players gp join game_sessions gs on gs.id = gp.session_id where gs.lobby_code = $1 and gp.player_id = $2", [lobbyId, ann])).rows[0],
+    );
+    expect(row).toEqual({ exp_earned: first.xp, coins_earned: first.gold });
+  });
+
   it("ADD CHIPS lands before the next deal; mid-hand, or as a string, it's refused", async () => {
     const ann = await player();
     const { sock: a, lobbyId } = await hostTable(ann, { buyIn: 400 });
