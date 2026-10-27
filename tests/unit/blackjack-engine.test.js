@@ -398,4 +398,14 @@ describe("blackjack engine", () => {
     expect(s.seats[4].name).toBe("P0");
     expect(() => E.moveSeat(E.placeBet(s, 4, 10), 4, 1)).toThrow("Move seats between rounds");
   });
+
+  it("clearRound clears last round's bets and READY, so seats can move again", () => {
+    let s = dealerOut(E.act(play("10♠ 10♣ 9♠ 7♣", { 0: 100 }), 0, "STAND"));
+    s = E.clearRound(s);
+    expect(s.phase).toBe(E.PHASES.WAITING);
+    expect(s.seats[0]).toMatchObject({ bet: 0, ready: false, lastBet: 100, hands: [], inRound: false });
+    s = E.moveSeat(s, 0, 3);
+    expect(s.seats[0]).toBeNull();
+    expect(s.seats[3]).toMatchObject({ name: "P0", bet: 0, ready: false });
+  });
 });

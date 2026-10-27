@@ -495,13 +495,13 @@ export function roundSummary(state) {
   };
 }
 
-/** Back to WAITING: players who left are gone, and every hand is cleared. */
+/** Back to WAITING: players who left are gone, and every hand, bet and READY is cleared. */
 export function clearRound(state) {
   if (IN_ROUND.has(state.phase)) throw new Error("The round isn't over");
   return {
     ...state,
     phase: PHASES.WAITING,
-    seats: state.seats.map((p) => (p && !p.leaving ? { ...p, ...roundFields() } : null)),
+    seats: state.seats.map((p) => (p && !p.leaving ? { ...p, ...roundFields(), bet: 0, ready: false } : null)),
     dealer: { cards: [], revealed: false },
     turn: null,
     events: [],
