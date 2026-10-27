@@ -39,3 +39,4 @@ server/.env.supabase
 
 # OAuth client secrets downloaded from Google Cloud
 client_secret_*.json
+.superpowers/
