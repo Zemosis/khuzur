@@ -16,7 +16,10 @@
 //     sit the round out.
 //   fund({ seat, key, amount, kind: "double" | "split" | "insurance" }) →
 //     Promise<{ ok, error? }>: the extra moves before the card is dealt. While
-//     it runs that move is pending: no other move is taken, and no clock acts.
+//     it runs that move is pending: no other move is taken, no clock acts, and
+//     that seat's standUp and setBankroll wait for it. Should a funded move
+//     still not apply, move()/insure() answer { ok: false, funded: true, error }:
+//     the credits moved, and the owner gives them back.
 //   beforeNextRound(summary) → Promise: the round's save; the next betting
 //     window waits for it (retried after delays.saveRetry while it rejects).
 
@@ -82,6 +85,7 @@ export class BlackjackTable {
     this.pending = new Set(); // seats whose double, split or insurance is being funded
     this.overdue = null; // { key, fn }: a clock that ran out while a move was funding
     this.leaveAfterFund = new Set(); // seats that stood up while funding
+    this.bankrollAfterFund = new Map(); // seat -> a setBankroll that came while funding
     this.kicked = new Set(); // seats already reported to onKick
     this.save = null; // the last round's save while it runs
     this.saveWait = null; // the next window, waiting on that save
@@ -137,6 +141,11 @@ export class BlackjackTable {
   }
 
   setBankroll(seat, amount) {
+    if (this.pending.has(seat)) {
+      // Their move is being funded: it lands on the bankroll it was checked against first.
+      this.bankrollAfterFund.set(seat, amount);
+      return { ok: true };
+    }
     const result = this.change((s) => setBankroll(s, seat, amount));
     if (result.ok) this.closeIfBetsIn();
     return result;
@@ -166,8 +175,8 @@ export class BlackjackTable {
     if (take && this.credit && this.fund) {
       const p = s.seats[seat];
       const funded = await this.funded(seat, { seat, key: p.key, amount: insuranceCost(p.bet), kind: "insurance" });
-      if (this.destroyed) return funded;
-      result = funded.ok ? this.change((st) => insure(st, seat, take)) : funded;
+      result = this.applyFunded(funded, (st) => insure(st, seat, take));
+      if (this.destroyed) return result;
       this.afterFund(seat);
     } else {
       result = this.change((st) => insure(st, seat, take));
@@ -189,8 +198,8 @@ export class BlackjackTable {
       const p = s.seats[seat];
       const amount = p.hands[s.turn.hand].bet;
       const funded = await this.funded(seat, { seat, key: p.key, amount, kind: type.toLowerCase() });
-      if (this.destroyed) return funded;
-      const result = funded.ok ? this.change((st) => act(st, seat, type)) : funded;
+      const result = this.applyFunded(funded, (st) => act(st, seat, type));
+      if (this.destroyed) return result;
       this.afterFund(seat);
       return result;
     }
@@ -212,7 +221,7 @@ export class BlackjackTable {
   closeAfterRound() {
     if (this.closing) return;
     this.closing = true;
-    this.onState?.(this);
+    this.notify("onState", this);
     if (this.state.phase === PHASES.WAITING || this.state.phase === PHASES.BETTING) this.finishClose();
   }
 
@@ -240,11 +249,21 @@ export class BlackjackTable {
     this.state = next;
     if (next.phase === PHASES.ROUND_OVER && prev.phase !== PHASES.ROUND_OVER) {
       const summary = roundSummary(next);
-      this.onRoundEnd?.(summary);
+      // The save starts first: nothing the owner's callbacks do can lose it.
       if (this.credit && this.beforeNextRound) this.save = this.saveRound(summary);
+      this.notify("onRoundEnd", summary);
     }
     this.reschedule();
-    this.onState?.(this);
+    this.notify("onState", this);
+  }
+
+  /** Calls an owner's callback; a throw is logged, never let into the table's flow. */
+  notify(name, ...args) {
+    try {
+      this[name]?.(...args);
+    } catch (err) {
+      console.error(`[blackjack] ${name} failed:`, err);
+    }
   }
 
   /**
@@ -319,21 +338,54 @@ export class BlackjackTable {
       if (this.credit && this.beforeDeal) {
         const bets = this.state.seats.flatMap((p, seat) => (p?.inRound ? [{ seat, key: p.key, amount: p.bet }] : []));
         try {
-          refused = (await this.beforeDeal(bets)) ?? [];
+          refused = await this.beforeDeal(bets);
         } catch (err) {
           console.error("[blackjack] moving the bets failed:", err.message);
           refused = bets.map((b) => b.seat);
         }
         if (this.destroyed) return;
+        if (!Array.isArray(refused)) {
+          if (refused != null) console.error("[blackjack] beforeDeal should resolve with an array of seats, got:", refused);
+          refused = [];
+        }
       }
       let s = this.state;
-      for (const seat of refused) if (s.seats[seat]?.inRound) s = refuseBet(s, seat);
-      const next = deal(s, this.rng);
-      if (next.phase !== PHASES.BETTING) this.dealEndsAt = Date.now() + this.delays.deal;
-      this.apply(next);
+      for (const seat of refused) if (Number.isInteger(seat) && s.seats[seat]?.inRound) s = refuseBet(s, seat);
+      this.dealOn(s);
     } catch (err) {
       console.error("[blackjack] closing betting failed:", err);
+      this.recover();
     }
+  }
+
+  /** The cards come out, unless every bet was refused: then betting reopens, or the table closes. */
+  dealOn(s) {
+    const next = deal(s, this.rng);
+    if (next.phase !== PHASES.BETTING) this.dealEndsAt = Date.now() + this.delays.deal;
+    if (this.closing && next.phase === PHASES.BETTING) {
+      this.apply(clearRound(next));
+      return this.finishClose();
+    }
+    this.apply(next);
+  }
+
+  /** Closing betting broke partway: never leave the table with bets taken and nothing armed. */
+  recover() {
+    if (this.destroyed || this.closed) return;
+    try {
+      if (this.state.phase === PHASES.DEALING) return this.dealOn(this.state);
+    } catch (err) {
+      console.error("[blackjack] dealing after a failure failed:", err);
+    }
+    this.reschedule();
+  }
+
+  /** A funded move lands; if it no longer can, the answer says the credits moved. */
+  applyFunded(funded, step) {
+    if (!funded.ok) return funded;
+    if (this.destroyed) return { ok: false, funded: true, error: "The table closed" };
+    const result = this.change(step);
+    return result.ok ? result : { ok: false, funded: true, error: result.error };
   }
 
   closeIfBetsIn() {
@@ -360,6 +412,11 @@ export class BlackjackTable {
 
   /** A funded move has landed (or was refused): a leave it held, then a clock that ran out meanwhile. */
   afterFund(seat) {
+    if (this.bankrollAfterFund.has(seat)) {
+      const amount = this.bankrollAfterFund.get(seat);
+      this.bankrollAfterFund.delete(seat);
+      this.setBankroll(seat, amount);
+    }
     if (this.leaveAfterFund.delete(seat)) this.standUp(seat);
     if (this.pending.size > 0) return;
     const overdue = this.overdue;
@@ -377,7 +434,7 @@ export class BlackjackTable {
       }
       if (this.kicked.has(seat) || this.destroyed) return;
       this.kicked.add(seat);
-      this.onKick?.(seat);
+      this.notify("onKick", seat);
     });
   }
 
@@ -411,7 +468,7 @@ export class BlackjackTable {
     if (this.saveWait) return;
     this.slowTimer = setTimeout(() => {
       this.saving = true;
-      this.onState?.(this);
+      this.notify("onState", this);
     }, this.delays.slowSave);
     this.saveWait = this.save.then(() => {
       clearTimeout(this.slowTimer);
@@ -426,7 +483,7 @@ export class BlackjackTable {
     this.closed = true;
     this.clearTimer();
     this.phaseEndsAt = null;
-    Promise.resolve(this.save).then(() => this.onClosed?.(this));
+    Promise.resolve(this.save).then(() => this.notify("onClosed", this));
   }
 
   later(ms, fn) {

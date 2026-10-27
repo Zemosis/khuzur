@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BlackjackTable, DEFAULT_BLACKJACK_DELAYS, SKIPS_BEFORE_KICK } from "../../src/utils/blackjack/table.js";
-import { PHASES } from "../../src/utils/blackjack/engine.js";
+import { PHASES, insure as engineInsure, setBankroll as engineSetBankroll } from "../../src/utils/blackjack/engine.js";
 import { riggedShoe } from "../helpers/blackjack.js";
 
 const DELAYS = { betting: 100, insurance: 50, turn: 50, deal: 10, dealerStep: 5, results: 20, saveRetry: 10, slowSave: 15 };
@@ -398,6 +398,132 @@ describe("blackjack table", () => {
     expect(table.saving).toBe(false);
     expect(table.state.phase).toBe(PHASES.BETTING);
     expect(table.state.seats[0].hands).toEqual([]);
+  });
+
+  it("credit: a setBankroll for a seat whose move is funding waits for the move", async () => {
+    const gate = deferred();
+    const fund = vi.fn(() => gate.promise);
+    make("6♠ 9♥ 5♣ 7♦ 10♠", { credit: true, beforeDeal: async () => [], fund });
+    table.sit(player("A", { bankroll: 1000 }));
+    table.bet(0, 100);
+    table.ready(0);
+    await flush();
+    const pending = table.move(0, "DOUBLE");
+    expect(table.setBankroll(0, 300)).toEqual({ ok: true });
+    expect(table.state.seats[0].bankroll).toBe(900); // not yet
+    gate.resolve({ ok: true });
+    expect(await pending).toEqual({ ok: true });
+    expect(hand(0)).toMatchObject({ doubled: true, bet: 200 });
+    expect(table.state.seats[0].bankroll).toBe(300); // then the resync lands
+    expect(fund).toHaveBeenCalledTimes(1);
+  });
+
+  it("credit: a funded move or insurance the table can no longer apply answers funded: true", async () => {
+    let gate = deferred();
+    make("6♠ 9♥ 5♣ 7♦ 10♠", { credit: true, beforeDeal: async () => [], fund: () => gate.promise });
+    table.sit(player("A", { bankroll: 1000 }));
+    table.bet(0, 100);
+    table.ready(0);
+    await flush();
+    const pending = table.move(0, "DOUBLE");
+    table.state = engineSetBankroll(table.state, 0, 50); // the state moved under the pending move
+    gate.resolve({ ok: true });
+    expect(await pending).toEqual({ ok: false, funded: true, error: "You can't double now" });
+    expect(hand(0)).toMatchObject({ doubled: false, bet: 100 });
+
+    gate = deferred();
+    make("10♠ A♥ 7♣ 9♦", { credit: true, beforeDeal: async () => [], fund: () => gate.promise });
+    table.sit(player("A", { bankroll: 1000 }));
+    table.bet(0, 100);
+    table.ready(0);
+    await flush();
+    const insuring = table.insure(0, true);
+    table.state = engineInsure(table.state, 0, false);
+    gate.resolve({ ok: true });
+    expect(await insuring).toEqual({ ok: false, funded: true, error: "You already answered" });
+    expect(table.state.seats[0].insurance).toBeNull();
+  });
+
+  it("credit: closeAfterRound while the bets move, and every bet refused: the table closes, no new round", async () => {
+    const gate = deferred();
+    make("10♠ 9♥ 7♣ 8♦", { credit: true, beforeDeal: () => gate.promise });
+    table.sit(player("A", { bankroll: 1000 }));
+    table.bet(0, 100);
+    table.ready(0);
+    expect(table.state.phase).toBe(PHASES.DEALING);
+    table.closeAfterRound();
+    await flush();
+    expect(closed).toBe(0);
+    gate.resolve([0]);
+    await flush();
+    expect(table.state.phase).toBe(PHASES.WAITING);
+    expect(table.state.seats[0]).toMatchObject({ bankroll: 1000, inRound: false });
+    expect(closed).toBe(1);
+    expect(table.phaseMsLeft()).toBeNull();
+    expect(table.bet(0, 100)).toEqual({ ok: false, error: "Betting is closed" });
+    await vi.advanceTimersByTimeAsync(DELAYS.betting * 3);
+    expect(table.state.phase).toBe(PHASES.WAITING);
+    expect(rounds).toHaveLength(0);
+  });
+
+  it("an owner callback that throws never stalls the table", async () => {
+    const boom = () => {
+      throw new Error("owner bug");
+    };
+    // onState and onKick throw; A never bets while B plays every round.
+    make("2♣", { onState: boom, onKick: (seat) => (kicked.push(seat), boom()) });
+    expect(table.sit(player("A"))).toEqual({ ok: true, seat: 0 });
+    table.sit(player("B"));
+    for (let i = 0; i < SKIPS_BEFORE_KICK; i++) {
+      table.bet(1, 10);
+      table.ready(1);
+      vi.advanceTimersByTime(DELAYS.betting);
+      expect(table.state.phase).toBe(PHASES.TURNS); // dealt, even as onKick threw on the 5th
+      expect(await table.move(1, "STAND")).toEqual({ ok: true });
+      for (let t = 0; t < 100 && table.state.phase !== PHASES.BETTING; t++) vi.advanceTimersByTime(5);
+      expect(table.state.phase).toBe(PHASES.BETTING);
+    }
+    expect(kicked).toEqual([0]);
+
+    // onRoundEnd throws from a dealer step (a timer): the save still runs and betting reopens.
+    const beforeNextRound = vi.fn(async () => {});
+    make("10♠ 9♥ 10♣ 8♦", { credit: true, beforeDeal: async () => [], beforeNextRound, onRoundEnd: boom });
+    table.sit(player("A", { bankroll: 1000 }));
+    table.bet(0, 100);
+    table.ready(0);
+    await flush();
+    await table.move(0, "STAND");
+    await vi.advanceTimersByTimeAsync(DELAYS.deal + DELAYS.dealerStep * 2);
+    expect(table.state.phase).toBe(PHASES.ROUND_OVER);
+    expect(beforeNextRound).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(DELAYS.results);
+    expect(table.state.phase).toBe(PHASES.BETTING);
+
+    // ...and from the deal itself (a dealer blackjack at the peek).
+    const save = vi.fn(async () => {});
+    make("10♠ K♥ 9♣ A♦", { credit: true, beforeDeal: async () => [], beforeNextRound: save, onRoundEnd: boom });
+    table.sit(player("A", { bankroll: 1000 }));
+    table.bet(0, 100);
+    table.ready(0);
+    await flush();
+    expect(table.state.phase).toBe(PHASES.ROUND_OVER);
+    expect(save).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(DELAYS.deal + DELAYS.results);
+    expect(table.state.phase).toBe(PHASES.BETTING);
+  });
+
+  it.each([
+    ["0", 0],
+    ["an object", { refused: [] }],
+    ["seats that aren't numbers", ["0", null]],
+  ])("credit: beforeDeal resolving %s counts as nobody refused", async (_label, answer) => {
+    make("10♠ 9♥ 7♣ 8♦", { credit: true, beforeDeal: async () => answer });
+    table.sit(player("A", { bankroll: 1000 }));
+    table.bet(0, 100);
+    table.ready(0);
+    await flush();
+    expect(table.state.phase).toBe(PHASES.TURNS);
+    expect(hand(0).cards).toHaveLength(2);
   });
 
   it("closeAfterRound finishes the round, then onClosed; no new betting window", async () => {
