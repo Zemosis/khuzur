@@ -68,10 +68,10 @@ describe.skipIf(!TEST_DATABASE_URL)("credit accounts (Postgres)", () => {
 
     it("an email-only account can't play or claim; a frozen one neither", async () => {
       const bob = await player("BOB", { linked: false });
-      expect(await A.me(bob)).toMatchObject({ canPlay: false, whyNot: "Link Google or Discord to play for credits" });
-      await expect(sit(bob, T1, "LOW", 500)).rejects.toThrow("Link Google or Discord to play for credits");
+      expect(await A.me(bob)).toMatchObject({ canPlay: false, whyNot: "Link Google or Discord on your profile to play for credits", needsLink: true });
+      await expect(sit(bob, T1, "LOW", 500)).rejects.toThrow("Link Google or Discord on your profile to play for credits");
       await lastClaimAgo(bob, DAY + 1);
-      await expect(A.claim(bob)).rejects.toThrow("Link Google or Discord to play for credits");
+      await expect(A.claim(bob)).rejects.toThrow("Link Google or Discord on your profile to play for credits");
       const cat = await player("CAT");
       await A.me(cat);
       await m.pool.query("update credit_accounts set frozen_at = now() where user_id = $1", [cat]);

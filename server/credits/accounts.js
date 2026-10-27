@@ -35,13 +35,16 @@ export async function setBalance(client, userId, balance) {
   await client.query("update credit_accounts set balance = $2 where user_id = $1", [userId, balance]);
 }
 
+// Credit play needs a Google or Discord login, linked on the profile page.
+const NEEDS_LINK = "Link Google or Discord on your profile to play for credits";
+
 /** Why this account can't play for credits, or null. */
 async function whyCantPlay(client, userId, account) {
   if (account.frozen_at) return "Credit play is suspended on this account";
   const {
     rows: [r],
   } = await client.query("select exists (select 1 from oauth_identities where user_id = $1) as linked", [userId]);
-  return r.linked ? null : "Link Google or Discord to play for credits";
+  return r.linked ? null : NEEDS_LINK;
 }
 
 /** The stack this player left a `tier` table with in the last hour: { amount, until } or null. */
@@ -87,6 +90,7 @@ export function me(userId, onTable = null) {
       onTable: held,
       canPlay: !whyNot,
       whyNot,
+      needsLink: whyNot === NEEDS_LINK,
       claim: claimState({ balance: a.balance, lastClaimAt: a.last_claim_at, frozen: !!a.frozen_at, onTable: held }),
       seat: seat ? { tableName: seat.table_name, tier: seat.tier } : null,
       rathole,

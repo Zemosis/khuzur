@@ -2,7 +2,8 @@
 // game server (server/oauth.js) puts the session token, or what went wrong,
 // in the URL fragment. The token is taken out of the address bar at once,
 // then the player goes back where they started — or to the main menu, which
-// asks a new player to pick a name and tag.
+// asks a new player to pick a name and tag. Linking a login to an account
+// (#link=ok, or why not) goes straight back to the profile with the result.
 
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -20,7 +21,7 @@ export default function AuthCallback() {
   const { completeOAuth } = useAuth();
   // What the server sent, read once on arrival.
   const [landing] = useState(() => Object.fromEntries(new URLSearchParams(window.location.hash.slice(1))));
-  const [error, setError] = useState(() => (landing.token ? "" : ERRORS[landing.error] || ERRORS.failed));
+  const [error, setError] = useState(() => (landing.token || landing.link ? "" : ERRORS[landing.error] || ERRORS.failed));
   const started = useRef(false);
 
   useEffect(() => {
@@ -28,6 +29,10 @@ export default function AuthCallback() {
     if (started.current) return;
     started.current = true;
     window.history.replaceState(null, "", window.location.pathname);
+    if (landing.link) {
+      navigate(landing.returnTo || "/profile", { replace: true, state: { link: landing.link, provider: landing.provider } });
+      return;
+    }
     if (!landing.token) return;
     completeOAuth(landing.token)
       .then((profile) => navigate(profile?.username ? landing.returnTo || "/" : "/", { replace: true }))

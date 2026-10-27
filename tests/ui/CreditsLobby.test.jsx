@@ -153,10 +153,16 @@ describe("the CREDITS tab", () => {
     expect(apiMock).not.toHaveBeenCalled();
   });
 
-  it("an email-only account is told how to play", async () => {
-    await openCredits({ ...ME, canPlay: false, whyNot: "Link Google or Discord to play for credits" });
-    expect(screen.getByText("Link Google or Discord to play for credits")).toBeInTheDocument();
+  it("an email-only account is told how to play, with a LINK button to its profile", async () => {
+    await openCredits({ ...ME, canPlay: false, whyNot: "Link Google or Discord on your profile to play for credits", needsLink: true });
+    expect(screen.getByText("Link Google or Discord on your profile to play for credits")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Private/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Link" })).toBeInTheDocument();
+  });
+
+  it("a frozen account gets no LINK button", async () => {
+    await openCredits({ ...ME, canPlay: false, whyNot: "Credit play is suspended on this account", needsLink: false });
+    expect(screen.queryByRole("button", { name: "Link" })).not.toBeInTheDocument();
   });
 
   it("after a restart it says where your credits went, until you dismiss it", async () => {

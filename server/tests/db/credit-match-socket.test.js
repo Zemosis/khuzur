@@ -158,7 +158,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
     expect(await waitFor(guest, "error_message")).toBe("Sign in to play for credits");
     const emma = await client(await player({ linked: false }));
     emma.emit("create_lobby", { gameType: "muushig", tier: "LOW", buyIn: 100 });
-    expect(await waitFor(emma, "error_message")).toBe("Link Google or Discord to play for credits");
+    expect(await waitFor(emma, "error_message")).toBe("Link Google or Discord on your profile to play for credits");
     emma.emit("create_lobby", { gameType: "muushig", tier: "HUGE", buyIn: 100 });
     expect(await waitFor(emma, "error_message")).toBe("Pick LOW, MID or HIGH");
     const fay = await client(await player());

@@ -57,7 +57,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit match stakes (Postgres)", () => {
 
     it("refuses an unlinked account", async () => {
       const bob = await player("BOB", { linked: false });
-      await expect(stake(bob)).rejects.toThrow("Link Google or Discord to play for credits");
+      await expect(stake(bob)).rejects.toThrow("Link Google or Discord on your profile to play for credits");
     });
 
     it("is one credit table at a time, across games", async () => {

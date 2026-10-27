@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import AuthCallback from "../../src/pages/AuthCallback";
 import LoginModal from "../../src/components/auth/LoginModal";
 
@@ -20,6 +20,12 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+/** Stands in for the profile: shows the address and what it was handed. */
+function ProfileStub() {
+  const { pathname, hash, state } = useLocation();
+  return <div>PROFILE {pathname}{hash} {JSON.stringify(state)}</div>;
+}
+
 /** Lands on /auth/callback with the server's fragment. */
 function land(fragment) {
   window.history.replaceState(null, "", `/auth/callback#${fragment}`);
@@ -29,6 +35,7 @@ function land(fragment) {
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/" element={<div>MAIN MENU</div>} />
         <Route path="/join/:code" element={<div>JOIN PAGE</div>} />
+        <Route path="/profile" element={<ProfileStub />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -59,6 +66,19 @@ describe("AuthCallback", () => {
     expect(completeOAuth).not.toHaveBeenCalled();
     await userEvent.setup().click(screen.getByRole("button", { name: "BACK TO MENU" }));
     expect(screen.getByText("MAIN MENU")).toBeInTheDocument();
+  });
+
+  it("a link goes back to the profile with how it went, signing nobody in", async () => {
+    land("link=ok&provider=google&returnTo=%2Fprofile%23logins");
+    expect(await screen.findByText(/PROFILE \/profile#logins/)).toHaveTextContent('{"link":"ok","provider":"google"}');
+    expect(completeOAuth).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(window.location.hash).toBe("");
+  });
+
+  it("a failed link goes back to the profile too, not to an error page", async () => {
+    land("link=taken&provider=discord&returnTo=%2Fprofile%23logins");
+    expect(await screen.findByText(/PROFILE/)).toHaveTextContent('{"link":"taken","provider":"discord"}');
   });
 
   it("a token the server won't accept is a failed sign in", async () => {

@@ -59,9 +59,17 @@ export default function BalancePanel({ credits, isGuest, error, onSignIn, onClai
               // Keyed by the claim, so its countdown restarts from now whenever the claim changes.
               <ClaimButton key={credits.claim.nextAt ?? credits.claim.state} claim={credits.claim} onClaim={onClaim} busy={claiming} />
             ) : (
-              <p className="font-pixel-body text-[20px] leading-tight" style={{ color: "#e85a7a" }}>
-                {credits.whyNot}
-              </p>
+              <div className="flex items-center gap-2.5">
+                <p className="flex-1 min-w-0 font-pixel-body text-[20px] leading-tight" style={{ color: "#e85a7a" }}>
+                  {credits.whyNot}
+                </p>
+                {credits.needsLink && (
+                  <Btn tone={TONES.cyan} onClick={() => navigate("/profile#logins")} className="px-3 shrink-0" style={{ height: 40 }}>
+                    <PixelIcon name="key" size={12} />
+                    Link
+                  </Btn>
+                )}
+              </div>
             )}
             {error && (
               <p role="alert" className="font-pixel-body text-[20px]" style={{ color: "#e85a7a" }}>

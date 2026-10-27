@@ -192,6 +192,19 @@ account it first reached (`oauth_identities`). A new identity joins the
 account with the same verified email, else a new account is made. A provider
 without a verified email is refused.
 
+**Linking a login** (the profile's *Linked logins*, `src/components/profile/LinkedLogins.jsx`):
+a signed-in player adds Google or Discord to their account whatever its email.
+The site gets a 10-minute link ticket (`POST /api/auth/link-ticket`, a JWT with
+`purpose: "link"` that `verifyToken` refuses as a session) and starts at
+`/oauth/:provider?link=<ticket>&returnTo=/profile#logins`. The ticket rides
+in the state cookie, is checked again at the callback, and the identity is
+attached to that account (`linkOAuthIdentity`) instead of signing in. The site
+gets `#link=ok|taken|exists|expired|cancelled|failed&provider=…`, and
+AuthCallback hands it to the profile. One account per provider identity, one
+identity per provider per account. `GET /api/auth/logins` lists the ways in;
+`DELETE /api/auth/logins/:provider` unlinks unless it's the last one. Credit
+play needs a linked provider (`needsLink` on `/api/credits/me`).
+
 **Solo matches** — practice games against CPUs run in the browser (Thirteen
 and Muushig practice), so the browser reports each finished one to `POST /matches`
 (`src/hooks/useSoloMatchReport.js`). `server/solo.js` checks the report and
@@ -410,7 +423,7 @@ and `server/oauth.js` read it.
 
 `(provider, provider_user_id)` → `user_id`. Keyed by the provider's id, not
 the email, since an address can change at the provider. An account can have
-one row per provider.
+one row per provider (checked when linking). Its email needn't match the account's.
 
 ### `profiles`
 

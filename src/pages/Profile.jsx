@@ -23,6 +23,7 @@ import { fmt } from "../utils/poker/tiers";
 import { api } from "../lib/api";
 import { connectSocket } from "../utils/socket";
 import UpdatingChip from "../components/UpdatingChip";
+import LinkedLogins from "../components/profile/LinkedLogins";
 import { levelProgress } from "../utils/progression";
 
 const ACCENT = "#f4c430";
@@ -172,6 +173,8 @@ function EditProfile() {
             <span className="font-pixel-body text-[18px] text-bone/70">Exactly 4</span>
           </label>
         </div>
+
+        <LinkedLogins />
 
         <div className="flex flex-col gap-3 mt-auto">
           {status.text && (

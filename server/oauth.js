@@ -14,6 +14,14 @@
 //      with the session token in the URL fragment (fragments never reach a
 //      server or its logs). Failures land there too, as #error=<reason>.
 //
+// Linking: a signed-in player can add Google or Discord to their account,
+// whatever its email. The site fetches a link ticket (POST /api/auth/link-ticket)
+// and starts at /oauth/:provider?link=<ticket>; the ticket rides in the state
+// cookie, so the callback attaches the provider to that account instead of
+// signing in, and lands back on the site with #link=ok (or why not).
+// A provider account links to one of ours at most, and ours to one of each
+// provider.
+//
 // Accounts: a provider identity, once seen, always signs into the same
 // account. A new one joins the account that already has its verified email.
 // Email sign-up never proves the address, so when a provider does, any
@@ -26,7 +34,7 @@
 import crypto from "node:crypto";
 import express from "express";
 import { pool, withTransaction } from "./db/index.js";
-import { signToken } from "./auth.js";
+import { signToken, verifyLinkTicket } from "./auth.js";
 
 const COOKIE = "khuzur_oauth";
 const COOKIE_TTL_MS = 10 * 60 * 1000;
@@ -155,6 +163,30 @@ export async function findOrCreateOAuthUser({ provider, id, email, emailVerified
   });
 }
 
+/**
+ * Links a provider identity to the account `userId`. Already linked to it:
+ * nothing to do. Throws an Error with `reason` "taken" (it's another
+ * account's) or "exists" (this account has a different one of that provider).
+ */
+export async function linkOAuthIdentity({ provider, id, userId }) {
+  return withTransaction(async (client) => {
+    await client.query("select 1 from users where id = $1 for update", [userId]);
+    const {
+      rows: [known],
+    } = await client.query("select user_id from oauth_identities where provider = $1 and provider_user_id = $2", [provider, id]);
+    if (known?.user_id === userId) return;
+    if (known) throw Object.assign(new Error("identity belongs to another account"), { reason: "taken" });
+    const { rowCount } = await client.query("select 1 from oauth_identities where provider = $1 and user_id = $2", [provider, userId]);
+    if (rowCount) throw Object.assign(new Error("account already has this provider"), { reason: "exists" });
+    try {
+      await client.query("insert into oauth_identities (provider, provider_user_id, user_id) values ($1, $2, $3)", [provider, id, userId]);
+    } catch (err) {
+      if (err.code === "23505") throw Object.assign(err, { reason: "taken" }); // linked elsewhere a moment ago
+      throw err;
+    }
+  });
+}
+
 export const oauthRouter = express.Router();
 
 // Which sign-in buttons the site should show.
@@ -171,7 +203,13 @@ oauthRouter.get("/:provider", (req, res) => {
   const state = randomToken();
   const verifier = randomToken();
   const returnTo = safeReturnTo(req.query.returnTo);
-  res.cookie(COOKIE, [state, verifier, base64url(Buffer.from(returnTo))].join("."), { ...cookieOptions(), maxAge: COOKIE_TTL_MS });
+  // Linking: the ticket must be good now, and is checked again on the way back.
+  const ticket = req.query.link == null ? "" : String(req.query.link);
+  if (req.query.link != null && !verifyLinkTicket(ticket)) return back(res, { link: "expired", provider: name, returnTo });
+  res.cookie(COOKIE, [state, verifier, base64url(Buffer.from(returnTo)), base64url(Buffer.from(ticket))].join("."), {
+    ...cookieOptions(),
+    maxAge: COOKIE_TTL_MS,
+  });
 
   const params = new URLSearchParams({
     client_id: creds.id,
@@ -191,15 +229,20 @@ oauthRouter.get("/:provider/callback", async (req, res) => {
   const cookie = readCookie(req);
   res.clearCookie(COOKIE, cookieOptions());
 
-  const creds = Object.hasOwn(PROVIDERS, name) && pool ? credentials(name) : null;
-  if (!creds) return back(res, { error: "unavailable" });
-  // The player said no on the provider's screen.
-  if (req.query.error) return back(res, { error: "cancelled" });
+  const [state, verifier, returnTo64, ticket64] = (cookie || "").split(".");
+  const returnTo = safeReturnTo(Buffer.from(returnTo64 || "", "base64url").toString());
+  const ticket = Buffer.from(ticket64 || "", "base64url").toString();
+  // A link goes back to where it started (the profile) with how it went.
+  const fail = (reason) => (ticket ? back(res, { link: reason, provider: name, returnTo }) : back(res, { error: reason }));
 
-  const [state, verifier, returnTo64] = (cookie || "").split(".");
-  if (!state || !verifier || !req.query.code || !sameString(state, req.query.state)) {
-    return back(res, { error: "failed" });
-  }
+  const creds = Object.hasOwn(PROVIDERS, name) && pool ? credentials(name) : null;
+  if (!creds) return fail("unavailable");
+  // The player said no on the provider's screen.
+  if (req.query.error) return fail("cancelled");
+
+  if (!state || !verifier || !req.query.code || !sameString(state, req.query.state)) return fail("failed");
+  const linkTo = ticket ? verifyLinkTicket(ticket) : null;
+  if (ticket && !linkTo) return fail("expired");
 
   try {
     const provider = PROVIDERS[name];
@@ -220,11 +263,15 @@ oauthRouter.get("/:provider/callback", async (req, res) => {
     if (!accessToken) throw new Error("token exchange gave no access token");
 
     const who = await provider.identity(accessToken);
+    if (linkTo) {
+      await linkOAuthIdentity({ provider: name, id: who.id, userId: linkTo });
+      return back(res, { link: "ok", provider: name, returnTo });
+    }
     const user = await findOrCreateOAuthUser({ provider: name, ...who });
-    back(res, { token: signToken(user), returnTo: safeReturnTo(Buffer.from(returnTo64 || "", "base64url").toString()) });
+    back(res, { token: signToken(user), returnTo });
   } catch (err) {
-    if (err.reason) return back(res, { error: err.reason });
-    console.error(`[oauth] ${name} sign in failed:`, err.message);
-    back(res, { error: "failed" });
+    if (err.reason) return fail(err.reason);
+    console.error(`[oauth] ${name} ${linkTo ? "link" : "sign in"} failed:`, err.message);
+    fail("failed");
   }
 });

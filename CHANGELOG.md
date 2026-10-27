@@ -4,6 +4,12 @@ Every version of Khuzur Card Hall, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
+## 1.4.2 — 27 October 2026
+
+- **Link Google or Discord to your account.** Your profile has a new **Linked logins** list. Press **LINK** next to Google or Discord, approve it there, and it's added to the account you're signed in to, even if it uses a different email. After that you can sign in with your email and password or with the linked login, and keep your level, gold and stats either way.
+- **Linking unlocks credit play.** Signed up with email and password? Link Google or Discord and you can play for credits. The CREDITS tab's message has a **LINK** button that takes you straight there.
+- A Google or Discord account can be linked to one player only. You can **unlink** one as long as you keep another way to sign in.
+
 ## 1.4.1 — 26 October 2026
 
 ### The shop is open
