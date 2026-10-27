@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// The Muushig and Poker rules (and XP and levels) run in the browser (practice) and on the server
+// The Muushig, Poker and Blackjack rules (and XP and levels) run in the browser (practice) and on the server
 // (online) from two copies, because the server deploys from server/ alone.
 // They must match byte for byte: edit src/utils/<game>/ and copy it to
 // server/game/<game>/.
@@ -14,6 +14,7 @@ const COPIES = [
   [".", ["aiPlayer.js", "aiCombos.js", "aiSearch.js", "stakes.js", "progression.js", "shop.js"]],
   ["muushig", ["engine.js", "ai.js"]],
   ["poker", ["hands.js", "pots.js", "engine.js", "ai.js", "table.js", "tiers.js"]],
+  ["blackjack", ["rules.js"]],
 ].flatMap(([game, files]) => files.map((file) => [game, file]));
 
 describe.each(COPIES)("%s/%s", (game, file) => {
