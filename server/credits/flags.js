@@ -9,7 +9,7 @@ const nameOf = (p) => (p?.username ? `${p.username} #${p.tag}` : "?");
 
 /** Flagged pairs over the last 30 days, newest flow first. */
 export async function flaggedPairs() {
-  const { rows: hands } = await pool.query("select id, played_at, is_private, seats from credit_hands where played_at > now() - make_interval(days => $1)", [FLAG_WINDOW_DAYS]);
+  const { rows: hands } = await pool.query("select id, played_at, is_private, seats from credit_hands where played_at > now() - make_interval(days => $1) and game_type <> 'blackjack'", [FLAG_WINDOW_DAYS]);
   const { rows: reviews } = await pool.query("select loser_id, winner_id, reviewed_at from credit_flag_reviews");
   const flags = flagPairs(
     pairFlows(hands.map((h) => ({ id: h.id, playedAt: h.played_at, isPrivate: h.is_private, seats: h.seats }))),
@@ -64,7 +64,7 @@ async function accountSummary(userId) {
 export async function pairDetail(a, b) {
   const { rows } = await pool.query(
     `select id, played_at, tier, is_private, seats, board, events, game_type, cpu_take from credit_hands
-      where seats @> $1::jsonb and seats @> $2::jsonb order by played_at desc limit 200`,
+      where seats @> $1::jsonb and seats @> $2::jsonb and game_type <> 'blackjack' order by played_at desc limit 200`,
     [JSON.stringify([{ user_id: a }]), JSON.stringify([{ user_id: b }])],
   );
   const ids = [...new Set(rows.flatMap((h) => h.seats.map((s) => s.user_id)).filter(Boolean))];

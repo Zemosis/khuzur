@@ -336,16 +336,165 @@ export function saveHand({ tableId, tier, isPrivate, sessionId, summary, events,
   });
 }
 
+// ---- Blackjack: bets against the house, straight from the balance ---------
+//
+// A blackjack seat row holds 0 between rounds; it's there so the player is at
+// one credit table at a time. Bets move onto it as they're placed, and the
+// round's settlement pays each seat's return to its balance and empties it.
+
+/** Sitting at a blackjack credit table: a seat holding 0. Nothing moves, so no ledger row. */
+export function sitBlackjack(userId, { tableId, tableName }) {
+  return withTransaction(async (client) => {
+    const a = await lockAccount(client, userId);
+    const whyNot = await whyCantPlay(client, userId, a);
+    if (whyNot) throw new CreditError(whyNot);
+    await refuseSecondTable(client, userId);
+    await client.query("insert into credit_seats (user_id, table_id, table_name, tier, stack, game_type) values ($1, $2, $3, 'HOUSE', 0, 'blackjack')", [
+      userId,
+      tableId,
+      tableName,
+    ]);
+    return { balance: a.balance };
+  });
+}
+
+/** A bet (or a double, split or insurance): `amount` from the balance onto the seat. */
+export function stakeBlackjack(userId, { tableId, amount }) {
+  return withTransaction(async (client) => {
+    const a = await lockAccount(client, userId);
+    const whyNot = await whyCantPlay(client, userId, a);
+    if (whyNot) throw new CreditError(whyNot);
+    if (!Number.isInteger(amount) || amount < 1) throw new CreditError("Pick an amount");
+    if (amount > a.balance) throw new CreditError(`Your balance is ${fmt(a.balance)}`);
+    const updated = await client.query("update credit_seats set stack = stack + $3 where user_id = $1 and table_id = $2 and game_type = 'blackjack'", [
+      userId,
+      tableId,
+      amount,
+    ]);
+    if (!updated.rowCount) throw new CreditError("You're not at this table");
+    const balance = a.balance - amount;
+    await setBalance(client, userId, balance);
+    await ledger(client, { userId, kind: "bet", amount: -amount, balanceAfter: balance, tier: "HOUSE", tableId, gameType: "blackjack" });
+    return { balance };
+  });
+}
+
+/**
+ * A funded move the table couldn't apply: `amount` off the seat back to the
+ * balance. More than the seat holds is a bug (CreditMismatch).
+ */
+export function refundBlackjack(userId, { tableId, amount }) {
+  return withTransaction(async (client) => {
+    const a = await lockAccount(client, userId);
+    const {
+      rows: [seat],
+    } = await client.query("select stack from credit_seats where user_id = $1 and table_id = $2 and game_type = 'blackjack' for update", [userId, tableId]);
+    if (!seat) throw new CreditError("You're not at this table");
+    if (!Number.isInteger(amount) || amount < 1 || amount > num(seat.stack)) {
+      throw new CreditMismatch(`refund of ${amount} at table ${tableId} for ${userId}, whose seat holds ${num(seat.stack)}`);
+    }
+    await client.query("update credit_seats set stack = stack - $3 where user_id = $1 and table_id = $2", [userId, tableId, amount]);
+    const balance = a.balance + amount;
+    await setBalance(client, userId, balance);
+    await ledger(client, { userId, kind: "payout", amount, balanceAfter: balance, tier: "HOUSE", tableId, gameType: "blackjack", note: "refund" });
+    return { balance };
+  });
+}
+
+/**
+ * A finished blackjack round, in one transaction: its record (with the house's
+ * net), each seat's return to its balance, every seat back to 0, and leavers'
+ * rows gone. The database must hold exactly each summary seat's `staked`, and
+ * 0 for every other seat at the table, or nothing is written. Returns
+ * { handId: null, balances: empty } if the round was settled already (a retry
+ * after a lost reply).
+ */
+export function settleBlackjackRound({ tableId, isPrivate, sessionId, summary, leavers = [] }) {
+  return withTransaction(async (client) => {
+    const results = summary.seatResults;
+    const houseNet = results.reduce((t, r) => t + r.staked - r.returned, 0);
+    if (summary.houseNet !== houseNet) {
+      throw new CreditMismatch(`round ${summary.roundNumber} at table ${tableId}: house net ${summary.houseNet}, but its seats say ${houseNet}`);
+    }
+    const seatsJson = results.map((r) => ({ seat: r.seat_index, user_id: r.player_key, staked: r.staked, returned: r.returned, net: r.net, hands: r.hands }));
+    const inserted = await client.query(
+      `insert into credit_hands (table_id, session_id, tier, hand_number, is_private, seats, events, game_type, house_net)
+       values ($1, $2, 'HOUSE', $3, $4, $5, '[]', 'blackjack', $6)
+       on conflict (table_id, hand_number) do nothing returning id`,
+      [tableId, sessionId, summary.roundNumber, !!isPrivate, JSON.stringify(seatsJson), summary.houseNet],
+    );
+    if (!inserted.rowCount) return { handId: null, balances: new Map() };
+    const handId = inserted.rows[0].id;
+
+    const { rows } = await client.query("select user_id, stack from credit_seats where table_id = $1 for update", [tableId]);
+    const saved = new Map(rows.map((r) => [r.user_id, num(r.stack)]));
+    const staked = new Map(results.map((r) => [r.player_key, r.staked]));
+    const off = [
+      ...results.filter((r) => saved.get(r.player_key) !== r.staked),
+      ...rows.filter((r) => !staked.has(r.user_id) && num(r.stack) !== 0),
+    ];
+    if (off.length || staked.size !== results.length) {
+      throw new CreditMismatch(`bets at table ${tableId} don't match the database: ${JSON.stringify([...saved])} vs ${JSON.stringify([...staked])}`);
+    }
+
+    const balances = new Map();
+    // Locked in a fixed order, so two settlements can't deadlock on shared players.
+    for (const r of [...results].sort((x, y) => (x.player_key < y.player_key ? -1 : 1))) {
+      const a = await lockAccount(client, r.player_key);
+      let balance = a.balance;
+      if (r.returned > 0) {
+        balance += r.returned;
+        await setBalance(client, r.player_key, balance);
+        await ledger(client, { userId: r.player_key, kind: "payout", amount: r.returned, balanceAfter: balance, tier: "HOUSE", tableId, handId, gameType: "blackjack" });
+      }
+      balances.set(r.player_key, balance);
+    }
+    await client.query("update credit_seats set stack = 0 where table_id = $1", [tableId]);
+    await client.query("delete from credit_seats where table_id = $1 and user_id = any($2::uuid[])", [tableId, leavers]);
+    const played = results.filter((r) => r.staked > 0).map((r) => r.player_key);
+    await client.query("update credit_accounts set first_hand_at = coalesce(first_hand_at, now()) where user_id = any($1::uuid[])", [played]);
+    return { handId, balances };
+  });
+}
+
+/** Leaving a blackjack table: any stack back to the balance, the seat gone. Safe to repeat. */
+export function standUpBlackjack(userId, tableId) {
+  return withTransaction(async (client) => {
+    const {
+      rows: [seat],
+    } = await client.query("select stack from credit_seats where user_id = $1 and table_id = $2 and game_type = 'blackjack' for update", [userId, tableId]);
+    if (!seat) return { paid: 0 };
+    const paid = num(seat.stack);
+    if (paid > 0) await payOut(client, userId, tableId, { tier: "HOUSE", amount: paid, gameType: "blackjack" });
+    else await client.query("delete from credit_seats where user_id = $1 and table_id = $2", [userId, tableId]);
+    return { paid };
+  });
+}
+
+/** Map<userId, balance> for the accounts that exist. */
+export async function balancesOf(userIds) {
+  const { rows } = await pool.query("select user_id, balance from credit_accounts where user_id = any($1::uuid[])", [userIds]);
+  return new Map(rows.map((r) => [r.user_id, num(r.balance)]));
+}
+
+/** A blackjack seat holding nothing (between rounds): closed without a ledger row or a notice. */
+async function closeEmptyBlackjackSeat(client, r, tableId) {
+  if (r.game_type !== "blackjack" || num(r.stack) + num(r.pending) !== 0) return false;
+  await client.query("delete from credit_seats where user_id = $1 and table_id = $2", [r.user_id, tableId]);
+  return true;
+}
+
 /**
  * Every seat at `tableId` home at its saved stack plus pending (a hand still
  * running is void). A restart_return (the server stopping) leaves each player
- * the one-time notice too.
+ * the one-time notice too. An empty blackjack seat just closes.
  */
 export function releaseTable(tableId, kind = "cash_out") {
   return withTransaction(async (client) => {
     const { rows } = await client.query("select user_id, table_name, tier, stack, pending, game_type from credit_seats where table_id = $1 order by user_id for update", [tableId]);
     const paid = [];
     for (const r of rows) {
+      if (await closeEmptyBlackjackSeat(client, r, tableId)) continue;
       const amount = num(r.stack) + num(r.pending);
       await payOut(client, r.user_id, tableId, { tier: r.tier, amount, kind, gameType: r.game_type });
       if (kind === "restart_return") {
@@ -357,16 +506,22 @@ export function releaseTable(tableId, kind = "cash_out") {
   });
 }
 
-/** At boot: no table survived, so every seat goes home, and each player is told once. Returns how many. */
+/**
+ * At boot: no table survived, so every seat goes home, and each player is told
+ * once. An empty blackjack seat just closes. Returns how many seats were returned.
+ */
 export function returnAllSeats() {
   return withTransaction(async (client) => {
     const { rows } = await client.query("select user_id, table_id, table_name, tier, stack, pending, game_type from credit_seats order by user_id for update");
+    let returned = 0;
     for (const r of rows) {
+      if (await closeEmptyBlackjackSeat(client, r, r.table_id)) continue;
       const amount = num(r.stack) + num(r.pending);
       await payOut(client, r.user_id, r.table_id, { tier: r.tier, amount, kind: "restart_return", gameType: r.game_type });
       await client.query("update credit_accounts set restart_notice = $2 where user_id = $1", [r.user_id, JSON.stringify({ amount, tableName: r.table_name })]);
+      returned += 1;
     }
-    return rows.length;
+    return returned;
   });
 }
 
