@@ -4,6 +4,23 @@ Every version of Khuzur Card Hall, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
+## 2.0.0 — 28 October 2026
+
+### Blackjack is here
+- **The hall's fourth game.** Pick **BLACKJACK** on the main menu. You play against the dealer, not each other, at a casino half-moon table with five seats along the curve.
+- **Meet the Hooded House.** The dealer sits in a gold frame above the felt, a faceless figure in a purple hood with two gold eyes. It calls the round as it goes: PLACE YOUR BETS, INSURANCE?, DEALER BUSTS.
+- **Free and credit tables.** Free tables seat you with 1,000 play chips, and **REBUY** tops you back up when you run low. Credit tables play for real credits and need a linked Google or Discord login, like the rest of credit play.
+- **Play with friends or alone.** Host a public or private table for up to 5 players, or join one with its code or invite link. **PLAY ALONE** makes a private table and seats you in one click, and friends can still join with its code.
+- **Bet from your balance, with no limit.** There's no buy-in and no table maximum: bet anything from 10 up to everything you have. Chip buttons from 10 to 5K, an exact-amount box, CLEAR, REBET, x2, then **DEAL**.
+- **Standard casino rules.** Blackjack pays 3 to 2, and the dealer stands on all 17s. When the dealer shows an Ace you can take **insurance**, which pays 2 to 1. **Double** on any first two cards, even after a split, and **split** any pair up to 4 hands. The rulebook has a Blackjack page with the rest.
+- **Every round pays XP and gold,** like a poker hand: 4 XP and 3 gold, or 6 XP and 8 gold when you come out ahead, at most one round every 30 seconds. Playing alone counts.
+- Miss 5 betting rounds in a row and you're stood up from the table. Leave in the middle of a round and your hands stand; at a credit table your winnings still reach your balance.
+
+### Your Blackjack record
+- **A Blackjack tab on your profile,** split into free and credits: rounds, win rate, blackjacks, biggest win and net result.
+- **Each table you played at is a match** in your history. Its page shows your rounds in order, your hands next to the dealer's and how each one ended.
+- **The leaderboard has a Blackjack column,** so every player's credits still add up game by game.
+
 ## 1.4.2 — 27 October 2026
 
 - **Link Google or Discord to your account.** Your profile has a new **Linked logins** list. Press **LINK** next to Google or Discord, approve it there, and it's added to the account you're signed in to, even if it uses a different email. After that you can sign in with your email and password or with the linked login, and keep your level, gold and stats either way.
