@@ -100,15 +100,16 @@ export function rankSeats(state) {
  *
  * @param {Object} rec
  * @param {String}  rec.sessionId
- * @param {String}  rec.gameType    - 'thirteen' (default) | 'muushig' | 'poker'
+ * @param {String}  rec.gameType    - 'thirteen' (default) | 'muushig' | 'poker' | 'blackjack'
  * @param {Boolean} rec.completed   - true if the match played to game over
  * @param {String}  rec.endedReason - 'completed' | 'abandoned' | 'all_left'
  * @param {Date}    rec.finishedAt
  * @param {Array}   rec.roster - every seat ever occupied: { playerKey, userId,
  *                  name, tag, seatIndex, joinedAt, leftAt, leftEarly,
- *                  cpuTookOver, disconnectCount, poker?, earned? }  (poker:
- *                  the player's tally of hands, and earned: the XP and gold
- *                  its hands paid them; see recordHand in index.js)
+ *                  cpuTookOver, disconnectCount, poker?, blackjack?, earned? }
+ *                  (poker / blackjack: the player's tally of hands or rounds,
+ *                  and earned: the XP and gold they paid them; see recordHand
+ *                  and recordRound in index.js)
  * @param {Array}   rec.rounds - per-round summaries from the engine
  * @param {Object}  rec.state - final game state
  * @returns {Promise<Array>} what each signed-in player earned (see applyGain),
@@ -120,10 +121,13 @@ export async function finishSession(rec) {
 
   const { state, roster, completed } = rec;
   const muushig = rec.gameType === "muushig";
-  // A poker table has no places: each player's result is the chips they won or lost.
+  // A poker or blackjack table has no places: each player's result is the
+  // chips they won or lost, from their tally at the table.
   const poker = rec.gameType === "poker";
+  const tableGame = poker || rec.gameType === "blackjack";
+  const tallyOf = (seat) => (poker ? seat.poker : seat.blackjack) ?? null;
   const finishedAt = rec.finishedAt || new Date();
-  const positionBySeat = completed && state && !poker ? (muushig ? muushigPlaces(state) : rankSeats(state)) : {};
+  const positionBySeat = completed && state && !tableGame ? (muushig ? muushigPlaces(state) : rankSeats(state)) : {};
   const rounds = rec.rounds || [];
 
   /** How many of each hand type a seat played this match (the profile's hand tally). */
@@ -231,7 +235,8 @@ export async function finishSession(rec) {
       const position = completed ? positionBySeat[seat.seatIndex] ?? null : null;
       // A player who left and didn't come back earns nothing: the CPU played their seat.
       const reward = withPeople && completed && position && !seat.leftEarly ? matchReward({ place: position, players: seats }) : null;
-      const roundStats = poker ? { roundsWon: seat.poker?.hands_won ?? 0, stats: seat.poker ?? null } : roundStatsFor(seat.seatIndex);
+      const tally = tallyOf(seat);
+      const roundStats = tableGame ? { roundsWon: (poker ? tally?.hands_won : tally?.rounds_won) ?? 0, stats: tally } : roundStatsFor(seat.seatIndex);
 
       return {
         player_key: seat.playerKey,
@@ -239,11 +244,11 @@ export async function finishSession(rec) {
         guest_name: seat.userId ? null : seat.name,
         guest_tag: seat.userId ? null : seat.tag,
         seat_index: seat.seatIndex,
-        final_score: poker ? (seat.poker?.net ?? 0) : (state?.players?.[seat.seatIndex]?.score ?? null),
+        final_score: tableGame ? (tally?.net ?? 0) : (state?.players?.[seat.seatIndex]?.score ?? null),
         final_position: position,
         is_winner: position === 1,
-        coins_earned: poker ? (seat.earned?.gold ?? 0) : (reward?.gold ?? 0),
-        exp_earned: poker ? (seat.earned?.xp ?? 0) : (reward?.xp ?? 0),
+        coins_earned: tableGame ? (seat.earned?.gold ?? 0) : (reward?.gold ?? 0),
+        exp_earned: tableGame ? (seat.earned?.xp ?? 0) : (reward?.xp ?? 0),
         joined_at: seat.joinedAt ? new Date(seat.joinedAt) : null,
         left_at: seat.leftAt ? new Date(seat.leftAt) : null,
         left_early: !!seat.leftEarly,
@@ -253,8 +258,9 @@ export async function finishSession(rec) {
         stats: roundStats.stats ? JSON.stringify(roundStats.stats) : null,
       };
     });
-    // Poker pays XP and gold hand by hand (grantProgress), so its rows only
-    // record what each seat earned, and it counts no games played.
+    // Poker and blackjack pay XP and gold hand by hand or round by round
+    // (grantProgress), so their rows only record what each seat earned, and
+    // they count no games played.
 
     for (const row of rows) {
       const cols = Object.keys(row);
@@ -267,7 +273,7 @@ export async function finishSession(rec) {
       );
     }
 
-    if (!completed || poker) return { rows, rewards: [] };
+    if (!completed || tableGame) return { rows, rewards: [] };
 
     // Progression for signed-in players.
     const rewards = [];
@@ -373,7 +379,7 @@ export async function recordSoloMatch(userId, report) {
 }
 
 /**
- * Pays a signed-in player XP and gold outside a match's record (a poker hand),
+ * Pays a signed-in player XP and gold outside a match's record (a poker hand or blackjack round),
  * with any level-up gold. → what applyGain reports, plus userId; or null when
  * there's no database or no such profile.
  */

@@ -328,6 +328,37 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     expect(rows[done]).toMatchObject({ status: "finished" });
   });
 
+  it("finishSession records a blackjack table like poker: tally stats, net as final_score, no games_played", async () => {
+    const me = await makeUser(m.pool, "bj@test.dev", { coins: 5, exp: 7 });
+    const before = (await m.pool.query("select coins, exp, wins, games_played from profiles where id = $1", [me.id])).rows[0];
+    const id = await session({ gameType: "blackjack", maxPlayers: 5, creditTier: "HOUSE" });
+    const tally = { rounds_played: 6, rounds_won: 3, rounds_pushed: 1, blackjacks: 1, doubles: 2, splits: 1, biggest_win: 300, net: 175, rounds: [] };
+    const hands = [{ cards: ["K♠0", "A♥0"], bet: 100, result: "blackjack", payout: 250 }];
+    await m.finishSession({
+      sessionId: id,
+      gameType: "blackjack",
+      completed: true,
+      endedReason: "completed",
+      roster: [
+        seat(0, { playerKey: me.id, userId: me.id, blackjack: tally, earned: { xp: 20, gold: 25 } }),
+        seat(3, { blackjack: { ...tally, rounds_won: 1, net: -40 } }),
+      ],
+      rounds: [{ roundNumber: 1, winnerSeat: null, seatResults: [{ seat_index: 0, name: "ME", hands, net: 150 }] }],
+      state: { roundNumber: 6 },
+    });
+    const { rows: [s] } = await m.pool.query("select status, round_count, game_type, credit_tier from game_sessions where id = $1", [id]);
+    expect(s).toEqual({ status: "finished", round_count: 6, game_type: "blackjack", credit_tier: "HOUSE" });
+    const { rows: [row] } = await m.pool.query("select * from game_players where player_id = $1", [me.id]);
+    expect(row).toMatchObject({ final_score: 175, final_position: null, is_winner: false, rounds_won: 3, coins_earned: 25, exp_earned: 20, seat_index: 0 });
+    expect(row.stats).toEqual(tally);
+    const { rows: [guestRow] } = await m.pool.query("select final_score, rounds_won from game_players where session_id = $1 and seat_index = 3", [id]);
+    expect(guestRow).toEqual({ final_score: -40, rounds_won: 1 });
+    const { rows: [round] } = await m.pool.query("select winner_seat, seat_results from game_rounds where session_id = $1", [id]);
+    expect(round).toEqual({ winner_seat: null, seat_results: [{ seat_index: 0, name: "ME", hands, net: 150 }] });
+    // The rounds paid XP and gold as they went: the profile isn't touched again.
+    expect((await m.pool.query("select coins, exp, wins, games_played from profiles where id = $1", [me.id])).rows[0]).toEqual(before);
+  });
+
   it("a failed write rolls back the whole result", async () => {
     const id = await session();
     await expect(
