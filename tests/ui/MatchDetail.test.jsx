@@ -219,15 +219,16 @@ describe("match page", () => {
         blackjacks: 1,
         biggestWin: 150,
         rounds: [
-          { n: 1, net: 150, hands: [{ cards: ["A♠", "K♦"], bet: 100, result: "blackjack", payout: 250 }], dealer: { cards: ["9♣", "8♦"], total: 17 } },
+          // Cards come as the engine's ids: rank, suit and the deck they came from.
+          { n: 1, net: 150, hands: [{ cards: ["A♠.0", "K♦.3"], bet: 100, result: "blackjack", payout: 250 }], dealer: { cards: ["9♣.1", "8♦.5"], total: 17 } },
           {
             n: 2,
             net: -25,
             hands: [
-              { cards: ["8♠", "8♦", "5♣"], bet: 50, result: "win", payout: 100 },
-              { cards: ["8♥", "K♣", "9♦"], bet: 50, result: "lose", payout: 0 },
+              { cards: ["8♠.2", "8♦.0", "5♣.4"], bet: 50, result: "win", payout: 100 },
+              { cards: ["8♥.1", "K♣.5", "9♦.2"], bet: 50, result: "lose", payout: 0 },
             ],
-            dealer: { cards: ["10♣", "6♦", "K♥"], total: 26 },
+            dealer: { cards: ["10♣.3", "6♦.0", "K♥.4"], total: 26 },
           },
         ],
       },
@@ -255,6 +256,12 @@ describe("match page", () => {
       expect(rounds[1]).toHaveTextContent("Lose");
       expect(rounds[1]).toHaveTextContent("Dealer 26 (bust)");
       expect(rounds[1]).toHaveTextContent("-25");
+      // Each hand's total, and its cards by rank and suit only.
+      const hands = within(log).getAllByLabelText("Your hand");
+      expect(hands[0]).toHaveTextContent(/^A♠K♦21Blackjack/);
+      expect(hands[1]).toHaveTextContent(/^8♠8♦5♣21Win/);
+      expect(hands[2]).toHaveTextContent(/^8♥K♣9♦27 \(bust\)Lose/);
+      expect(log).not.toHaveTextContent(/NaN|\./);
     });
   });
 });

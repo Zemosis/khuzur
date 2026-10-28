@@ -18,7 +18,11 @@ const RESULT_TONE = { blackjack: "#f4c430", win: UP, lose: DOWN, push: "#ead8b1"
 const short = (name = "") => name.split(" #")[0];
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
 const toneOf = (n) => (n > 0 ? UP : n < 0 ? DOWN : "#ead8b1");
-const card = (id) => ({ id, rank: id.slice(0, -1), suit: id.slice(-1) });
+// A card id is the engine's: rank, suit, then the deck it came from ("10♦.3").
+const card = (id) => {
+  const face = id.split(".")[0];
+  return { id, rank: face.slice(0, -1), suit: face.slice(-1) };
+};
 const pct = (n, of) => (of ? `${Math.round((n / of) * 100)}%` : "-");
 
 function formatDuration(seconds) {
