@@ -6,11 +6,13 @@ import PixelIcon from "./PixelIcon";
 import RulesModal from "./thirteen/RulesModal";
 import MuushigRules from "./muushig/MuushigRules";
 import PokerRules from "./poker/PokerRules";
+import BlackjackRules from "./blackjack/BlackjackRules";
 
 const GAMES = [
   { id: "thirteen", label: "Thirteen", color: "#f4c430", Rules: RulesModal },
   { id: "muushig", label: "Muushig", color: "#e85a7a", Rules: MuushigRules },
   { id: "poker", label: "Poker", color: "#9bd14f", Rules: PokerRules },
+  { id: "blackjack", label: "Blackjack", color: "#5fd4d6", Rules: BlackjackRules },
 ];
 
 export default function RulebookPicker() {

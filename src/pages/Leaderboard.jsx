@@ -33,12 +33,13 @@ const GAMES = [
   { key: "thirteen", name: "Thirteen", live: false },
   { key: "muushig", name: "Muushig", live: false },
   { key: "poker", name: "Poker", live: true },
+  { key: "blackjack", name: "Blackjack", live: true },
 ];
 const VIEWS = [
   ["top", "Top 100"],
   ["me", "Your standing"],
 ];
-const COLS = "grid-cols-[56px_96px_minmax(0,1fr)] sm:grid-cols-[96px_150px_minmax(0,1fr)_repeat(3,104px)]";
+const COLS = "grid-cols-[56px_96px_minmax(0,1fr)] sm:grid-cols-[96px_150px_minmax(0,1fr)_repeat(4,104px)]";
 
 /** A pixel credit coin. */
 function Coin({ size = 12 }) {

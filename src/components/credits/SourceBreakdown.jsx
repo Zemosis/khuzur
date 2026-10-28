@@ -20,6 +20,7 @@ const SOURCES = [
   ["poker", "Poker"],
   ["thirteen", "Thirteen"],
   ["muushig", "Muushig"],
+  ["blackjack", "Blackjack"],
   ["admin", "Admin"],
 ];
 

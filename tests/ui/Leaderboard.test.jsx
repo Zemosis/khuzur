@@ -116,4 +116,14 @@ describe("leaderboard", () => {
     await open({ top: [], me: null });
     expect(screen.getByText("No one has played for credits yet.")).toBeInTheDocument();
   });
+
+  it("the leaderboard has a Blackjack column and the source breakdown lists Blackjack", async () => {
+    const bj = rowOf(1, "EVE", 1500, { sources: { ...sources(0), blackjack: 500 } });
+    await open({ top: [bj], me: null });
+    const row = items("Top 100")[0];
+    expect(within(row).getByLabelText("Blackjack +500")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "1. EVE #0001: 1,500 credits" }));
+    const breakdown = screen.getByRole("list", { name: "Where EVE's credits came from" });
+    expect(within(breakdown).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Blackjack+500"]);
+  });
 });

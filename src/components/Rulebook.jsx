@@ -118,12 +118,19 @@ const LEVEL_COLORS = { EASY: "#9bd14f", MEDIUM: "#f4c430", HARD: "#e85a7a" };
 
 /** The CPU levels side by side. levels: [{ id: "EASY", who: "A beginner", traits: [text] }]. */
 /** The "XP, levels and gold" section: what a match (or a poker hand) pays, and what a level costs and pays. */
-export function XpRules({ n, poker = false }) {
+export function XpRules({ n, poker = false, blackjack = false }) {
   const win = matchReward({ place: 1, players: 2 });
   const last = matchReward({ place: 2, players: 2 });
   const hand = pokerHandReward({ won: false });
   const won = pokerHandReward({ won: true });
-  const rows = poker
+  const rows = blackjack
+    ? [
+        ["A ROUND", `${hand.xp} XP and ${hand.gold} gold for each round you bet in`],
+        ["A WON ROUND", `${won.xp} XP and ${won.gold} gold`],
+        ["HOW OFTEN", `At most one round every ${POKER_REWARD_SPACING_MS / 1000} seconds pays, so a quick run of small rounds earns little`],
+        ["ALONE", "A round pays only if another person is dealt in too"],
+      ]
+    : poker
     ? [
         ["A HAND", `${hand.xp} XP and ${hand.gold} gold for each hand you're dealt into`],
         ["A WON HAND", `${won.xp} XP and ${won.gold} gold`],
@@ -139,7 +146,7 @@ export function XpRules({ n, poker = false }) {
   return (
     <Section id="xp" n={n} title="XP, levels and gold">
       <p>
-        Signed in, online {poker ? "poker" : "matches"} against other people pay <Key>XP</Key> and <Key>gold</Key>, at free and credit
+        Signed in, online {blackjack ? "blackjack" : poker ? "poker" : "matches"} against other people pay <Key>XP</Key> and <Key>gold</Key>, at free and credit
         tables alike. Playing CPUs alone doesn't, online or in practice.
       </p>
       <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>

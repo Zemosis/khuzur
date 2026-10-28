@@ -12,7 +12,7 @@ vi.mock("../../src/hooks/useAuth", () => ({ useAuth: () => ({ identity: { name: 
 
 const ANN = "00000000-0000-4000-8000-0000000000a1";
 const BOB = "00000000-0000-4000-8000-0000000000b2";
-const CHECK = { balances: 9000, atTables: 1000, granted: 10000, claimed: 500, removed: 500, ok: true };
+const CHECK = { balances: 9000, atTables: 1000, granted: 10000, claimed: 500, removed: 500, wonByBots: 0, houseNet: -250, ok: true };
 const FLAG = { loser: ANN, winner: BOB, loserName: "ANN #0001", winnerName: "BOB #0001", flow: 1200, back: 0, share: 1, hands: 4, privateHands: 4, bigFolds: 3, lastAt: "2026-10-15T10:00:00Z", loserSince: "2026-10-14T10:00:00Z", loserClaims: 2 };
 const PAIR = {
   hands: [
@@ -67,6 +67,7 @@ describe("admin page", () => {
     routes();
     await open();
     expect(screen.getByText("OK")).toBeInTheDocument();
+    expect(screen.getByText("House net").nextSibling).toHaveTextContent("-250");
     const flag = screen.getByText("ANN #0001 → BOB #0001").closest("li");
     expect(flag).toHaveTextContent("1,200");
     expect(flag).toHaveTextContent("4 hands · 4 private · 3 big folds · 2 claims");

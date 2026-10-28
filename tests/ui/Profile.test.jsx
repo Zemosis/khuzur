@@ -49,6 +49,18 @@ const pokerView = (over = {}) => ({
   time: { totalSeconds: 0, lastPlayedAt: null },
   ...over,
 });
+const bjView = (over = {}) => ({
+  tables: 0,
+  rounds: 0,
+  roundsWon: 0,
+  winRate: null,
+  blackjacks: 0,
+  biggestWin: 0,
+  net: 0,
+  time: { totalSeconds: 0, lastPlayedAt: null },
+  recent: [],
+  ...over,
+});
 const empty = {
   overall: view(),
   thirteen: view({ extras: {}, hands: {} }),
@@ -132,7 +144,7 @@ describe("Profile stats", () => {
   it("overall lists poker tables with what they came to, and says wins and places leave poker out", async () => {
     const pokerRow = { id: "pk-1", game: "poker", place: null, of: null, won: false, leftEarly: false, solo: false, score: null, hands: 30, seconds: 1800, finishedAt: new Date().toISOString(), tier: null, net: 250 };
     await renderProfile({ ...played, poker: { free: pokerView(), credits: pokerView() }, overall: { ...played.overall, poker: { tables: 3, hands: 90, net: 250, seconds: 5400 }, recent: [pokerRow, ...played.overall.recent] } });
-    expect(screen.getByText("Wins, places and streaks count Thirteen and Muushig: a poker table has no places.")).toBeInTheDocument();
+    expect(screen.getByText("Wins, places and streaks count Thirteen and Muushig: poker and blackjack tables have no places.")).toBeInTheDocument();
     const recent = section("Recent matches");
     expect(within(recent).getByText("+250")).toBeInTheDocument();
     expect(within(recent).getByText("Free chips")).toBeInTheDocument();
@@ -360,5 +372,47 @@ describe("Profile stats", () => {
     expect(within(tables).getByText("Felt").closest("button")).toHaveTextContent("-90");
     await user.click(within(tables).getByText("High Rollers").closest("button"));
     expect(await screen.findByText("table page")).toBeInTheDocument();
+  });
+
+  it("the profile has a Blackjack tab with free and credit figures", async () => {
+    const user = userEvent.setup();
+    await renderProfile({
+      ...empty,
+      blackjack: {
+        free: bjView({ tables: 2, rounds: 40, roundsWon: 18, winRate: 45, blackjacks: 3, biggestWin: 750, net: -120 }),
+        credits: bjView({ tables: 1, rounds: 9, roundsWon: 5, winRate: 56, blackjacks: 1, biggestWin: 300, net: 450 }),
+      },
+    });
+    await user.click(within(screen.getByRole("group", { name: "Game" })).getByRole("button", { name: "Blackjack" }));
+    expect(tile("Rounds")).toHaveTextContent("40");
+    expect(tile("Rounds")).toHaveTextContent("at 2 tables");
+    expect(tile("Rounds won")).toHaveTextContent("45% of rounds");
+    expect(tile("Blackjacks")).toHaveTextContent("3");
+    expect(tile("Biggest win")).toHaveTextContent("750");
+    expect(tile("Chips")).toHaveTextContent("-120");
+    expect(screen.queryByText("Dead last")).not.toBeInTheDocument();
+    await user.click(within(screen.getByRole("group", { name: "Stakes" })).getByRole("button", { name: "Credits" }));
+    expect(tile("Rounds")).toHaveTextContent("9");
+    expect(tile("Chips")).toHaveTextContent("+450");
+    expect(tile("Biggest win")).toHaveTextContent("300");
+  });
+
+  it("a Blackjack credit table reads Credits, never HOUSE", async () => {
+    const user = userEvent.setup();
+    const row = { id: "bj-1", game: "blackjack", place: null, of: null, won: false, leftEarly: false, solo: false, score: null, rounds: 12, seconds: 900, finishedAt: new Date().toISOString(), tier: "HOUSE", net: 80 };
+    await renderProfile({
+      ...played,
+      blackjack: { free: bjView(), credits: bjView({ recent: [{ id: "bj-1", tier: "HOUSE", table: "Felt", net: 80, rounds: 12, seconds: 900, finishedAt: "2026-10-19T10:00:00Z" }] }) },
+      overall: { ...played.overall, blackjack: { tables: 1, rounds: 12, net: 80, seconds: 900 }, recent: [row, ...played.overall.recent] },
+    });
+    const recent = section("Recent matches");
+    expect(within(recent).getByText("Credits")).toBeInTheDocument();
+    expect(within(recent).getByText("12 rounds")).toBeInTheDocument();
+    expect(within(recent).getByText("+80")).toBeInTheDocument();
+    expect(within(recent).getByText("Blackjack")).toBeInTheDocument();
+    await user.click(within(screen.getByRole("group", { name: "Game" })).getByRole("button", { name: "Blackjack" }));
+    await user.click(within(screen.getByRole("group", { name: "Stakes" })).getByRole("button", { name: "Credits" }));
+    expect(within(section("Recent tables")).getByText("Felt").closest("button")).toHaveTextContent("CREDITS");
+    expect(screen.queryByText(/HOUSE/)).not.toBeInTheDocument();
   });
 });

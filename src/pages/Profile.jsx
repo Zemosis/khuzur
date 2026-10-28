@@ -28,7 +28,7 @@ import { levelProgress } from "../utils/progression";
 
 const ACCENT = "#f4c430";
 const PRESETS = ["1", "2", "3", "4", "5"];
-const GAME_NAMES = { thirteen: "Thirteen", muushig: "Muushig", poker: "Poker" };
+const GAME_NAMES = { thirteen: "Thirteen", muushig: "Muushig", poker: "Poker", blackjack: "Blackjack" };
 
 const num = (v) => (v == null ? null : Number(v));
 
@@ -219,6 +219,7 @@ const FILTERS = [
   ["thirteen", "Thirteen"],
   ["muushig", "Muushig"],
   ["poker", "Poker"],
+  ["blackjack", "Blackjack"],
 ];
 // Seats at the table, so how many places a match can end in.
 const PLACES = { thirteen: 4, muushig: 5 };
@@ -288,7 +289,8 @@ function RecentList({ matches }) {
     <div className="flex flex-col">
       {matches.map((m, i) => {
         const Row = m.solo ? "div" : "button";
-        const poker = m.game === "poker";
+        const poker = m.game === "poker" || m.game === "blackjack"; // no places: what it came to instead
+        const blackjack = m.game === "blackjack";
         return (
         <Row
           key={m.id}
@@ -305,7 +307,7 @@ function RecentList({ matches }) {
           </span>
           <span className="text-parchment truncate">{GAME_NAMES[m.game] || m.game}</span>
           {poker ? (
-            <span className="text-bone/80">{m.tier ? `${m.tier} credits` : "Free chips"}</span>
+            <span className="text-bone/80">{m.tier ? (blackjack ? "Credits" : `${m.tier} credits`) : "Free chips"}</span>
           ) : m.tier ? (
             <span className="tabular-nums whitespace-nowrap" style={{ color: m.net > 0 ? "#f4c430" : m.net < 0 ? "#e85a7a" : "#ead8b1" }} title={`A ${m.tier} credit match`}>
               {m.net == null ? m.tier : `${m.net > 0 ? "+" : ""}${m.net} CR`}
@@ -313,7 +315,7 @@ function RecentList({ matches }) {
           ) : (
             <span className="text-bone/80">{m.solo ? "vs CPU" : "Online"}</span>
           )}
-          <span className="text-bone text-right tabular-nums">{poker ? `${m.hands} hands` : `${m.score ?? "-"} pts`}</span>
+          <span className="text-bone text-right tabular-nums">{poker ? (blackjack ? `${m.rounds} rounds` : `${m.hands} hands`) : `${m.score ?? "-"} pts`}</span>
           <span className="text-bone/80 text-right tabular-nums">{formatDuration(m.seconds)}</span>
           <span className="text-bone/70 text-right">{new Date(m.finishedAt).toLocaleDateString()}</span>
         </Row>
@@ -446,6 +448,68 @@ function PokerSheet({ poker }) {
   );
 }
 
+// Blackjack mirrors poker: rounds, chips or credits won or lost, no places.
+// Its credit tables are the house's, so the stakes say Credits, never HOUSE.
+function BlackjackTables({ tables }) {
+  const navigate = useNavigate();
+  if (!tables.length) return <p className="font-pixel-body text-[20px] text-bone/70 px-3">No tables yet</p>;
+  return (
+    <div className="flex flex-col">
+      {tables.map((t, i) => (
+        <button
+          key={t.id}
+          onClick={() => navigate(`/match/${t.id}`)}
+          title="See your rounds at this table"
+          className="pixel-hbtn grid items-center gap-3 px-3 font-pixel-body text-[20px] text-left w-full cursor-pointer"
+          style={{ gridTemplateColumns: "88px minmax(0,1fr) 100px 80px 70px 110px", minHeight: 44, backgroundColor: i % 2 ? "#181432" : "transparent" }}
+        >
+          <span
+            className="font-pixel-display text-[10px] text-center py-1"
+            style={{ backgroundColor: t.tier ? ACCENT : INK, color: t.tier ? INK : "#ead8b1", boxShadow: "0 0 0 2px #2a234d" }}
+          >
+            {t.tier ? "CREDITS" : "FREE"}
+          </span>
+          <span className="text-parchment truncate">{t.table || "Blackjack table"}</span>
+          <span className="text-bone/80 text-right tabular-nums">{t.rounds} rounds</span>
+          <span className="text-right tabular-nums" style={{ color: t.net > 0 ? "#9bd14f" : t.net < 0 ? "#e85a7a" : "#ead8b1" }}>
+            {signed(t.net)}
+          </span>
+          <span className="text-bone/80 text-right tabular-nums">{formatDuration(t.seconds)}</span>
+          <span className="text-bone/70 text-right">{new Date(t.finishedAt).toLocaleDateString()}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function BlackjackSheet({ blackjack }) {
+  const [stakes, setStakes] = useState("free");
+  const v = blackjack[stakes];
+  return (
+    <>
+      <Toggle label="Stakes" options={STAKES} value={stakes} onChange={setStakes} />
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <StatTile label="Rounds" value={v.rounds} note={`at ${v.tables} ${v.tables === 1 ? "table" : "tables"}`} />
+        <StatTile label="Rounds won" value={v.roundsWon} note={v.winRate == null ? "-" : `${v.winRate}% of rounds`} />
+        <StatTile label="Blackjacks" value={v.blackjacks} note="dealt to you" />
+        <StatTile label="Biggest win" value={v.biggestWin} note="won in one round" />
+        <StatTile label="Chips" value={signed(v.net)} note={stakes === "credits" ? "credits won or lost" : "won or lost, all tables"} />
+      </div>
+      <Section title="Time">
+        <Facts
+          rows={[
+            ["Time played", formatDuration(v.time.totalSeconds)],
+            ["Last played", v.time.lastPlayedAt ? new Date(v.time.lastPlayedAt).toLocaleDateString() : "-"],
+          ]}
+        />
+      </Section>
+      <Section title="Recent tables">
+        <BlackjackTables tables={v.recent ?? []} />
+      </Section>
+    </>
+  );
+}
+
 // Which matches the other games' figures count: every one, free ones
 // (practice included) or credit matches.
 const MATCH_STAKES = [
@@ -460,6 +524,14 @@ function StatsSheet({ data, stakes, onStakes, dim = false }) {
   const [filter, setFilter] = useState("overall");
   const [recentView, setRecentView] = useState("list");
   const [handsSort, setHandsSort] = useState("rank");
+  if (filter === "blackjack") {
+    return (
+      <div className="flex-1 flex flex-col gap-6 p-4 overflow-y-auto min-h-0">
+        <Toggle label="Game" options={FILTERS} value={filter} onChange={setFilter} />
+        <BlackjackSheet blackjack={data.blackjack} />
+      </div>
+    );
+  }
   if (filter === "poker") {
     return (
       <div className="flex-1 flex flex-col gap-6 p-4 overflow-y-auto min-h-0">
@@ -514,7 +586,7 @@ function StatsSheet({ data, stakes, onStakes, dim = false }) {
         />
         <StatTile label="Rounds won" value={v.rounds.won} note={`of ${v.rounds.played} played`} />
       </div>
-      {overall && <p className="font-pixel-body text-[18px] text-bone/60 -mt-3">Wins, places and streaks count Thirteen and Muushig: a poker table has no places.</p>}
+      {overall && <p className="font-pixel-body text-[18px] text-bone/60 -mt-3">Wins, places and streaks count Thirteen and Muushig: poker and blackjack tables have no places.</p>}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Section title="Finishing places">

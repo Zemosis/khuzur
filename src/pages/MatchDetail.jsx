@@ -5,8 +5,8 @@
 // starts on you when you played, otherwise on the winner.
 //
 // Public-table matches open for anyone; a private one only for its players
-// (server/matches.js). Anything unavailable reads as not found. A poker table
-// has a page of its own (PokerTablePage): your time there.
+// (server/matches.js). Anything unavailable reads as not found. A poker or
+// blackjack table has a page of its own (PokerTablePage, BlackjackTablePage).
 
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -19,6 +19,7 @@ import { signed } from "../components/credits/signed";
 import ScoreTimeline from "../components/match/ScoreTimeline";
 import RoundList from "../components/match/RoundList";
 import PokerTablePage from "../components/match/PokerTablePage";
+import BlackjackTablePage from "../components/match/BlackjackTablePage";
 import { seatName } from "../utils/matchSummary";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
@@ -82,13 +83,15 @@ export default function MatchDetail() {
   const back = () => (window.history.length > 1 ? navigate(-1) : navigate("/profile"));
   const game = GAME[match?.gameType] || GAME.thirteen;
   const poker = match?.gameType === "poker";
-  const seats = match && !poker ? seatsOf(match.standings) : [];
+  const blackjack = match?.gameType === "blackjack";
+  const table = poker || blackjack;
+  const seats = match && !table ? seatsOf(match.standings) : [];
   const pickedSeat = seats.find((s) => s.seat === picked);
   const pickedRow = match?.standings?.find((s) => s.seat === picked && !s.leftEarly) ?? pickedSeat;
 
   return (
     <div className="relative w-full h-screen starfield font-pixel-body text-parchment flex flex-col overflow-hidden">
-      <TopBar title={poker ? "Table" : "Match"} accent="#f4c430" backLabel="Back" onBack={back} onSettings={() => setShowSettings(true)} />
+      <TopBar title={table ? "Table" : "Match"} accent="#f4c430" backLabel="Back" onBack={back} onSettings={() => setShowSettings(true)} />
 
       <main className="flex-1 min-h-0 overflow-y-auto">
         <div className="w-full max-w-[1600px] mx-auto p-4 flex flex-col gap-4">
@@ -104,6 +107,8 @@ export default function MatchDetail() {
             </p>
           ) : poker ? (
             <PokerTablePage table={match} />
+          ) : blackjack ? (
+            <BlackjackTablePage table={match} />
           ) : (
             <>
               <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1">

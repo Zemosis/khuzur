@@ -198,4 +198,63 @@ describe("match page", () => {
       expect(screen.queryByRole("list", { name: "Your hands" })).not.toBeInTheDocument();
     });
   });
+
+  describe("a blackjack table", () => {
+    const blackjack = {
+      id: thirteen.id,
+      gameType: "blackjack",
+      table: "Felt",
+      credit: true,
+      isPrivate: false,
+      startedAt: "2026-10-27T10:00:00Z",
+      finishedAt: "2026-10-27T11:00:00Z",
+      durationSeconds: 3600,
+      roundCount: 2,
+      you: {
+        name: "ANN #0001",
+        net: 125,
+        seconds: 1800,
+        roundsPlayed: 2,
+        roundsWon: 1,
+        blackjacks: 1,
+        biggestWin: 150,
+        rounds: [
+          { n: 1, net: 150, hands: [{ cards: ["A♠", "K♦"], bet: 100, result: "blackjack", payout: 250 }], dealer: { cards: ["9♣", "8♦"], total: 17 } },
+          {
+            n: 2,
+            net: -25,
+            hands: [
+              { cards: ["8♠", "8♦", "5♣"], bet: 50, result: "win", payout: 100 },
+              { cards: ["8♥", "K♣", "9♦"], bet: 50, result: "lose", payout: 0 },
+            ],
+            dealer: { cards: ["10♣", "6♦", "K♥"], total: 26 },
+          },
+        ],
+      },
+      players: [
+        { name: "ANN #0001", xpLevel: 3, net: 125, rounds: 2, you: true },
+        { name: "BOB #0002", xpLevel: 4, net: -300, rounds: 2, you: false },
+      ],
+    };
+
+    it("MatchDetail shows a blackjack table page with its round log", async () => {
+      open(blackjack);
+      expect(await screen.findByRole("heading", { name: "BLACKJACK" })).toBeInTheDocument();
+            expect(screen.getByText(/Felt/)).toHaveTextContent("2 rounds");
+      expect(screen.getByText("CREDITS")).toBeInTheDocument();
+      expect(screen.queryByText(/HOUSE/)).not.toBeInTheDocument();
+      const players = within(panel("Players")).getAllByRole("listitem");
+      expect(players.map((li) => li.textContent)).toEqual(["1ANNLV 3YOU2 rounds+125", "2BOBLV 42 rounds-300"]);
+      const log = screen.getByRole("list", { name: "Your rounds" });
+      const rounds = within(log).getAllByRole("listitem");
+      expect(rounds).toHaveLength(2);
+      expect(rounds[0]).toHaveTextContent("Blackjack");
+      expect(rounds[0]).toHaveTextContent("Dealer 17");
+      expect(rounds[0]).toHaveTextContent("+150");
+      expect(rounds[1]).toHaveTextContent("Win");
+      expect(rounds[1]).toHaveTextContent("Lose");
+      expect(rounds[1]).toHaveTextContent("Dealer 26 (bust)");
+      expect(rounds[1]).toHaveTextContent("-25");
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import RulebookPicker from "../../src/components/RulebookPicker";
 import RulesModal from "../../src/components/thirteen/RulesModal";
 
 const SECTIONS = ["The goal", "Card order", "Playing a round", "Combinations", "5-card hands", "Breaking ties", "Scoring", "CPU levels", "Playing for credits", "XP, levels and gold", "Controls"];
@@ -64,5 +65,18 @@ describe("RulesModal", () => {
     await user.click(screen.getByRole("heading", { name: /Scoring/ }));
     await user.click(screen.getByRole("button", { name: /Scoring/ }));
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("the rulebook picker has Blackjack with 3:2, stands on all 17s, insurance 2:1", async () => {
+    const user = userEvent.setup();
+    render(<RulebookPicker />);
+    await user.click(screen.getByRole("button", { name: /Rules/ }));
+    await user.click(screen.getByRole("menuitem", { name: /BLACKJACK/ }));
+    const dialog = screen.getByRole("dialog", { name: "HOW TO PLAY BLACKJACK" });
+    expect(within(dialog).getByText(/3:2/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/stands on all 17s/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/insurance pays 2:1/i)).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: /XP, levels and gold/ })).toBeInTheDocument();
+    expect(within(dialog).getByText(/for each round you bet in/)).toBeInTheDocument();
   });
 });

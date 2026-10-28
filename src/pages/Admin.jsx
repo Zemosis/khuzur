@@ -43,10 +43,11 @@ function Economy({ check }) {
           ["Claimed", check.claimed],
           ["Removed", check.removed],
           ["Won by bots", check.wonByBots ?? 0],
+          ["House net", check.houseNet ?? 0],
         ].map(([label, n]) => (
           <div key={label} className={TEXT}>
             <div className="text-bone/70">{label}</div>
-            <div className="font-pixel-display text-[12px] tabular-nums">{fmt(n)}</div>
+            <div className="font-pixel-display text-[12px] tabular-nums">{label === "House net" && n > 0 ? "+" : ""}{fmt(n)}</div>
           </div>
         ))}
         <div className="font-pixel-display text-[14px] self-center" style={{ color: check.ok ? "#9bd14f" : "#e85a7a" }}>
