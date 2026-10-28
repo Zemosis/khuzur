@@ -2,7 +2,7 @@
 // there is one place to write them. The newest release there is the site's
 // version (the main menu's footer shows it); the PATCH NOTES page lists them all.
 //
-// The file's shape: "## 1.2.1 — 20 October 2026" starts a release, "### Title"
+// The file's shape: "## 0.3.1 — 20 October 2026" starts a release, "### Title"
 // a section in it, "- " an item. Text between a release heading and its
 // first item is an intro. **bold** is kept; anything else is plain text.
 

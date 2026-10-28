@@ -4,7 +4,11 @@ Every version of Khuzur Card Hall, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
-## 2.0.0 — 28 October 2026
+The hall is in early access, so versions are 0.x: the middle number moves
+for a new game or a big new system, the last for everything else. 1.0.0 is
+the first stable release.
+
+## 0.6.0 — 28 October 2026
 
 ### Blackjack is here
 - **The hall's fourth game.** Pick **BLACKJACK** on the main menu. You play against the dealer, not each other, at a casino half-moon table: five players sit just outside its rim, each with a betting circle on the felt in front of them.
@@ -27,13 +31,13 @@ page lists them all. Write for players.
 ### Also
 - **The CREDITS tab fits on one screen** in every game's lobby, like the FREE tab: your balance and CLAIM now share a row, and the panels only take the room they need.
 
-## 1.4.2 — 27 October 2026
+## 0.5.2 — 27 October 2026
 
 - **Link Google or Discord to your account.** Your profile has a new **Linked logins** list. Press **LINK** next to Google or Discord, approve it there, and it's added to the account you're signed in to, even if it uses a different email. After that you can sign in with your email and password or with the linked login, and keep your level, gold and stats either way.
 - **Linking unlocks credit play.** Signed up with email and password? Link Google or Discord and you can play for credits. The CREDITS tab's message has a **LINK** button that takes you straight there.
 - A Google or Discord account can be linked to one player only. You can **unlink** one as long as you keep another way to sign in.
 
-## 1.4.1 — 26 October 2026
+## 0.5.1 — 26 October 2026
 
 ### The shop is open
 - **SHOP** on the main menu opens the shop over the menu. Your gold is in its corner.
@@ -44,7 +48,7 @@ page lists them all. Write for players.
 - **Coming soon:** avatar borders, titles and card variants. They're in the shop now, marked SOON.
 
 ### Patch notes you can browse
-- **Pick a version from the tree on the left** and read just that one on the right. Each update line (v1.4, v1.3, ...) folds open to its versions, and the version you're reading lists its sections, so you can jump to one. **OLDER** and **NEWER** at the bottom step through them.
+- **Pick a version from the tree on the left** and read just that one on the right. Each update line (v0.5, v0.4, ...) folds open to its versions, and the version you're reading lists its sections, so you can jump to one. **OLDER** and **NEWER** at the bottom step through them.
 - **Link to a version:** the address keeps the one you're reading.
 - **FILTER** narrows the tree to the versions that mention what you type, and the notes to the lines that do, with the words marked.
 - On phones the tree folds into an **ALL VERSIONS** button above the notes.
@@ -54,7 +58,7 @@ page lists them all. Write for players.
 - If you end up the only person at the table, the end of the match says why it paid nothing.
 - Each rulebook's **XP, levels and gold** section says so.
 
-## 1.4.0 — 26 October 2026
+## 0.5.0 — 26 October 2026
 
 ### XP, levels and gold
 - **Coins are now gold.** Same balance, new name. Gold is for the shop (coming soon), and it isn't credits.
@@ -77,23 +81,23 @@ page lists them all. Write for players.
 - **Credit figures only under CREDITS.** The ALL view no longer repeats your credit games in their own row. Under CREDITS you get what credit play came to: credits won or lost, per game, pots won and your biggest pot (no more "Credit games" beside "Games").
 - **Overall no longer has a Poker section.** Poker's figures live on the POKER tab.
 
-## 1.3.3 — 26 October 2026
+## 0.4.3 — 26 October 2026
 
 - **The log follows the table.** It now says when a player leaves and a CPU plays their seat (at a credit match, how many rounds they have to come back), when they come back, when someone joins by taking over a CPU's seat, and when a seat is forfeited. At a poker table it says who left.
 - At the end of a credit match, the log says who took the pot, or that a bot won it.
 
-## 1.3.2 — 21 October 2026
+## 0.4.2 — 21 October 2026
 
 - **Poker on your Overall stats.** Recent matches list your poker tables with the chips or credits each came to. Time played and your credit figures count poker too, and a new **Poker** box sums up your tables. Wins, places and streaks still count Thirteen and Muushig only, since a poker table has no places.
 
-## 1.3.1 — 21 October 2026
+## 0.4.1 — 21 October 2026
 
 - **Profile stats open at once.** Your stats show straight away with the figures from your last visit, and a small **UPDATING** box in the corner refreshes them behind the scenes.
 - **Match pages use the whole screen** on wide displays: standings and the summary on the left, the timeline and rounds on the right.
 - **Timeline:** the scores for the round you hover now show under the chart, so they never cover the lines.
 - New loading animations on the **CLAIM** buttons.
 
-## 1.3.0 — 21 October 2026
+## 0.4.0 — 21 October 2026
 
 ### Muushig and Thirteen for credits
 - Thirteen's and Muushig's lobbies have a **CREDITS** tab. Both are played for a stake: everyone at the table puts in the same amount, and **the match winner takes the pot**.
@@ -110,17 +114,17 @@ page lists them all. Write for players.
 - Your Thirteen, Muushig and Overall stats have an **All · Free · Credits** switch. Credits shows your credit matches: credits won or lost, pots won and your biggest pot. Credit matches in **Recent matches** show what you won or lost.
 - **No more rating.** Credits are the ranked play, so the hidden rating is gone and match pages no longer show a rating number next to each player. A credit match's page shows each player's credits won or lost there instead.
 
-## 1.2.2 — 20 October 2026
+## 0.3.2 — 20 October 2026
 
 - **Rulebooks:** Muushig and Poker now have a **CPU levels** section, like Thirteen: who picks the levels, how Easy, Medium and Hard each play, and what a CPU can and can't see.
 - Behind the scenes: Thirteen's table runs on a simpler game loop. Nothing changes at the table.
 
-## 1.2.1 — 20 October 2026
+## 0.3.1 — 20 October 2026
 
 - **Patch notes.** This page: see what changed in every version. Open it from **Patch notes** at the bottom of the main menu.
 - Behind the scenes: tidier code across the site. Nothing changes at the table.
 
-## 1.2.0 — 20 October 2026
+## 0.3.0 — 20 October 2026
 
 ### Match pages
 - Open any online Thirteen or Muushig match from **Recent matches** on a profile: the final standings, one player's summary against the table, the score over the rounds, and each round's results and key plays.
@@ -143,13 +147,13 @@ page lists them all. Write for players.
 - Chat: turn speech bubbles off in Settings, or mute a player just for yourself.
 - Thirteen's menu tile now says what it plays: 2 to 4 players.
 
-## 1.1.0 — 15 October 2026
+## 0.2.0 — 15 October 2026
 
 - **Thirteen:** a new hand, **Poker**: four of a kind plus one card, between a full house and a straight flush.
 - **Thirteen:** the winning play stays on the table for a moment before the round's scores cover it.
 - **Main menu:** signing in and out moved into the player menu and Settings, and the games scroll sideways with pixel arrows.
 
-## 1.0.0 — 15 October 2026
+## 0.1.0 — 15 October 2026
 
 - The hall opens: **Thirteen** for 2 to 4 players, **Muushig** for 5, and **Poker** for up to 6, online with friends or in practice against CPUs at three levels.
 - **Credits:** a balance that stays with your account, a daily claim, credit poker tables and an all-time leaderboard.

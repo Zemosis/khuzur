@@ -2,10 +2,10 @@
 // CHANGELOG.md (utils/changelog.js). Opened from the main menu's footer.
 //
 // Two panes. On the left, a tree of versions, newest first: each minor line
-// (v1.4, v1.3, ...) is a folder of its versions, and the version you're
+// (v0.5, v0.4, ...) is a folder of its versions, and the version you're
 // reading lists its sections, which jump to them. On the right, that one
 // version's notes, with the older and newer versions a click away. The
-// address keeps the version (?v=1.3.0) so it can be linked. FILTER narrows
+// address keeps the version (?v=0.4.0) so it can be linked. FILTER narrows
 // the tree to the versions that mention what you type, and the notes to the
 // lines that do. On phones the tree folds into a VERSIONS button.
 
@@ -24,7 +24,7 @@ const GUIDE = "#2a234d"; // the tree's indent lines
 const plain = (text) => text.replace(/\*\*/g, "");
 const lineOf = (version) => version.split(".").slice(0, 2).join(".");
 
-/** Releases grouped by minor line: [{ line: "1.3", releases }], newest first. */
+/** Releases grouped by minor line: [{ line: "0.4", releases }], newest first. */
 function groupByLine(releases) {
   const lines = [];
   for (const release of releases) {
