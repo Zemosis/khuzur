@@ -37,6 +37,8 @@ export default function GameBlackjack() {
   return <OnlineBlackjack lobbyId={lobbyId} playerName={playerName} />;
 }
 
+const REJECTION_MS = 5000;
+
 /** Joins the table and draws each blackjack_state the server sends. */
 function OnlineBlackjack({ lobbyId, playerName }) {
   const navigate = useNavigate();
@@ -62,14 +64,20 @@ function OnlineBlackjack({ lobbyId, playerName }) {
       seenRef.current += 1;
       setView({ ...v, phaseEndsAt: v.phaseMsLeft == null ? null : Date.now() + v.phaseMsLeft });
       creditRef.current = !!v.credit;
-      setRejection(null);
       if (v.phase === PHASES.BETTING) setRoundReward(null);
     };
     const onChat = (msg) => setMessages((m) => [...m, { ...msg, isMe: msg.sender === playerName }]);
-    const onRejected = ({ reason } = {}) => setRejection(reason || "Move rejected");
+    // A refusal stays up a few seconds: the deal that follows a refused bet must not wipe its reason.
+    let rejectTimer = null;
+    const reject = (text) => {
+      setRejection(text);
+      clearTimeout(rejectTimer);
+      rejectTimer = setTimeout(() => setRejection(null), REJECTION_MS);
+    };
+    const onRejected = ({ reason } = {}) => reject(reason || "Move rejected");
     const onError = (msg) => {
       if (!seenRef.current) setFatal(String(msg || "Lobby not found"));
-      else setRejection(String(msg));
+      else reject(String(msg));
     };
     // Sat out too long, or the host closed the table.
     const onLeft = () => navigate(...lobbyRoute(creditRef.current));
@@ -88,6 +96,7 @@ function OnlineBlackjack({ lobbyId, playerName }) {
       if (socket.connected) join();
     });
     return () => {
+      clearTimeout(rejectTimer);
       socket.off("connect", join);
       socket.off("blackjack_state", onState);
       socket.off("receive_chat", onChat);

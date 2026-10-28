@@ -2,7 +2,7 @@
 // view function, as the server sends them, and the page answers with bj_ events.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act, within } from "@testing-library/react";
+import { render, screen, act, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import GameBlackjack from "../../src/pages/blackjack/GameBlackjack";
@@ -320,5 +320,34 @@ describe("blackjack table online", () => {
     expect(screen.getByText("The minimum bet is 10")).toBeInTheDocument();
     serverSends("table_left", { reason: "closed" });
     expect(screen.getByText("BLACKJACK LOBBY credits")).toBeInTheDocument();
+  });
+
+  it("a refused bet's reason stays up through the deal that follows", async () => {
+    await open();
+    serverSends("blackjack_state", view(openBetting(table([1000, 1000]))));
+    serverSends("move_rejected", { reason: "Your balance is 5" });
+    serverSends("blackjack_state", view(dealtWith(table([1000, 1000], { shoe: "10♠ 9♠ 10♣ 8♥ 7♦ 7♣" }), { 1: 100 })));
+    expect(screen.getByText("Your balance is 5")).toBeInTheDocument();
+  });
+
+  it("a typed amount reaches the table only when committed; an unusable one clears the bet", async () => {
+    await open();
+    serverSends("blackjack_state", view(openBetting(table([1500, 1000]))));
+    const box = screen.getByLabelText("Bet amount");
+    await userEvent.type(box, "2000");
+    expect(box).toHaveValue("2000");
+    expect(button("DEAL")).toBeDisabled();
+    const amounts = emitted("bj_bet").map((d) => d.amount);
+    expect(amounts.every((a) => a === 0)).toBe(true);
+    fakeSocket.emit.mockClear();
+    await userEvent.clear(box);
+    await userEvent.type(box, "250");
+    expect(emitted("bj_bet").every((d) => d.amount === 0)).toBe(true);
+    fireEvent.blur(box);
+    expect(emitted("bj_bet").at(-1)).toEqual({ lobbyId: LOBBY, amount: 250 });
+    fakeSocket.emit.mockClear();
+    await userEvent.click(button("DEAL"));
+    expect(emitted("bj_bet").map((d) => d.amount)).toEqual([250]);
+    expect(emitted("bj_ready")).toHaveLength(1);
   });
 });

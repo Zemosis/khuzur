@@ -1,8 +1,8 @@
 // BET BAR — your controls in the betting window: chips that add to your bet,
 // a box for any amount, CLEAR, REBET (last round's bet), x2, and DEAL, which
-// sends the bet and says you're ready. Each change of a valid bet goes to the
-// table at once, so a bet left without DEAL still plays when the window
-// closes. A free table's seat below the minimum gets REBUY instead.
+// sends the bet and says you're ready. Chips, CLEAR, REBET and x2 go to the
+// table at once; a typed amount goes on DEAL or blur, and while the box holds
+// an amount the table can't take, the table's bet is cleared. A free table's seat below the minimum gets REBUY instead.
 
 import React, { useState } from "react";
 import Countdown from "../poker/Countdown";
@@ -37,10 +37,21 @@ export default function BetBar({ seat, credit = false, endsAt = null, onBet, onD
   const valid = (n) => Number.isInteger(n) && n >= MIN_BET && n <= bankroll;
   const broke = !credit && bankroll < MIN_BET;
 
-  // A new amount shows at once; it goes to the table when it's a bet the table takes (or 0, to clear).
+  // Chips, CLEAR, REBET and x2 go to the table at once (a bet it takes, or 0 to clear).
   const change = (n) => {
     setAmount(n);
     if (n === 0 || valid(n)) onBet(n);
+  };
+  // A typed amount stays in the box until it's committed (blur or DEAL). While the box holds an
+  // amount the table can't take, the table's bet is cleared so the circle and the box agree.
+  const typed = (n) => {
+    setAmount(n);
+    if (!valid(n)) onBet(0);
+  };
+  const commit = (e) => {
+    if (e.relatedTarget?.tagName === "BUTTON") return; // moving to a button: it sends (chips, DEAL, ...)
+    const n = valid(amount) ? amount : 0;
+    if (n !== (seat.bet || 0)) onBet(n);
   };
 
   const timer = endsAt != null && (
@@ -89,7 +100,8 @@ export default function BetBar({ seat, credit = false, endsAt = null, onBet, onD
         aria-label="Bet amount"
         placeholder="0"
         value={amount ? String(amount) : ""}
-        onChange={(e) => change(Number(e.target.value.replace(/\D/g, "").slice(0, 12)) || 0)}
+        onChange={(e) => typed(Number(e.target.value.replace(/\D/g, "").slice(0, 12)) || 0)}
+        onBlur={commit}
         className="font-pixel-body text-[22px] leading-none px-2 py-1 text-parchment tabular-nums"
         style={{ width: compact ? 92 : 110, backgroundColor: "#0a0712", border: "3px solid #2a234d", boxShadow: "inset 0 3px 0 rgba(0,0,0,0.5)" }}
       />
