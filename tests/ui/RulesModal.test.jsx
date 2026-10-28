@@ -78,5 +78,8 @@ describe("RulesModal", () => {
     expect(within(dialog).getByText(/insurance pays 2:1/i)).toBeInTheDocument();
     expect(within(dialog).getByRole("heading", { name: /XP, levels and gold/ })).toBeInTheDocument();
     expect(within(dialog).getByText(/for each round you bet in/)).toBeInTheDocument();
+    expect(within(dialog).getByText("A round pays the same with nobody else at the table")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/only if another person/)).toBeNull();
+    expect(within(dialog).queryByText(/Playing CPUs alone/)).toBeNull();
   });
 });

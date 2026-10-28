@@ -103,14 +103,14 @@ Signed in, you can also play for **credits**, which stay with your account. Your
 
 ## 9. XP, levels and gold
 
-Signed in, online blackjack against other people pays **XP** and **gold**, at free and credit tables alike. Playing alone doesn't.
+Signed in, online blackjack pays **XP** and **gold**, at free and credit tables alike, alone or with others.
 
 | | |
 | --- | --- |
 | **A round** | 4 XP and 3 gold for each round you bet in |
 | **A won round** | 6 XP and 8 gold |
 | **How often** | At most one round every 30 seconds pays, so a quick run of small rounds earns little |
-| **Alone** | A round pays only if another person is dealt in too |
+| **Alone** | A round pays the same with nobody else at the table |
 
 **Levels.** Level 2 takes **100 XP**, and each level after takes 50 more, up to 1,500 a level. Every new level pays **25 gold × the level**, and every 5th pays double: level 5 pays 250, level 10 pays 500.
 

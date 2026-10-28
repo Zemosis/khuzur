@@ -128,7 +128,7 @@ export function XpRules({ n, poker = false, blackjack = false }) {
         ["A ROUND", `${hand.xp} XP and ${hand.gold} gold for each round you bet in`],
         ["A WON ROUND", `${won.xp} XP and ${won.gold} gold`],
         ["HOW OFTEN", `At most one round every ${POKER_REWARD_SPACING_MS / 1000} seconds pays, so a quick run of small rounds earns little`],
-        ["ALONE", "A round pays only if another person is dealt in too"],
+        ["ALONE", "A round pays the same with nobody else at the table"],
       ]
     : poker
     ? [
@@ -146,8 +146,16 @@ export function XpRules({ n, poker = false, blackjack = false }) {
   return (
     <Section id="xp" n={n} title="XP, levels and gold">
       <p>
-        Signed in, online {blackjack ? "blackjack" : poker ? "poker" : "matches"} against other people pay <Key>XP</Key> and <Key>gold</Key>, at free and credit
-        tables alike. Playing CPUs alone doesn't, online or in practice.
+        {blackjack ? (
+          <>
+            Signed in, online blackjack pays <Key>XP</Key> and <Key>gold</Key>, at free and credit tables alike, alone or with others.
+          </>
+        ) : (
+          <>
+            Signed in, online {poker ? "poker" : "matches"} against other people pay <Key>XP</Key> and <Key>gold</Key>, at free and credit
+            tables alike. Playing CPUs alone doesn't, online or in practice.
+          </>
+        )}
       </p>
       <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
         {rows.map(([k, v]) => (
