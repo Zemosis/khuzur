@@ -354,6 +354,15 @@ describe("blackjack engine", () => {
     expect(after.dealerTotal).toBe(17);
   });
 
+  it("a changed bet clears ready; the same amount keeps it", () => {
+    let s = E.createTable({ shoe: riggedShoe("2♠") });
+    s = E.openBetting(E.sit(s, 0, player(0, { bankroll: 1000 })));
+    s = E.setReady(E.placeBet(s, 0, 100), 0);
+    expect(E.placeBet(s, 0, 100).seats[0].ready).toBe(true);
+    expect(E.placeBet(s, 0, 150).seats[0].ready).toBe(false);
+    expect(E.placeBet(s, 0, 0).seats[0].ready).toBe(false);
+  });
+
   it("refuses bad amounts: 9, 10.5, '100', more than the bankroll", () => {
     let s = E.createTable({ shoe: riggedShoe("2♠") });
     s = E.openBetting(E.sit(s, 0, player(0, { bankroll: 340 })));

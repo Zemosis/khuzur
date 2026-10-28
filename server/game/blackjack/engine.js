@@ -174,14 +174,14 @@ export function openBetting(state) {
   };
 }
 
-/** `amount` replaces the seat's bet: 0 clears it, otherwise MIN_BET up to the bankroll. */
+/** `amount` replaces the seat's bet: 0 clears it, otherwise MIN_BET up to the bankroll. A changed bet is no longer ready. */
 export function placeBet(state, seat, amount) {
   if (state.phase !== PHASES.BETTING) throw new Error("Betting is closed");
   const p = seatOf(state, seat);
   if (!Number.isInteger(amount) || amount < 0) throw new Error("Pick an amount");
   if (amount > 0 && amount < MIN_BET) throw new Error(`The minimum bet is ${MIN_BET}`);
   if (amount > p.bankroll) throw new Error(`You have ${p.bankroll}`);
-  const s = patchSeat(state, seat, { bet: amount, ready: amount > 0 && p.ready });
+  const s = patchSeat(state, seat, { bet: amount, ready: amount > 0 && p.ready && amount === p.bet });
   return log(s, { type: "bet", seat, amount });
 }
 
