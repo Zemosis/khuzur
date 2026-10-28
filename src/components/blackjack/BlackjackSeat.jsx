@@ -26,6 +26,16 @@ function Tag({ label, bg, fg = "#0a0712", ...rest }) {
   );
 }
 
+/**
+ * Where a seat's hands sit over its circle: centred, except split hands at
+ * the table's edges, which grow inward so a phone doesn't cut them off.
+ */
+function handsAnchor(edge, count) {
+  if (count > 1 && edge === "right") return { right: 0 };
+  if (count > 1 && edge === "left") return { left: 0 };
+  return { left: "50%", transform: "translateX(-50%)" };
+}
+
 /** READY / BETTING / SITTING OUT while betting; SITTING OUT (or LEFT) during a round it isn't in. */
 function statusOf(player, phase) {
   if (player.leaving) return { label: "LEFT", bg: "#2a234d", fg: "#c8b890" };
@@ -92,8 +102,8 @@ export default function BlackjackSeat({ seat, player, face, isMe = false, turnHa
 
       {playing && (
         <div
-          className="absolute left-1/2 flex items-end gap-2 z-[5]"
-          style={{ bottom: "100%", marginBottom: compact ? 4 : 8, transform: "translateX(-50%)" }}
+          className="absolute flex items-end gap-2 z-[5]"
+          style={{ bottom: "100%", marginBottom: compact ? 4 : 8, ...handsAnchor(edge, player.hands.length) }}
           aria-label={`${isMe ? "Your" : `${short(player.name)}'s`} cards`}
         >
           {player.hands.map((hand, i) => (
