@@ -46,10 +46,39 @@ describe("leaderboard", () => {
     expect(rows[0]).toHaveTextContent(/AT TABLE.*\+29,000 Poker/);
     expect(rows[3]).toHaveTextContent("−400 Poker");
     expect(rows[3]).not.toHaveTextContent("+300"); // claims only in the breakdown
-    // A column per game: poker's net, and Thirteen and Muushig marked as coming.
+    // A column per game, each with its net.
     expect(within(rows[3]).getByLabelText("Poker −400")).toBeInTheDocument();
-    expect(within(rows[3]).getByLabelText("Thirteen: soon")).toHaveTextContent("—");
-    expect(within(rows[3]).getByLabelText("Muushig: soon")).toHaveTextContent("—");
+    expect(within(rows[3]).getByLabelText("Thirteen 0")).toHaveTextContent("0");
+    expect(within(rows[3]).getByLabelText("Muushig 0")).toHaveTextContent("0");
+    expect(screen.queryByText("SOON")).toBeNull();
+  });
+
+  it("shows Thirteen and Muushig nets like the other games", async () => {
+    const eve = rowOf(1, "EVE", 1700, { sources: { ...sources(0), thirteen: 500, muushig: 200 } });
+    await open({ top: [eve], me: null });
+    const row = items("Top 100")[0];
+    expect(within(row).getByLabelText("Thirteen +500")).toBeInTheDocument();
+    expect(within(row).getByLabelText("Muushig +200")).toBeInTheDocument();
+    expect(row).toHaveTextContent(/\+500 Thirteen.*\+200 Muushig/);
+  });
+
+  it("refreshes while open, and a failed refresh keeps the board", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await open({ top: four, me: null });
+      expect(apiMock).toHaveBeenCalledTimes(1);
+      apiMock.mockResolvedValueOnce({ top: [rowOf(1, "NEW", 50000), ...four], me: null });
+      await act(async () => vi.advanceTimersByTime(30_000));
+      expect(apiMock).toHaveBeenCalledTimes(2);
+      expect(names("Top 100")[0]).toBe("1. NEW #0001: 50,000 credits");
+      apiMock.mockRejectedValueOnce(new Error("offline"));
+      await act(async () => vi.advanceTimersByTime(30_000));
+      expect(apiMock).toHaveBeenCalledTimes(3);
+      expect(names("Top 100")[0]).toBe("1. NEW #0001: 50,000 credits");
+      expect(screen.queryByRole("alert")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("a row opens to where its credits came from: the start as a note, then claims and each game", async () => {

@@ -6,7 +6,8 @@
 // bronze, ties sharing the color), and a footer with a name search and pages.
 //
 // Two views: TOP 100, and YOUR STANDING (you with the five above and below).
-// A row opens to where that player's credits came from.
+// A row opens to where that player's credits came from. The board refreshes
+// while it's open (the server works it out at most every 30 seconds).
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -27,13 +28,13 @@ import { NARROW_W, useViewport } from "../hooks/useTableMetrics";
 const ACCENT = "#f4c430";
 const PAGE = 10;
 const MEDAL = { 1: "#f4c430", 2: "#c8c4dc", 3: "#d0844a" };
-// A column per game: the credits won or lost there. `live`: the game has
-// credit tables; until then its column reads SOON and "—".
+const REFRESH_MS = 30_000;
+// A column per game: the credits won or lost there.
 const GAMES = [
-  { key: "thirteen", name: "Thirteen", live: false },
-  { key: "muushig", name: "Muushig", live: false },
-  { key: "poker", name: "Poker", live: true },
-  { key: "blackjack", name: "Blackjack", live: true },
+  { key: "thirteen", name: "Thirteen" },
+  { key: "muushig", name: "Muushig" },
+  { key: "poker", name: "Poker" },
+  { key: "blackjack", name: "Blackjack" },
 ];
 const VIEWS = [
   ["top", "Top 100"],
@@ -55,18 +56,18 @@ function Coin({ size = 12 }) {
 
 /** One cell per game, under its column (wide screens). */
 function GameCells({ sources }) {
-  return GAMES.map(({ key, name, live }) => (
-    <span key={key} className="max-sm:hidden text-right font-pixel-body text-[20px] tabular-nums" aria-label={live ? `${name} ${signed(sources?.[key] ?? 0)}` : `${name}: soon`}>
-      {live ? <span className="text-parchment">{signed(sources?.[key] ?? 0)}</span> : <span className="text-bone/30">—</span>}
+  return GAMES.map(({ key, name }) => (
+    <span key={key} className="max-sm:hidden text-right font-pixel-body text-[20px] tabular-nums text-parchment" aria-label={`${name} ${signed(sources?.[key] ?? 0)}`}>
+      {signed(sources?.[key] ?? 0)}
     </span>
   ));
 }
 
-/** On a phone, the games with credit tables, under the name. */
+/** On a phone, each game's net, under the name. */
 function GameNets({ sources }) {
   return (
-    <span className="sm:hidden flex gap-4 font-pixel-body text-[20px] tabular-nums">
-      {GAMES.filter((g) => g.live).map(({ key, name }) => (
+    <span className="sm:hidden flex flex-wrap gap-x-4 font-pixel-body text-[20px] tabular-nums">
+      {GAMES.map(({ key, name }) => (
         <span key={key} className="whitespace-nowrap">
           <span className="text-parchment">{signed(sources?.[key] ?? 0)}</span>{" "}
           <span className="font-pixel-display text-[9px] text-bone/60 uppercase">{name}</span>
@@ -199,10 +200,23 @@ export default function Leaderboard() {
     connectSocket(identity);
   }, [identity.name, identity.tag]);
 
+  // Load now, then again every so often and whenever you come back to the tab.
   useEffect(() => {
-    api("/leaderboard", { base: "/api/credits" })
-      .then(setBoard)
-      .catch((err) => setError(err.message));
+    const load = () =>
+      api("/leaderboard", { base: "/api/credits" })
+        .then((next) => {
+          setBoard(next);
+          setError("");
+        })
+        .catch((err) => setError(err.message));
+    const visible = () => document.visibilityState === "visible" && load();
+    load();
+    const timer = setInterval(visible, REFRESH_MS);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", visible);
+    };
   }, []);
 
   const rows = view === "top" ? (board?.top ?? []) : (board?.me?.around ?? []);
@@ -226,9 +240,9 @@ export default function Leaderboard() {
   };
   const back = () => (window.history.length > 1 ? navigate(-1) : navigate("/"));
 
+  // A refresh that fails keeps the board you already have.
   let empty = null;
-  if (error) empty = `Couldn't load the leaderboard: ${error}`;
-  else if (!board) empty = "Loading the leaderboard...";
+  if (!board) empty = error ? `Couldn't load the leaderboard: ${error}` : "Loading the leaderboard...";
   else if (view === "top" && !rows.length) empty = "No one has played for credits yet.";
   else if (view === "me" && isGuest) empty = "Sign in to see where you stand.";
   else if (view === "me" && !board.me) empty = "Play a hand at a credit table to get on the board.";
@@ -250,19 +264,14 @@ export default function Leaderboard() {
               <span className="text-center">Rank</span>
               <span>Credits</span>
               <span>Player</span>
-              {GAMES.map(({ key, name, live }) => (
-                <span key={key} className="max-sm:hidden flex flex-col items-end gap-1">
+              {GAMES.map(({ key, name }) => (
+                <span key={key} className="max-sm:hidden text-right">
                   {name}
-                  {!live && (
-                    <span className="text-[7px] px-1 py-0.5 leading-none" style={{ backgroundColor: "#e85a7a", color: "#1a1024" }}>
-                      SOON
-                    </span>
-                  )}
                 </span>
               ))}
             </div>
             {empty ? (
-              <p role={error ? "alert" : undefined} className="p-6 font-pixel-body text-[22px] text-bone">
+              <p role={error && !board ? "alert" : undefined} className="p-6 font-pixel-body text-[22px] text-bone">
                 {empty}
               </p>
             ) : (

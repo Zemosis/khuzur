@@ -8,6 +8,11 @@ The hall is in early access, so versions are 0.x: the middle number moves
 for a new game or a big new system, the last for everything else. 1.0.0 is
 the first stable release.
 
+## 0.6.2 — 28 October 2026
+
+- **The leaderboard counts every game.** Thirteen and Muushig lost their SOON tags: their columns now show what each player has won or lost at their credit tables, like Poker and Blackjack. On a phone, all four games show under the player's name.
+- **The leaderboard keeps itself up to date.** While it's open it refreshes about every 30 seconds, and again when you come back to the tab, so you don't have to reload to see new results.
+
 ## 0.6.1 — 28 October 2026
 
 - **Your XP and gold rise from your own seat** at the Blackjack table, not the middle of the felt, so nobody else at the table takes them for theirs.
