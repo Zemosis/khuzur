@@ -838,6 +838,8 @@ function recordRound(lobby, summary) {
     winnerSeat: null,
     // Player keys stay in the roster.
     seatResults: summary.seatResults.map(({ player_key: _key, ...result }) => result),
+    // The dealer's hand, for the match page (game_rounds.highlights must be an array).
+    highlights: [{ type: "dealer", cards: summary.dealer.cards, total: summary.dealer.total }],
   });
   for (const r of summary.seatResults) {
     const entry = r.player_key && lobby.roster.get(r.player_key);

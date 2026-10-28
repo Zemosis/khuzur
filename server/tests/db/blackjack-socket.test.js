@@ -154,6 +154,8 @@ describe.skipIf(!TEST_DATABASE_URL)("credit blackjack over sockets (Postgres)", 
     const row = await until(async () => (await m.pool.query("select final_score, stats from game_players where session_id = $1 and player_id = $2", [session.id, ann])).rows[0]);
     expect(row.final_score).toBe(net);
     expect(row.stats).toMatchObject({ rounds_played: 1, net });
+    const { rows: [round] } = await m.pool.query("select winner_seat, highlights from game_rounds where session_id = $1", [session.id]);
+    expect(round).toEqual({ winner_seat: null, highlights: [{ type: "dealer", cards: over.dealer.cards.map((c) => c.id), total: over.dealerTotal }] });
     expect((await economy()).ok).toBe(true);
   });
 

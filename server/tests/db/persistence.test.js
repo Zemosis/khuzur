@@ -334,6 +334,7 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     const id = await session({ gameType: "blackjack", maxPlayers: 5, creditTier: "HOUSE" });
     const tally = { rounds_played: 6, rounds_won: 3, rounds_pushed: 1, blackjacks: 1, doubles: 2, splits: 1, biggest_win: 300, net: 175, rounds: [] };
     const hands = [{ cards: ["K♠0", "A♥0"], bet: 100, result: "blackjack", payout: 250 }];
+    const dealerHand = { type: "dealer", cards: ["9♦0", "7♣0", "5♠0"], total: 21 };
     await m.finishSession({
       sessionId: id,
       gameType: "blackjack",
@@ -343,7 +344,7 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
         seat(0, { playerKey: me.id, userId: me.id, blackjack: tally, earned: { xp: 20, gold: 25 } }),
         seat(3, { blackjack: { ...tally, rounds_won: 1, net: -40 } }),
       ],
-      rounds: [{ roundNumber: 1, winnerSeat: null, seatResults: [{ seat_index: 0, name: "ME", hands, net: 150 }] }],
+      rounds: [{ roundNumber: 1, winnerSeat: null, seatResults: [{ seat_index: 0, name: "ME", hands, net: 150 }], highlights: [dealerHand] }],
       state: { roundNumber: 6 },
     });
     const { rows: [s] } = await m.pool.query("select status, round_count, game_type, credit_tier from game_sessions where id = $1", [id]);
@@ -353,8 +354,9 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     expect(row.stats).toEqual(tally);
     const { rows: [guestRow] } = await m.pool.query("select final_score, rounds_won from game_players where session_id = $1 and seat_index = 3", [id]);
     expect(guestRow).toEqual({ final_score: -40, rounds_won: 1 });
-    const { rows: [round] } = await m.pool.query("select winner_seat, seat_results from game_rounds where session_id = $1", [id]);
-    expect(round).toEqual({ winner_seat: null, seat_results: [{ seat_index: 0, name: "ME", hands, net: 150 }] });
+    const { rows: [round] } = await m.pool.query("select winner_seat, seat_results, highlights from game_rounds where session_id = $1", [id]);
+    expect(round).toEqual({ winner_seat: null, seat_results: [{ seat_index: 0, name: "ME", hands, net: 150 }], highlights: [dealerHand] });
+    expect(round.highlights[0]).toMatchObject({ cards: ["9♦0", "7♣0", "5♠0"], total: 21 });
     // The rounds paid XP and gold as they went: the profile isn't touched again.
     expect((await m.pool.query("select coins, exp, wins, games_played from profiles where id = $1", [me.id])).rows[0]).toEqual(before);
   });
