@@ -276,7 +276,8 @@ describe("blackjack table online", () => {
     // The rest of the spec's lines, straight from the log function.
     const names = ["NOVSH", "BOB", "CAT"];
     expect(eventEntry({ type: "dealer_blackjack", total: 21 }, names)).toBe("Dealer has blackjack");
-    expect(eventEntry({ type: "leave", seat: 0 }, names)).toBe("NOVSH left");
+    // A leave is already in the log from the server ("NOVSH left the table."): no second line.
+    expect(eventEntry({ type: "leave", seat: 0 }, names)).toBeNull();
     expect(eventEntry({ type: "shuffle" }, names)).toBe("New shoe");
     expect(eventEntry({ type: "result", seat: 2, hand: 0, amount: 800, bet: 400 }, names)).toBe("CAT wins 400");
     expect(eventEntry({ type: "dealer_reveal", card: cards("9♦")[0], total: 19 }, names)).toBeNull();

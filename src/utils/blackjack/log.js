@@ -69,7 +69,7 @@ export function eventEntry(e, names = []) {
       return `${who} pushes`;
     }
     case "leave":
-      return `${who} left`;
+      return null; // the server already logs it: "ANN left the table."
     case "shuffle":
       return "New shoe";
     default:
