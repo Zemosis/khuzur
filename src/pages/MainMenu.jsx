@@ -235,6 +235,23 @@ const MainMenu = () => {
           onClick={() => navigate("/lobby-poker")}
         />
         <GameTile
+          id="blackjack"
+          title="BLACKJACK"
+          tag="1-5 PLAYERS"
+          desc="Beat the dealer to 21 without going over. Play alone or with friends, for chips or credits."
+          accent="cyan"
+          cards={[
+            { rank: "A", suit: "♠" },
+            { rank: "K", suit: "♥" },
+          ]}
+          difficulty={1}
+          lobbies={stats.lobbies?.blackjack}
+          hovered={hovered === "blackjack"}
+          onMouseEnter={() => setHovered("blackjack")}
+          onMouseLeave={() => setHovered(null)}
+          onClick={() => navigate("/lobby-blackjack")}
+        />
+        <GameTile
           id="locked"
           title="???"
           tag="COMING"
@@ -417,6 +434,13 @@ function GameTile({
       tagBg: "#9bd14f",
       tagText: "#1a3a0e",
     },
+    cyan: {
+      border: "#2a8a8c",
+      bg: "#0c2226",
+      text: "#5fd4d6",
+      tagBg: "#5fd4d6",
+      tagText: "#0a2a2c",
+    },
     dusk: {
       border: "#2a234d",
       bg: "#14102a",
@@ -565,7 +589,7 @@ function GameTile({
               </div>
             ) : (
               <PixelButton
-                color={{ gold: "gold", moss: "poison" }[accent] || "rose"}
+                color={{ gold: "gold", moss: "poison", cyan: "cyan" }[accent] || "rose"}
                 size="md"
               >
                 PLAY

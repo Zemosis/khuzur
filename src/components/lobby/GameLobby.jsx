@@ -251,6 +251,21 @@ function PracticePanel({ onStart }) {
   );
 }
 
+/** A game with no CPU practice: one private table for you, friends join by code. */
+function PlayAlonePanel({ onPlay }) {
+  return (
+    <Panel title="Play alone" icon="skull" deep="#6a9a30">
+      <ActionBody>
+        <p className="font-pixel-body text-[22px] text-bone leading-tight">A private table just for you. Friends can join with its code.</p>
+        <Btn tone={TONES.poison} onClick={onPlay} className="w-full">
+          <PixelIcon name="play" size={14} />
+          PLAY ALONE
+        </Btn>
+      </ActionBody>
+    </Panel>
+  );
+}
+
 // ------------------------------------------------------------- tables ----
 
 function SeatPips({ current, max, color }) {
@@ -341,7 +356,7 @@ function TablesPanel({ game, lobbies, onJoin, onRefresh }) {
                     </span>
                     {lobby.tier && (
                       <span className="font-pixel-display text-[8px] px-1.5 py-1 shrink-0" style={{ backgroundColor: "#c89820", color: INK }}>
-                        {lobby.stake != null ? `${lobby.tier} · ${fmt(lobby.stake)}` : `${lobby.tier} ${TIERS[lobby.tier].smallBlind}/${TIERS[lobby.tier].bigBlind}`}
+                        {lobby.tier === "HOUSE" ? "CREDITS" : lobby.stake != null ? `${lobby.tier} · ${fmt(lobby.stake)}` : `${lobby.tier} ${TIERS[lobby.tier].smallBlind}/${TIERS[lobby.tier].bigBlind}`}
                       </span>
                     )}
                   </div>
@@ -393,6 +408,8 @@ export default function GameLobby({ game }) {
   const credit = !!game.credits && mode === "credits";
   const { credits, error: creditsError, busy: claiming, refresh: refreshCredits, claim, dismissNotice } = useCredits({ enabled: !!game.credits });
   const stakes = game.credits?.kind === "stake";
+  // A house game's credit tables take no buy-in: its seats are bought at the table.
+  const house = game.credits?.kind === "house";
   // The buy-in or stake panel: { tier, tableName, lobbyId? | create: { name, isPrivate }, busy, error }.
   const [buyIn, setBuyIn] = useState(null);
   const buyInRef = useRef(null); // the socket handlers read the panel without re-subscribing
@@ -440,12 +457,15 @@ export default function GameLobby({ game }) {
   }
 
   function createCreditTable(name, tier, isPrivate) {
+    if (house) {
+      return socket.emit(ev.create, { lobbyName: name.trim() || `${identity.name}'s table`, playerName, isPrivate, gameType: game.id, tier: "HOUSE" });
+    }
     setBuyIn({ tier, stake: stakes ? STAKES[tier] : null, tableName: name.trim() || `${identity.name}'s table`, create: { isPrivate }, busy: false, error: "" });
   }
 
   function joinTable(lobbyId) {
     const table = lobbies.find((l) => l.id === lobbyId);
-    if (table?.tier) return setBuyIn({ tier: table.tier, stake: table.stake, tableName: table.name, lobbyId, busy: false, error: "" });
+    if (table?.tier && table.tier !== "HOUSE") return setBuyIn({ tier: table.tier, stake: table.stake, tableName: table.name, lobbyId, busy: false, error: "" });
     socket.emit(ev.join, { lobbyId, playerName });
   }
 
@@ -454,6 +474,12 @@ export default function GameLobby({ game }) {
     if (buyIn.create) {
       socket.emit(ev.create, { lobbyName: buyIn.tableName, playerName, isPrivate: buyIn.create.isPrivate, gameType: game.id, tier: buyIn.tier, buyIn: amount });
     } else socket.emit(ev.join, { lobbyId: buyIn.lobbyId, playerName, buyIn: amount });
+  }
+
+  // A private table for one: free, or on credits when the CREDITS tab is open.
+  function playAlone(name) {
+    const lobbyName = (name || "").trim() || game.defaultTableName;
+    socket.emit(ev.create, { lobbyName, playerName, isPrivate: true, gameType: game.id, ...(credit ? { tier: "HOUSE" } : {}) });
   }
 
   function startPractice(difficulty) {
@@ -520,7 +546,8 @@ export default function GameLobby({ game }) {
               <BalancePanel credits={credits} isGuest={isGuest} error={creditsError} onSignIn={() => setShowLogin(true)} onClaim={claim} claiming={claiming} onDismissNotice={dismissNotice} />
               <CreditHostPanel
                 defaultName={game.defaultTableName}
-                tiers={stakes ? STAKE_BUTTONS : undefined}
+                tiers={house ? null : stakes ? STAKE_BUTTONS : undefined}
+                onPlayAlone={game.playAlone ? () => playAlone(game.defaultTableName) : undefined}
                 disabled={isGuest || !credits?.canPlay}
                 onCreate={createCreditTable}
               />
@@ -530,7 +557,7 @@ export default function GameLobby({ game }) {
             <>
               <HostPanel game={game} onCreate={createTable} />
               <JoinPanel onJoin={joinTable} />
-              <PracticePanel onStart={startPractice} />
+              {game.playAlone ? <PlayAlonePanel onPlay={() => playAlone(game.defaultTableName)} /> : <PracticePanel onStart={startPractice} />}
             </>
           )}
         </div>

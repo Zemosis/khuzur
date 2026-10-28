@@ -1,6 +1,7 @@
 // CREDIT HOST PANEL — host a credit table: its name, its stakes (LOW, MID,
 // HIGH) and public or private. The buy-in (or stake) panel opens next.
 // `tiers` are the buttons: [{ id, label, title }]; poker's blinds by default.
+// `tiers={null}` (a game with no stakes) swaps that row for a PLAY ALONE button.
 
 import React, { useState } from "react";
 import { Panel, Btn } from "../PixelUI";
@@ -13,7 +14,7 @@ const POKER_TIERS = TIER_IDS.map((id) => {
   return { id, label: `${t.smallBlind}/${t.bigBlind}`, title: `Blinds ${t.smallBlind}/${t.bigBlind}, buy in ${fmt(t.minBuyIn)}–${fmt(t.maxBuyIn)}` };
 });
 
-export default function CreditHostPanel({ defaultName, tiers = POKER_TIERS, disabled = false, onCreate }) {
+export default function CreditHostPanel({ defaultName, tiers = POKER_TIERS, disabled = false, onCreate, onPlayAlone }) {
   const [name, setName] = useState(defaultName);
   const [tier, setTier] = useState("LOW");
   return (
@@ -31,6 +32,12 @@ export default function CreditHostPanel({ defaultName, tiers = POKER_TIERS, disa
           className="w-full font-pixel-body text-[22px] px-3 text-parchment placeholder:text-mist"
           style={inputStyle}
         />
+        {tiers === null ? (
+          <Btn tone={TONES.poison} disabled={disabled} onClick={onPlayAlone} className="w-full" title="A private table just for you">
+            <PixelIcon name="play" size={14} />
+            PLAY ALONE
+          </Btn>
+        ) : (
         <div role="radiogroup" aria-label="Stakes" className="grid grid-cols-3 gap-2">
           {tiers.map(({ id, label, title }) => {
             const on = tier === id;
@@ -50,6 +57,7 @@ export default function CreditHostPanel({ defaultName, tiers = POKER_TIERS, disa
             );
           })}
         </div>
+        )}
         <div className="grid grid-cols-2 gap-2.5">
           <Btn tone={TONES.cyan} disabled={disabled} onClick={() => onCreate(name, tier, false)} title="Anyone can join from the list">
             <PixelIcon name="globe" size={14} />

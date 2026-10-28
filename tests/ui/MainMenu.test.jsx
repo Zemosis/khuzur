@@ -305,6 +305,20 @@ describe("MainMenu", () => {
     credits.claim = undefined;
   });
 
+  it("shows a BLACKJACK tile that opens /lobby-blackjack", async () => {
+    render(
+      <MemoryRouter>
+        <Routes>
+          <Route path="/" element={<MainMenu />} />
+          <Route path="/lobby-blackjack" element={<p>blackjack lobby</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("1-5 PLAYERS")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("BLACKJACK"));
+    expect(screen.getByText("blackjack lobby")).toBeInTheDocument();
+  });
+
   it("RANKS opens the leaderboard, for guests too", async () => {
     render(
       <MemoryRouter>
