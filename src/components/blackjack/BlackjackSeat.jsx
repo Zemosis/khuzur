@@ -17,6 +17,7 @@ import { PixelAvatar, PixelCard } from "../PixelCard";
 import ChipStack from "../poker/ChipStack";
 import LevelTag from "../LevelTag";
 import Callout from "../Callout";
+import { HandReward } from "../RewardPanel";
 import PixelIcon from "../PixelIcon";
 import { PHASES } from "../../utils/blackjack/engine";
 import { MIN_BET } from "../../utils/blackjack/rules";
@@ -170,9 +171,10 @@ export default function BlackjackSeat({ seat, player, isMe = false, turnHand = n
  * The plate on the rim. player: the view's seat (null: empty, with SIT).
  * face: PixelAvatar props. callout: { id, label, bg, fg, delay } to pop over
  * it, or null; onCalloutDone(id) once it's gone. canSit / onSit: SIT on an
- * empty seat (active only when canSit).
+ * empty seat (active only when canSit). reward: what the round paid you
+ * (only on your plate), floating up from it until onRewardDone.
  */
-export function SeatPlate({ seat, player, face, isMe = false, onTurn = false, phase, layout = "full", edge = null, xpLevel = null, canSit = false, onSit, callout = null, onCalloutDone }) {
+export function SeatPlate({ seat, player, face, isMe = false, onTurn = false, phase, layout = "full", edge = null, xpLevel = null, canSit = false, onSit, callout = null, onCalloutDone, reward = null, onRewardDone }) {
   const size = SEAT_SIZE[layout] ?? SEAT_SIZE.full;
   const compact = layout === "compact";
   if (!player)
@@ -191,10 +193,19 @@ export function SeatPlate({ seat, player, face, isMe = false, onTurn = false, ph
   return (
     <div className="relative">
       {callout && <Callout key={callout.id} label={callout.label} bg={callout.bg} fg={callout.fg} delay={callout.delay} onDone={() => onCalloutDone?.(callout.id)} />}
+      {/* Your XP and gold rise from your own plate, so nobody takes them for theirs. At the
+          table's edges they grow inward. */}
+      {reward && (
+        <div className="absolute z-40 bottom-full mb-2" style={REWARD_ANCHOR[edge] ?? { left: "50%", transform: "translateX(-50%)" }}>
+          <HandReward key={`${reward.expAfter}`} reward={reward} onDone={onRewardDone} />
+        </div>
+      )}
       <Plate player={player} face={face} isMe={isMe} onTurn={onTurn} status={statusOf(player, phase)} size={size} compact={compact} edge={edge} xpLevel={xpLevel} />
     </div>
   );
 }
+
+const REWARD_ANCHOR = { right: { right: 0 }, left: { left: 0 } };
 
 // A status tag wider than a phone's plate grows inward at the table's edges.
 const TAG_ALIGN = { left: "justify-start", right: "justify-end" };

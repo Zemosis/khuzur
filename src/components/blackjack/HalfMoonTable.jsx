@@ -192,9 +192,10 @@ function RulesPrint({ compact }) {
  * view: the blackjack_state view. motion: a ref the table writes `busyUntil`
  * to (when its moves under way end), or none. mySeat: your seat (-1: none).
  * onSit(seat): SIT on an empty seat. faceFor(seat): PixelAvatar props.
- * layout: "full" | "compact".
+ * layout: "full" | "compact". reward: what the round paid you (XP, gold),
+ * floating up from your plate until onRewardDone.
  */
-export default function HalfMoonTable({ view, motion = null, mySeat, onSit, layout = "full", faceFor = () => null }) {
+export default function HalfMoonTable({ view, motion = null, mySeat, onSit, layout = "full", faceFor = () => null, reward = null, onRewardDone }) {
   const geo = GEOMETRY[layout] ?? GEOMETRY.full;
   const compact = layout === "compact";
   const size = SEAT_SIZE[layout] ?? SEAT_SIZE.full;
@@ -295,6 +296,8 @@ export default function HalfMoonTable({ view, motion = null, mySeat, onSit, layo
                 onSit={onSit}
                 callout={player ? calloutFor(seat) : null}
                 onCalloutDone={(id) => calloutDone(seat, id)}
+                reward={seat === mySeat ? reward : null}
+                onRewardDone={onRewardDone}
               />
             </div>
           );

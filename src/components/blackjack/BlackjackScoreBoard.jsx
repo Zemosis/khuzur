@@ -1,7 +1,8 @@
 // BLACKJACK SCOREBOARD — everyone at the table by what they've won or lost
-// since sitting down, most first: the net in green or rose (a rebuy doesn't
-// wipe it), the rounds they played, how many they came out ahead and how
-// often they rebought, and the balance they have now.
+// since sitting down, most first: the net in green or rose beside their name
+// (a rebuy doesn't wipe it), and under it the rounds they played, how many
+// they came out ahead and how often they rebought. Balances are on the
+// plates at the table.
 // The player on their turn gets a gold frame; your row a cyan marker. Same
 // rows as the other games' scoreboards.
 
@@ -47,17 +48,22 @@ export default function BlackjackScoreBoard({ seats = [], turn = null, mySeat = 
                 </span>
                 <PixelAvatar variant={face.variant} customAvatarData={face.customAvatarData} size={34} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-pixel-display text-[10px] text-parchment truncate">{short(p.name)}</div>
-                  <div className="font-pixel-body text-[18px] leading-none mt-1 text-bone/70 whitespace-nowrap">
-                    {p.rounds ?? 0} played · {p.won ?? 0} won
-                    {p.rebuys > 0 && ` · ${p.rebuys} rebuy${p.rebuys === 1 ? "" : "s"}`}
+                  <div className="flex items-baseline justify-between gap-2 min-w-0">
+                    <span className="font-pixel-display text-[10px] text-parchment truncate">{short(p.name)}</span>
+                    <span data-net className="font-pixel-display text-[12px] tabular-nums leading-none shrink-0" style={{ color: net > 0 ? "#9bd14f" : net < 0 ? "#e85a7a" : "rgba(200,184,144,0.7)" }}>
+                      {signed(net)}
+                    </span>
                   </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <div data-net className="font-pixel-display text-[12px] tabular-nums leading-none" style={{ color: net > 0 ? "#9bd14f" : net < 0 ? "#e85a7a" : "rgba(200,184,144,0.7)" }}>
-                    {signed(net)}
+                  {/* Wraps rather than running under the net when there's a lot to say. */}
+                  <div className="font-pixel-body text-[18px] leading-tight mt-1 text-bone/70">
+                    <span className="whitespace-nowrap">{p.rounds ?? 0} played</span> · <span className="whitespace-nowrap">{p.won ?? 0} won</span>
+                    {p.rebuys > 0 && (
+                      <>
+                        {" · "}
+                        <span className="whitespace-nowrap">{`${p.rebuys} rebuy${p.rebuys === 1 ? "" : "s"}`}</span>
+                      </>
+                    )}
                   </div>
-                  <div className="font-pixel-body text-[18px] leading-none mt-1 text-glow-gold tabular-nums">{fmt(p.bankroll)}</div>
                 </div>
               </li>
             );

@@ -20,7 +20,6 @@ import { socket, connectSocket } from "../../utils/socket";
 import { seatAvatar } from "../../utils/avatarConstants";
 import GameChat from "../../components/thirteen/GameChat";
 import { TableHeader, TableSidebar, ConnectionSignal } from "../../components/TableChrome";
-import { HandReward } from "../../components/RewardPanel";
 import Modal from "../../components/credits/Modal";
 import HalfMoonTable from "../../components/blackjack/HalfMoonTable";
 import BetBar from "../../components/blackjack/BetBar";
@@ -140,7 +139,6 @@ function OnlineBlackjack({ lobbyId, playerName }) {
 
   if (!shown) return <Joining fatal={fatal} />;
   return (
-    <>
       <BlackjackScreen
         view={shown}
         motion={motion}
@@ -151,13 +149,9 @@ function OnlineBlackjack({ lobbyId, playerName }) {
         setMessages={setMessages}
         warning={rejection}
         reward={roundReward}
+        handReward={revealed ? handReward : null}
+        onHandRewardDone={clearHandReward}
       />
-      {handReward && revealed && (
-        <div className="fixed left-1/2 -translate-x-1/2 z-40" style={{ bottom: "32%" }}>
-          <HandReward key={`${handReward.expAfter}`} reward={handReward} onDone={clearHandReward} />
-        </div>
-      )}
-    </>
   );
 }
 
@@ -227,7 +221,8 @@ function useBlackjackLog(view, setMessages) {
   }, [view, setMessages]);
 }
 
-function BlackjackScreen({ view, motion, lobbyId, chatLimit, actions, messages, setMessages, warning, reward }) {
+/** handReward: what this round paid you, floating up from your plate until onHandRewardDone. */
+function BlackjackScreen({ view, motion, lobbyId, chatLimit, actions, messages, setMessages, warning, reward, handReward, onHandRewardDone }) {
   const { identity } = useAuth();
   const { compact, narrow } = useTableMetrics();
   const { connected, ping } = useServerStats({ enabled: true });
@@ -276,7 +271,16 @@ function BlackjackScreen({ view, motion, lobbyId, chatLimit, actions, messages, 
       <div className="relative flex-1 grid min-h-0" style={{ gridTemplateColumns: compact ? "minmax(0, 1fr)" : "minmax(0, 1fr) 300px" }}>
         <div className="relative flex flex-col min-h-0">
           <div className={`relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${narrow ? "px-4 pt-3 pb-2" : "px-4 pt-4 pb-3"}`}>
-            <HalfMoonTable view={view} motion={motion} mySeat={mySeat} onSit={actions.sit} layout={narrow ? "compact" : "full"} faceFor={faceFor} />
+            <HalfMoonTable
+              view={view}
+              motion={motion}
+              mySeat={mySeat}
+              onSit={actions.sit}
+              layout={narrow ? "compact" : "full"}
+              faceFor={faceFor}
+              reward={handReward}
+              onRewardDone={onHandRewardDone}
+            />
           </div>
           <div className="relative flex flex-col gap-2 px-4 py-3" style={{ backgroundColor: "#14102a", borderTop: "4px solid #0a0712" }}>
             {warning && (

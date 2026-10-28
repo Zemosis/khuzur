@@ -255,6 +255,9 @@ describe("blackjack table online", () => {
 
     serverSends("progress_reward", { xp: 6, gold: 8, levelBefore: 3, levelAfter: 3, expAfter: 100 });
     expect(screen.getByText("+6 XP · +8 GOLD")).toBeInTheDocument();
+    // It rises from your own plate (seat 0), not the middle of the table.
+    expect(document.querySelector('[data-plate="0"]')).toHaveTextContent("+6 XP · +8 GOLD");
+    expect(document.querySelector('[data-plate="1"]')).not.toHaveTextContent("XP");
   });
 
   it("logs dealer and player events as plain lines", async () => {

@@ -8,6 +8,11 @@ The hall is in early access, so versions are 0.x: the middle number moves
 for a new game or a big new system, the last for everything else. 1.0.0 is
 the first stable release.
 
+## 0.6.1 — 28 October 2026
+
+- **Your XP and gold rise from your own seat** at the Blackjack table, not the middle of the felt, so nobody else at the table takes them for theirs.
+- **The Blackjack scoreboard no longer runs together:** each player's net sits beside their name, and the rounds played, won and rebought wrap underneath instead of running into it.
+
 ## 0.6.0 — 28 October 2026
 
 ### Blackjack is here
