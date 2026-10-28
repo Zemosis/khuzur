@@ -42,7 +42,7 @@ export default function BalancePanel({ credits, isGuest, error, onSignIn, onClai
             <div className="flex items-baseline gap-2 min-w-0">
               <span className="font-pixel-display text-[18px] text-glow-gold tabular-nums">{fmt(credits.balance)}</span>
               <span className="font-pixel-body text-[20px] text-bone truncate">
-                credits{credits.seat ? ` + ${fmt(credits.onTable)} at ${credits.seat.tableName}` : ""}
+                credits{credits.seat && credits.onTable > 0 ? ` + ${fmt(credits.onTable)} at ${credits.seat.tableName}` : ""}
               </span>
             </div>
             {credits.rejoin && (

@@ -2,7 +2,7 @@
 // CLAIM, credit tables only, hosting with a tier, and the buy-in panel.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act, within } from "@testing-library/react";
+import { render, screen, act, within, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import LobbyPoker from "../../src/pages/poker/LobbyPoker";
@@ -206,5 +206,13 @@ describe("an invite link to a credit table", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Max" }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Sit with 1,000" }));
     expect(emitted("join_lobby").at(-1)).toEqual({ lobbyId: "FRN123", playerName: "ANN #0001", buyIn: 1000 });
+  });
+
+  it("shows what's at the table only when something is", async () => {
+    await openCredits({ ...ME, seat: { tableName: "The House" }, onTable: 0 });
+    expect(screen.queryByText(/at The House/)).not.toBeInTheDocument();
+    cleanup();
+    await openCredits({ ...ME, seat: { tableName: "The House" }, onTable: 500 });
+    expect(screen.getByText(/\+ 500 at The House/)).toBeInTheDocument();
   });
 });
