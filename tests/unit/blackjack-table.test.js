@@ -8,7 +8,7 @@ import { BlackjackTable, DEFAULT_BLACKJACK_DELAYS, SKIPS_BEFORE_KICK } from "../
 import { PHASES, insure as engineInsure, setBankroll as engineSetBankroll } from "../../src/utils/blackjack/engine.js";
 import { riggedShoe } from "../helpers/blackjack.js";
 
-const DELAYS = { betting: 100, insurance: 50, turn: 50, deal: 10, dealerStep: 5, results: 20, saveRetry: 10, slowSave: 15 };
+const DELAYS = { betting: 100, insurance: 50, turn: 50, deal: 10, shuffle: 10, dealerStep: 5, results: 20, saveRetry: 10, slowSave: 15 };
 
 let table;
 let rounds;
@@ -57,6 +57,7 @@ describe("blackjack table", () => {
       insurance: 8_000,
       turn: 15_000,
       deal: 2_500,
+      shuffle: 2_000,
       dealerStep: 800,
       results: 5_000,
       saveRetry: 3_000,
@@ -92,6 +93,28 @@ describe("blackjack table", () => {
     expect(table.state.seats[1].inRound).toBe(false); // B didn't bet: sits the round out
     expect(table.state.seats[1].skipped).toBe(1);
     expect(table.dealMsLeft()).toBe(0);
+  });
+
+  it("a deal from a new shoe pauses longer, while the shoe is shuffled", () => {
+    // The first turn's clock starts once the cards are round: on a shoe
+    // already in play, it runs out a deal pause and a turn later.
+    make("10♠ 9♥ 7♣ 8♦");
+    table.sit(player("A"));
+    table.bet(0, 100);
+    table.ready(0);
+    vi.advanceTimersByTime(DELAYS.deal + DELAYS.turn);
+    expect(table.state.phase).toBe(PHASES.DEALER); // A's hand stood when the clock ran out
+
+    make(undefined, { rng: () => 0.5 }); // no shoe yet: the first deal shuffles one
+    table.sit(player("A"));
+    table.bet(0, 100);
+    table.ready(0);
+    expect(table.state.events.some((e) => e.type === "shuffle")).toBe(true);
+    expect(table.state.phase).toBe(PHASES.TURNS);
+    vi.advanceTimersByTime(DELAYS.deal + DELAYS.turn);
+    expect(table.state.phase).toBe(PHASES.TURNS);
+    vi.advanceTimersByTime(DELAYS.shuffle);
+    expect(table.state.phase).toBe(PHASES.DEALER);
   });
 
   it("closes betting early once everyone with a bet is READY", () => {

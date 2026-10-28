@@ -47,7 +47,7 @@ const middle = (el) => {
 const pileOf = (el, pile) => el?.closest("[data-poker-table]")?.querySelector(`[data-${pile}]`) ?? null;
 
 /** Runs `tl` to its end if animation frames stop (it would stall), and when it's over anyway. */
-function finishOnTime(tl) {
+export function finishOnTime(tl) {
   if (typeof document !== "undefined" && document.hidden) tl.progress(1);
   const timer = setTimeout(() => tl.progress(1), (tl.duration() + 0.5) * 1000);
   return () => clearTimeout(timer);
@@ -57,7 +57,7 @@ function finishOnTime(tl) {
  * Two riffles of the deck's layers (data-deck-layer) on `tl` from time `t`,
  * then a tap to square it up. Returns when the deck is ready to deal.
  */
-function riffle(tl, deck, t) {
+export function riffle(tl, deck, t) {
   const layers = [...deck.querySelectorAll("[data-deck-layer]")];
   if (layers.length < 2) return t;
   const half = Math.ceil(layers.length / 2);

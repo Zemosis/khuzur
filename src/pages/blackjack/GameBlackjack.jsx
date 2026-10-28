@@ -3,11 +3,13 @@
 // your controls in a bar under it (the bet bar while betting, the action bar
 // once the cards are out), and the sidebar's chat and round log.
 //
-// Every state is drawn as it arrives: the server paces the deal and the
-// dealer. A credit table is told by `view.credit`; leaving one lands on the
-// lobby's CREDITS tab.
+// Every state is drawn as it arrives (the server paces the deal and the
+// dealer), but a round's results wait for its last cards to land on the
+// table: until then the settled round shows as the dealer still playing
+// (useResultHold). A credit table is told by `view.credit`; leaving one
+// lands on the lobby's CREDITS tab.
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useServerStats } from "../../hooks/useServerStats";
@@ -23,8 +25,10 @@ import Modal from "../../components/credits/Modal";
 import HalfMoonTable from "../../components/blackjack/HalfMoonTable";
 import BetBar from "../../components/blackjack/BetBar";
 import ActionBar from "../../components/blackjack/ActionBar";
+import BlackjackScoreBoard from "../../components/blackjack/BlackjackScoreBoard";
 import { PHASES } from "../../utils/blackjack/engine";
 import { eventEntry, withContext } from "../../utils/blackjack/log";
+import { beforeResults } from "../../components/blackjack/tableInfo";
 
 const AVATAR_COLOR = { 1: "#f4c430", 2: "#5fd4d6", 3: "#e85a7a", 4: "#9bd14f", 5: "#c5a8ff", custom: "#ead8b1" };
 const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -111,6 +115,10 @@ function OnlineBlackjack({ lobbyId, playerName }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lobbyId]);
 
+  // When the table's moves under way end (performance.now ms): written by the table.
+  const motion = useRef({ busyUntil: 0 });
+  const [shown, revealed] = useResultHold(view, motion);
+
   const emit = (event, extra = {}) => socket.emit(event, { lobbyId, ...extra });
   const actions = {
     sit: (seat) => emit("bj_sit", { seat }),
@@ -130,17 +138,49 @@ function OnlineBlackjack({ lobbyId, playerName }) {
     sendChat: (text) => text.trim() && emit("send_chat", { message: text.trim() }),
   };
 
-  if (!view) return <Joining fatal={fatal} />;
+  if (!shown) return <Joining fatal={fatal} />;
   return (
     <>
-      <BlackjackScreen view={view} lobbyId={lobbyId} chatLimit={chatLimit} actions={actions} messages={messages} setMessages={setMessages} warning={rejection} reward={roundReward} />
-      {handReward && (
+      <BlackjackScreen
+        view={shown}
+        motion={motion}
+        lobbyId={lobbyId}
+        chatLimit={chatLimit}
+        actions={actions}
+        messages={messages}
+        setMessages={setMessages}
+        warning={rejection}
+        reward={roundReward}
+      />
+      {handReward && revealed && (
         <div className="fixed left-1/2 -translate-x-1/2 z-40" style={{ bottom: "32%" }}>
           <HandReward key={`${handReward.expAfter}`} reward={handReward} onDone={clearHandReward} />
         </div>
       )}
     </>
   );
+}
+
+const RESULT_BEAT_MS = 600; // after the last card lands, before the results show
+
+/**
+ * The view to draw: a settled round shows as before it settled (no results,
+ * old balances) until the table's last cards have landed and a beat has
+ * passed. Returns [view to draw, whether this round's results show].
+ */
+function useResultHold(view, motion) {
+  const [revealedRound, setRevealedRound] = useState(null);
+  const holding = view?.phase === PHASES.ROUND_OVER && revealedRound !== view.roundNumber;
+  const round = view?.roundNumber;
+  useEffect(() => {
+    if (!holding) return;
+    // Runs after the table has drawn the held view and planned its moves.
+    const wait = Math.max(0, motion.current.busyUntil - performance.now()) + RESULT_BEAT_MS;
+    const timer = setTimeout(() => setRevealedRound(round), wait);
+    return () => clearTimeout(timer);
+  }, [holding, round, motion]);
+  const shown = useMemo(() => (holding ? beforeResults(view) : view), [holding, view]);
+  return [shown, !holding];
 }
 
 function Joining({ fatal }) {
@@ -187,7 +227,7 @@ function useBlackjackLog(view, setMessages) {
   }, [view, setMessages]);
 }
 
-function BlackjackScreen({ view, lobbyId, chatLimit, actions, messages, setMessages, warning, reward }) {
+function BlackjackScreen({ view, motion, lobbyId, chatLimit, actions, messages, setMessages, warning, reward }) {
   const { identity } = useAuth();
   const { compact, narrow } = useTableMetrics();
   const { connected, ping } = useServerStats({ enabled: true });
@@ -236,7 +276,7 @@ function BlackjackScreen({ view, lobbyId, chatLimit, actions, messages, setMessa
       <div className="relative flex-1 grid min-h-0" style={{ gridTemplateColumns: compact ? "minmax(0, 1fr)" : "minmax(0, 1fr) 300px" }}>
         <div className="relative flex flex-col min-h-0">
           <div className={`relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${narrow ? "px-4 pt-3 pb-2" : "px-4 pt-4 pb-3"}`}>
-            <HalfMoonTable view={view} mySeat={mySeat} onSit={actions.sit} layout={narrow ? "compact" : "full"} faceFor={faceFor} />
+            <HalfMoonTable view={view} motion={motion} mySeat={mySeat} onSit={actions.sit} layout={narrow ? "compact" : "full"} faceFor={faceFor} />
           </div>
           <div className="relative flex flex-col gap-2 px-4 py-3" style={{ backgroundColor: "#14102a", borderTop: "4px solid #0a0712" }}>
             {warning && (
@@ -266,6 +306,7 @@ function BlackjackScreen({ view, lobbyId, chatLimit, actions, messages, setMessa
         </div>
 
         <TableSidebar compact={compact} open={panelOpen} onClose={closePanel}>
+          <BlackjackScoreBoard seats={view.seats} turn={view.phase === PHASES.TURNS ? (view.turn?.seat ?? null) : null} mySeat={mySeat} faceFor={faceFor} />
           <GameChat messages={messages} onSendMessage={actions.sendChat} avatarFor={avatarFor} colorFor={colorFor} {...chatLimit} />
         </TableSidebar>
       </div>

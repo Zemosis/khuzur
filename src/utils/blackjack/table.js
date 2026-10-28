@@ -54,6 +54,7 @@ export const DEFAULT_BLACKJACK_DELAYS = {
   insurance: 8_000, // everyone answers insurance
   turn: 15_000, // each decision on a hand
   deal: 2_500, // the cards go round before the first clock starts
+  shuffle: 2_000, // more of it when a new shoe is shuffled first
   dealerStep: 800, // between the dealer's cards
   results: 5_000, // the results show, then betting reopens
   saveRetry: 3_000, // a failed save (credit tables) is tried again after this
@@ -361,7 +362,8 @@ export class BlackjackTable {
   /** The cards come out, unless every bet was refused: then betting reopens, or the table closes. */
   dealOn(s) {
     const next = deal(s, this.rng);
-    if (next.phase !== PHASES.BETTING) this.dealEndsAt = Date.now() + this.delays.deal;
+    const shuffled = next.events.some((e) => e.type === "shuffle");
+    if (next.phase !== PHASES.BETTING) this.dealEndsAt = Date.now() + this.delays.deal + (shuffled ? this.delays.shuffle : 0);
     if (this.closing && next.phase === PHASES.BETTING) {
       this.apply(clearRound(next));
       return this.finishClose();

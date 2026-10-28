@@ -2,6 +2,7 @@
 // centred on the top edge of its (relative) parent, holds, then shrinks into
 // `targetRef` (a status chip, which takes over from it) or, with no target,
 // floats up and fades. Key it by the decision so each one plays once.
+// `delay` (ms) holds it back, hidden, before it pops.
 
 import React, { useLayoutEffect, useRef } from "react";
 import gsap from "gsap";
@@ -9,7 +10,7 @@ import { reducedMotion } from "../utils/motion";
 
 const CALLOUT_HOLD = 0.45; // seconds the callout rests before it shrinks away
 
-function Callout({ label, bg, fg = "#1a1024", targetRef, onDone }) {
+function Callout({ label, bg, fg = "#1a1024", targetRef, delay = 0, onDone }) {
   const bubbleRef = useRef(null);
 
   // Mounted once per decision (keyed by its id), so onDone never changes.
@@ -17,7 +18,7 @@ function Callout({ label, bg, fg = "#1a1024", targetRef, onDone }) {
     const el = bubbleRef.current;
     if (!el) return;
     if (reducedMotion()) {
-      const timer = setTimeout(onDone, 900);
+      const timer = setTimeout(onDone, delay + 900);
       return () => clearTimeout(timer);
     }
     // Measured when the flight starts, from the bubble's resting place.
@@ -32,7 +33,7 @@ function Callout({ label, bg, fg = "#1a1024", targetRef, onDone }) {
       };
     };
     let flight = null;
-    const tl = gsap.timeline({ onComplete: onDone });
+    const tl = gsap.timeline({ delay: delay / 1000, onComplete: onDone });
     tl.fromTo(el, { scale: 0.2, y: 14, autoAlpha: 0 }, { scale: 1, y: 0, autoAlpha: 1, duration: 0.3, ease: "back.out(2.4)" })
       .to(el, { rotation: -4, duration: 0.08, yoyo: true, repeat: 3, ease: "none" })
       .to(el, { rotation: 0, duration: 0.04 })

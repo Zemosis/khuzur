@@ -19,7 +19,7 @@ const envMs = (name, fallback) => {
 
 // The test suite sets every pause to BLACKJACK_DELAY_MS, and the turn and
 // insurance clocks to BLACKJACK_TURN_MS. The betting window keeps its length.
-const PAUSES = ["deal", "dealerStep", "results", "saveRetry"];
+const PAUSES = ["deal", "shuffle", "dealerStep", "results", "saveRetry"];
 export const BLACKJACK_DELAYS = {
   ...DEFAULT_BLACKJACK_DELAYS,
   ...(process.env.BLACKJACK_DELAY_MS ? Object.fromEntries(PAUSES.map((k) => [k, envMs("BLACKJACK_DELAY_MS", DEFAULT_BLACKJACK_DELAYS[k])])) : {}),

@@ -417,4 +417,33 @@ describe("blackjack engine", () => {
     expect(s.seats[0]).toBeNull();
     expect(s.seats[3]).toMatchObject({ name: "P0", bet: 0, ready: false });
   });
+
+  it("keeps each seat's record since sitting down: net, rounds played, rounds won", () => {
+    // Round 1: P0 18 beats the dealer's 17 (+100); P2 15 loses to it (-200).
+    let s = dealerOut(E.act(E.act(play("10♠ 10♣ 10♦ 8♠ 5♣ 7♥", { 0: 100, 2: 200 }), 0, "STAND"), 2, "STAND"));
+    expect(s.seats[0]).toMatchObject({ net: 100, rounds: 1, won: 1 });
+    expect(s.seats[2]).toMatchObject({ net: -200, rounds: 1, won: 0 });
+
+    // Round 2 on, carrying the record: P0 is insured against a dealer blackjack and breaks even.
+    s = E.openBetting(E.clearRound(s));
+    s = { ...s, shoe: riggedShoe("10♠ A♣ 9♥ K♣"), dealt: 0 };
+    s = E.deal(E.closeBetting(E.setReady(E.placeBet(s, 0, 100), 0)));
+    s = E.closeInsurance(E.insure(s, 0, true));
+    expect(s.seats[0]).toMatchObject({ net: 100, rounds: 2, won: 1 });
+    expect(s.seats[2]).toMatchObject({ net: -200, rounds: 1 }); // sat this one out
+  });
+
+  it("counts the record at a credit table too, where settling leaves the bankroll alone", () => {
+    // A blackjack against the dealer's 17 pays 150.
+    const s = dealerOut(play("A♠ 10♣ K♠ 7♥", { 0: 100 }, { credit: true, bankrolls: { 0: 500 } }));
+    expect(s.seats[0]).toMatchObject({ net: 150, rounds: 1, won: 1, bankroll: 400 });
+  });
+
+  it("a rebuy tops up the chips but keeps the record: the loss stays in the net", () => {
+    // P0 bets everything on 15 against the dealer's 17 and loses it.
+    let s = dealerOut(E.act(play("10♠ 10♦ 5♣ 7♥", { 0: 1000 }), 0, "STAND"));
+    expect(s.seats[0]).toMatchObject({ bankroll: 0, net: -1000, rounds: 1, rebuys: 0 });
+    s = E.rebuy(E.openBetting(E.clearRound(s)), 0);
+    expect(s.seats[0]).toMatchObject({ bankroll: 1000, net: -1000, rounds: 1, rebuys: 1 });
+  });
 });

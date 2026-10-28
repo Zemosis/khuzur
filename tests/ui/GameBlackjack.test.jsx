@@ -1,7 +1,7 @@
 // The blackjack table page: real engine states go through the engine's own
 // view function, as the server sends them, and the page answers with bj_ events.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
@@ -91,9 +91,13 @@ const open = async () => {
 const button = (name) => screen.getByRole("button", { name });
 
 beforeEach(() => fakeSocket.emit.mockClear());
+afterEach(() => vi.useRealTimers());
+
+/** A settled round's results wait for its last cards to land on the table: let them (under fake timers). */
+const resultsLand = () => act(() => vi.advanceTimersByTimeAsync(10_000));
 
 describe("blackjack table online", () => {
-  it("draws five seats with seat 0 at the right, and SIT on empty seats while betting", async () => {
+  it("draws five seats with seat 0 at the right, plates on the rim, and SIT on empty seats while betting", async () => {
     await open();
     expect(emitted("join_lobby")).toEqual([{ lobbyId: LOBBY, playerName: "ME #0003" }]);
     expect(emitted("check_game_status")).toEqual([{ lobbyId: LOBBY }]);
@@ -104,13 +108,17 @@ describe("blackjack table online", () => {
     const left = seats.map((el) => parseFloat(el.style.left));
     // Seat 0 (first base) is furthest right, and play goes right to left.
     for (let i = 1; i < 5; i++) expect(left[i]).toBeLessThan(left[i - 1]);
-    expect(seats[0]).toHaveTextContent("ME");
-    expect(seats[1]).toHaveTextContent("ANN");
+    // Each seat's plate sits on the rim, in the same order.
+    const plates = [...document.querySelectorAll("[data-plate]")];
+    const plateLeft = plates.map((el) => parseFloat(el.style.left));
+    for (let i = 1; i < 5; i++) expect(plateLeft[i]).toBeLessThan(plateLeft[i - 1]);
+    expect(plates[0]).toHaveTextContent("ME");
+    expect(plates[1]).toHaveTextContent("ANN");
 
     const sits = screen.getAllByRole("button", { name: "SIT" });
     expect(sits).toHaveLength(3);
     sits.forEach((b) => expect(b).toBeEnabled());
-    await userEvent.click(within(seats[3]).getByRole("button", { name: "SIT" }));
+    await userEvent.click(within(plates[3]).getByRole("button", { name: "SIT" }));
     expect(emitted("bj_sit")).toEqual([{ lobbyId: LOBBY, seat: 3 }]);
 
     // With a bet down you stay put; mid-round nobody moves.
@@ -120,7 +128,7 @@ describe("blackjack table online", () => {
     screen.getAllByRole("button", { name: "SIT" }).forEach((b) => expect(b).toBeDisabled());
   });
 
-  it("chips add to the bet, CLEAR resets, REBET repeats, x2 doubles; DEAL emits bj_bet then bj_ready", async () => {
+  it("chips add to the bet, CLEAR resets, REBET repeats; DEAL emits bj_bet then bj_ready", async () => {
     await open();
     let s = openBetting(table([1000, 1000]));
     s = { ...s, seats: s.seats.map((p, i) => (i === 0 ? { ...p, lastBet: 200 } : p)) };
@@ -132,8 +140,7 @@ describe("blackjack table online", () => {
     await userEvent.click(button("100"));
     await userEvent.click(button("50"));
     expect(box).toHaveValue("150");
-    await userEvent.click(button("x2"));
-    expect(box).toHaveValue("300");
+    expect(screen.queryByRole("button", { name: "x2" })).not.toBeInTheDocument();
     await userEvent.click(button("CLEAR"));
     expect(box).toHaveValue("");
     await userEvent.click(button("REBET"));
@@ -227,6 +234,7 @@ describe("blackjack table online", () => {
   });
 
   it("result tags: +250 BLACKJACK in gold, -100 in rose, PUSH", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     await open();
     // You: A K, a blackjack on 167 (pays 250). ANN 17 and BOB 18 against the dealer's 18.
     let s = dealtWith(table([1000, 1000, 1000], { shoe: "A♠ 10♦ 10♣ 10♥ K♥ 7♣ 8♦ 8♠" }), { 0: 167, 1: 100, 2: 100 });
@@ -234,10 +242,14 @@ describe("blackjack table online", () => {
     s = dealerStep(dealerStep(s));
     expect(s.phase).toBe("ROUND_OVER");
     serverSends("blackjack_state", view(s, { phaseMsLeft: null }));
+    // Held until the cards have landed: no result yet.
+    expect(screen.queryByText("BLACKJACK +250")).not.toBeInTheDocument();
+    expect(screen.queryByText("YOU WON 250")).not.toBeInTheDocument();
+    await resultsLand();
 
     const bj = screen.getByText("BLACKJACK +250");
     expect(bj).toHaveStyle({ backgroundColor: "#f4c430" });
-    expect(screen.getByText("-100")).toHaveStyle({ backgroundColor: "#e85a7a" });
+    expect(screen.getByText("-100", { selector: "[data-result]" })).toHaveStyle({ backgroundColor: "#e85a7a" });
     expect(screen.getByText("PUSH", { selector: "[data-result]" })).toHaveStyle({ backgroundColor: "#463a78" });
     expect(screen.getByText("YOU WON 250")).toBeInTheDocument();
 
@@ -246,6 +258,7 @@ describe("blackjack table online", () => {
   });
 
   it("logs dealer and player events as plain lines", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     await open();
     // You stand on 19; ANN doubles on 11 for 21; the dealer's 16 draws a 9 and busts.
     const start = table([1000, 1000], { shoe: "10♠ 6♦ 10♣ 9♥ 5♣ 6♥ 10♦ 9♠" });
@@ -265,6 +278,7 @@ describe("blackjack table online", () => {
     s = dealerStep(s);
     serverSends("blackjack_state", view(s));
     expect(s.phase).toBe("ROUND_OVER");
+    await resultsLand();
 
     // jsdom's window is a compact layout: the sidebar is a drawer to open first.
     await userEvent.click(screen.getByRole("button", { name: /^Scoreboard and chat/ }));
@@ -349,5 +363,44 @@ describe("blackjack table online", () => {
     await userEvent.click(button("DEAL"));
     expect(emitted("bj_bet").map((d) => d.amount)).toEqual([250]);
     expect(emitted("bj_ready")).toHaveLength(1);
+  });
+
+  it("what a player does pops over their plate, and new cards land in the hand", async () => {
+    await open();
+    // ANN hits 10 6 and gets a 3.
+    let s = dealtWith(table([1000, 1000], { shoe: "9♠ 10♣ K♥ 7♦ 6♣ 8♠ 3♦" }), { 0: 100, 1: 100 });
+    s = play(s, 0, "STAND");
+    serverSends("blackjack_state", view(s));
+    s = play(s, 1, "HIT");
+    serverSends("blackjack_state", view(s));
+
+    const plates = [...document.querySelectorAll("[data-plate]")];
+    expect(plates[1]).toHaveTextContent("HIT");
+    const cardIds = [...screen.getByLabelText("ANN's cards").querySelectorAll("[data-bj-card]")].map((el) => el.dataset.bjCard);
+    expect(cardIds).toEqual(["10♣.0", "6♣.0", "3♦.0"]);
+  });
+
+  it("the scoreboard ranks everyone by their net since sitting down", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await open();
+    // You stand on 19 and win 100; ANN stands on 15 and loses 200, against the dealer's 17.
+    let s = dealtWith(table([1000, 1000], { shoe: "10♠ 10♣ 10♦ 9♠ 5♣ 7♥" }), { 0: 100, 1: 200 });
+    s = dealerStep(dealerStep(play(play(s, 0, "STAND"), 1, "STAND")));
+    serverSends("blackjack_state", view(s, { phaseMsLeft: null }));
+    await resultsLand();
+
+    // In the sidebar (a closed drawer at this width).
+    const rows = [...document.querySelectorAll('[aria-label="Scoreboard"] li')];
+    expect(rows.map((r) => [r.textContent.match(/ME|ANN/)[0], r.querySelector("[data-net]").textContent])).toEqual([
+      ["ME", "+100"],
+      ["ANN", "-200"],
+    ]);
+    expect(rows[0]).toHaveTextContent("1 played · 1 won");
+    expect(rows[0]).not.toHaveTextContent("rebuy");
+    expect(rows[0].querySelector('[aria-label="You"]')).not.toBeNull();
+
+    // Rebuys show once there are any.
+    serverSends("blackjack_state", view({ ...s, seats: s.seats.map((p, i) => (i === 1 ? { ...p, rebuys: 2 } : p)) }, { phaseMsLeft: null }));
+    expect(document.querySelectorAll('[aria-label="Scoreboard"] li')[1]).toHaveTextContent("1 played · 0 won · 2 rebuys");
   });
 });

@@ -539,7 +539,12 @@ export default function GameLobby({ game }) {
         className="flex-1 min-h-0 w-full flex flex-col lg:grid lg:grid-cols-[clamp(380px,24vw,480px)_minmax(0,1fr)] overflow-y-auto"
         style={{ padding: "var(--gap)", gap: "var(--gap)" }}
       >
-        <div className="grid shrink-0 lg:grid-rows-[auto_repeat(3,minmax(min-content,1fr))]" style={{ gap: "var(--gap)" }}>
+        {/* Free: the three panels share the height. Credits: the balance and the (taller) host
+            panel take what they need and the join panel the rest, so it all fits on one screen. */}
+        <div
+          className={`grid shrink-0 ${credit ? "lg:grid-rows-[auto_auto_auto_minmax(min-content,1fr)]" : "lg:grid-rows-[auto_repeat(3,minmax(min-content,1fr))]"}`}
+          style={{ gap: "var(--gap)" }}
+        >
           <AdventurerCard game={game} onSignIn={() => setShowLogin(true)} />
           {credit ? (
             <>

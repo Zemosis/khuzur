@@ -7,11 +7,14 @@ page lists them all. Write for players.
 ## 2.0.0 — 28 October 2026
 
 ### Blackjack is here
-- **The hall's fourth game.** Pick **BLACKJACK** on the main menu. You play against the dealer, not each other, at a casino half-moon table with five seats along the curve.
-- **Meet the Hooded House.** The dealer sits in a gold frame above the felt, a faceless figure in a purple hood with two gold eyes. It calls the round as it goes: PLACE YOUR BETS, INSURANCE?, DEALER BUSTS.
+- **The hall's fourth game.** Pick **BLACKJACK** on the main menu. You play against the dealer, not each other, at a casino half-moon table: five players sit just outside its rim, each with a betting circle on the felt in front of them.
+- **Meet the Hooded House.** The dealer sits in a gold frame above the felt, a faceless figure in a purple hood with two gold eyes. It calls the round as it goes: PLACE YOUR BETS, the card it shows, its hole card, each card it draws, DEALER BUSTS.
+- **Watch every card come out of the shoe.** A new shoe is shuffled on the felt, then the cards are dealt round one by one, flying out face down and turning over as they land. The dealer's hole card flips when it's revealed, and at the end of the round the cards are swept into the discard tray.
+- **See what everyone does.** BET, READY, HIT, STAND, DOUBLE, SPLIT, BUST and BLACKJACK! pop up over each player as it happens. Chips drop into the circle as you bet. Results show only once the dealer's last card has landed: then lost bets go to the dealer and winnings fly onto your bet. An arrow bobs over the hand being played.
+- **A scoreboard beside the table** ranks everyone by what they've won or lost since sitting down, with the rounds they've played and won, how often they've rebought, and their balance. A rebuy tops up your chips but your losses still count.
 - **Free and credit tables.** Free tables seat you with 1,000 play chips, and **REBUY** tops you back up when you run low. Credit tables play for real credits and need a linked Google or Discord login, like the rest of credit play.
 - **Play with friends or alone.** Host a public or private table for up to 5 players, or join one with its code or invite link. **PLAY ALONE** makes a private table and seats you in one click, and friends can still join with its code.
-- **Bet from your balance, with no limit.** There's no buy-in and no table maximum: bet anything from 10 up to everything you have. Chip buttons from 10 to 5K, an exact-amount box, CLEAR, REBET, x2, then **DEAL**.
+- **Bet from your balance, with no limit.** There's no buy-in and no table maximum: bet anything from 10 up to everything you have. Chip buttons from 10 to 5K, an exact-amount box, CLEAR, REBET, then **DEAL**.
 - **Standard casino rules.** Blackjack pays 3 to 2, and the dealer stands on all 17s. When the dealer shows an Ace you can take **insurance**, which pays 2 to 1. **Double** on any first two cards, even after a split, and **split** any pair up to 4 hands. The rulebook has a Blackjack page with the rest.
 - **Every round pays XP and gold,** like a poker hand: 4 XP and 3 gold, or 6 XP and 8 gold when you come out ahead, at most one round every 30 seconds. Playing alone counts.
 - Miss 5 betting rounds in a row and you're stood up from the table. Leave in the middle of a round and your hands stand; at a credit table your winnings still reach your balance.
@@ -20,6 +23,9 @@ page lists them all. Write for players.
 - **A Blackjack tab on your profile,** split into free and credits: rounds, win rate, blackjacks, biggest win and net result.
 - **Each table you played at is a match** in your history. Its page shows your rounds in order, your hands next to the dealer's and how each one ended.
 - **The leaderboard has a Blackjack column,** so every player's credits still add up game by game.
+
+### Also
+- **The CREDITS tab fits on one screen** in every game's lobby, like the FREE tab: your balance and CLAIM now share a row, and the panels only take the room they need.
 
 ## 1.4.2 — 27 October 2026
 

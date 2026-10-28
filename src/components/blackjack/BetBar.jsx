@@ -1,7 +1,8 @@
 // BET BAR — your controls in the betting window: chips that add to your bet,
-// a box for any amount, CLEAR, REBET (last round's bet), x2, and DEAL, which
-// sends the bet and says you're ready. Chips, CLEAR, REBET and x2 go to the
-// table at once; a typed amount goes on DEAL or blur, and while the box holds
+// a box for any amount, CLEAR, REBET (last round's bet), and DEAL, which
+// sends the bet and says you're ready. END TABLE (a host's, as children) sits
+// at the far right, after the clock. Chips, CLEAR and REBET go to the table
+// at once; a typed amount goes on DEAL or blur, and while the box holds
 // an amount the table can't take, the table's bet is cleared. A free table's seat below the minimum gets REBUY instead.
 
 import React, { useState } from "react";
@@ -37,7 +38,7 @@ export default function BetBar({ seat, credit = false, endsAt = null, onBet, onD
   const valid = (n) => Number.isInteger(n) && n >= MIN_BET && n <= bankroll;
   const broke = !credit && bankroll < MIN_BET;
 
-  // Chips, CLEAR, REBET and x2 go to the table at once (a bet it takes, or 0 to clear).
+  // Chips, CLEAR and REBET go to the table at once (a bet it takes, or 0 to clear).
   const change = (n) => {
     setAmount(n);
     if (n === 0 || valid(n)) onBet(n);
@@ -65,8 +66,8 @@ export default function BetBar({ seat, credit = false, endsAt = null, onBet, onD
         <button className={BTN} style={TONE.gold} onClick={onRebuy}>
           REBUY
         </button>
-        {children}
         <span className="ml-auto">{timer}</span>
+        {children}
       </div>
     );
   }
@@ -111,14 +112,11 @@ export default function BetBar({ seat, credit = false, endsAt = null, onBet, onD
       <button className={BTN} style={TONE.cyan} onClick={() => change(seat.lastBet)} disabled={!valid(seat.lastBet)}>
         REBET
       </button>
-      <button className={BTN} style={TONE.cyan} onClick={() => change(amount * 2)} disabled={!(amount > 0) || amount * 2 > bankroll}>
-        x2
-      </button>
       <button className={BTN} style={TONE.poison} onClick={() => onDeal(amount)} disabled={!valid(amount) || (seat.ready && seat.bet === amount)}>
         {seat.ready && seat.bet === amount ? "READY" : "DEAL"}
       </button>
-      {children}
       <span className="ml-auto">{timer}</span>
+      {children}
     </div>
   );
 }

@@ -28,23 +28,33 @@ export default function BalancePanel({ credits, isGuest, error, onSignIn, onClai
     >
       <div className="flex-1 flex flex-col justify-center gap-2.5 min-h-0" style={{ padding: "var(--pad)" }}>
         {isGuest ? (
-          <>
-            <p className="font-pixel-body text-[22px] text-bone leading-tight">Sign in to play for credits.</p>
-            <Btn tone={TONES.poison} onClick={onSignIn} className="w-full">
+          <div className="flex items-center gap-3">
+            <p className="flex-1 min-w-0 font-pixel-body text-[22px] text-bone leading-tight">Sign in to play for credits.</p>
+            <Btn tone={TONES.poison} onClick={onSignIn} className="px-4 shrink-0">
               Sign in
             </Btn>
-          </>
+          </div>
         ) : !credits ? (
           <p className="font-pixel-body text-[22px] text-bone">{error ? `Couldn't load your credits: ${error}` : "Loading your credits..."}</p>
         ) : (
           <>
             <RestartNotice notice={credits.notice} onDismiss={onDismissNotice} />
-            <div className="flex items-baseline gap-2 min-w-0">
-              <span className="font-pixel-display text-[18px] text-glow-gold tabular-nums">{fmt(credits.balance)}</span>
-              <span className="font-pixel-body text-[20px] text-bone truncate">
-                credits{credits.seat && credits.onTable > 0 ? ` + ${fmt(credits.onTable)} at ${credits.seat.tableName}` : ""}
-              </span>
+            {/* The balance, with CLAIM (or when it's next) beside it: one row, to keep the tab on one screen. */}
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="shrink-0 flex flex-col gap-1">
+                <span className="font-pixel-display text-[18px] leading-none text-glow-gold tabular-nums">{fmt(credits.balance)}</span>
+                <span className="font-pixel-body text-[20px] leading-none text-bone">credits</span>
+              </div>
+              {credits.canPlay && (
+                <div className="flex-1 min-w-0">
+                  {/* Keyed by the claim, so its countdown restarts from now whenever the claim changes. */}
+                  <ClaimButton key={credits.claim.nextAt ?? credits.claim.state} claim={credits.claim} onClaim={onClaim} busy={claiming} />
+                </div>
+              )}
             </div>
+            {credits.seat && credits.onTable > 0 && (
+              <p className="font-pixel-body text-[20px] leading-none text-bone truncate">{`+ ${fmt(credits.onTable)} at ${credits.seat.tableName}`}</p>
+            )}
             {credits.rejoin && (
               <div role="status" className="flex items-center gap-2.5">
                 <p className="flex-1 min-w-0 font-pixel-body text-[20px] leading-tight" style={{ color: "#f4c430" }}>
@@ -55,10 +65,7 @@ export default function BalancePanel({ credits, isGuest, error, onSignIn, onClai
                 </Btn>
               </div>
             )}
-            {credits.canPlay ? (
-              // Keyed by the claim, so its countdown restarts from now whenever the claim changes.
-              <ClaimButton key={credits.claim.nextAt ?? credits.claim.state} claim={credits.claim} onClaim={onClaim} busy={claiming} />
-            ) : (
+            {!credits.canPlay && (
               <div className="flex items-center gap-2.5">
                 <p className="flex-1 min-w-0 font-pixel-body text-[20px] leading-tight" style={{ color: "#e85a7a" }}>
                   {credits.whyNot}

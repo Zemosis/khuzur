@@ -117,6 +117,12 @@ export function sit(state, seat, { key = null, name, avatar = null, bankroll } =
     lastBet: 0,
     skipped: 0, // betting windows sat out in a row
     leaving: false,
+    // Since sitting down: what the rounds paid less what they staked (a rebuy
+    // doesn't change it), rounds played, rounds come out ahead, rebuys.
+    net: 0,
+    rounds: 0,
+    won: 0,
+    rebuys: 0,
     ...roundFields(),
   });
 }
@@ -153,7 +159,7 @@ export function rebuy(state, seat) {
   if (state.credit) throw new Error("Rebuy is only for free tables");
   if (p.inRound) throw new Error("Wait for the round to end");
   if (p.bankroll >= MIN_BET) throw new Error("You still have chips");
-  return patchSeat(state, seat, { bankroll: FREE_CHIPS });
+  return patchSeat(state, seat, { bankroll: FREE_CHIPS, rebuys: p.rebuys + 1 });
 }
 
 export function setBankroll(state, seat, amount) {
@@ -448,7 +454,9 @@ function settle(s) {
     const p = s.seats[seat];
     const hands = p.hands.map((h) => ({ ...h, ...settleHand(h, s.dealer.cards) }));
     const paid = hands.reduce((sum, h) => sum + h.payout, 0) + insurancePayout(s, p);
-    s = patchSeat(s, seat, { hands, ...(s.credit ? {} : { bankroll: p.bankroll + paid }) });
+    const net = paid - hands.reduce((sum, h) => sum + h.bet, 0) - (p.insurance || 0);
+    const record = { net: p.net + net, rounds: p.rounds + 1, won: p.won + (net > 0 ? 1 : 0) };
+    s = patchSeat(s, seat, { hands, ...record, ...(s.credit ? {} : { bankroll: p.bankroll + paid }) });
     for (const [h, hand] of hands.entries()) s = log(s, { type: "result", seat, hand: h, amount: hand.payout });
   }
   return { ...s, phase: PHASES.ROUND_OVER, turn: null };
