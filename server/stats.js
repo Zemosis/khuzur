@@ -252,14 +252,122 @@ async function withPoker(playerId, stakes, overall) {
   };
 }
 
-/** { stakes, overall, thirteen, muushig, poker } for one signed-in player; all but poker for `stakes` only. */
+const blackjackFigures = (r = {}) => {
+  const rounds = int(r.rounds_played);
+  return {
+    tables: int(r.tables),
+    rounds,
+    roundsWon: int(r.rounds_won),
+    winRate: rounds ? Math.round((int(r.rounds_won) / rounds) * 1000) / 10 : null,
+    blackjacks: int(r.blackjacks),
+    biggestWin: int(r.biggest_win),
+    net: int(r.net),
+    time: { totalSeconds: int(r.total_seconds), lastPlayedAt: r.last_played_at ?? null },
+  };
+};
+
+const BJ_SECONDS = "extract(epoch from (coalesce(gp.left_at, gs.finished_at) - coalesce(gp.joined_at, gs.started_at)))::integer";
+const BJ_PLAYED = "gs.game_type = 'blackjack' and gs.status = 'finished' and gp.player_id = $1 and coalesce((gp.stats ->> 'rounds_played')::int, 0) > 0";
+
+/**
+ * Blackjack figures from player_blackjack_stats, free and credit play apart:
+ * zeros for someone who hasn't played. Each also lists the latest tables
+ * played (each opens its table page).
+ */
+async function blackjackStatsFor(playerId) {
+  const [figures, tables] = await Promise.all([
+    pool.query("select * from player_blackjack_stats where player_id = $1", [playerId]),
+    pool.query(
+      `select gs.id, ${STAKES} as stakes, gs.credit_tier, gs.name as table_name, gs.finished_at, gp.final_score,
+              coalesce((gp.stats ->> 'rounds_played')::int, 0) as rounds, ${BJ_SECONDS} as seconds
+         from game_players gp
+         join game_sessions gs on gs.id = gp.session_id
+        where ${BJ_PLAYED}
+        order by gs.finished_at desc
+        limit $2`,
+      [playerId, RECENT * 2],
+    ),
+  ]);
+  const forStakes = (stakes) => ({
+    ...blackjackFigures(figures.rows.find((r) => r.stakes === stakes)),
+    recent: tables.rows
+      .filter((r) => r.stakes === stakes)
+      .slice(0, RECENT)
+      .map((r) => ({ id: r.id, tier: r.credit_tier, table: r.table_name, net: int(r.final_score), rounds: int(r.rounds), seconds: int(r.seconds), finishedAt: r.finished_at })),
+  });
+  return { free: forStakes("free"), credits: forStakes("credits") };
+}
+
+/**
+ * Overall, with the blackjack tables (for `stakes`) folded in, as withPoker
+ * does: recent matches, time played, the credit figures and a summary of its
+ * own. Wins, places and streaks stay as they are.
+ */
+async function withBlackjack(playerId, stakes, overall) {
+  const where = `${BJ_PLAYED} and ($2::text = 'all' or (gs.credit_tier is not null) = ($2::text = 'credits'))`;
+  const [summary, recent] = await Promise.all([
+    pool.query(
+      `select count(*) as tables,
+              coalesce(sum((gp.stats ->> 'rounds_played')::int), 0) as rounds,
+              coalesce(sum(gp.final_score), 0) as net,
+              coalesce(sum(${BJ_SECONDS}), 0) as seconds,
+              max(gs.finished_at) as last_played_at,
+              count(*) filter (where gs.credit_tier is not null) as credit_tables,
+              coalesce(sum(gp.final_score) filter (where gs.credit_tier is not null), 0) as credit_net,
+              coalesce(sum((gp.stats ->> 'rounds_won')::int) filter (where gs.credit_tier is not null), 0) as credit_rounds_won,
+              coalesce(max((gp.stats ->> 'biggest_win')::bigint) filter (where gs.credit_tier is not null), 0) as credit_biggest
+         from game_players gp join game_sessions gs on gs.id = gp.session_id
+        where ${where}`,
+      [playerId, stakes],
+    ),
+    pool.query(
+      `select gs.id, gs.credit_tier, gs.finished_at, gp.final_score, coalesce((gp.stats ->> 'rounds_played')::int, 0) as rounds, ${BJ_SECONDS} as seconds
+         from game_players gp join game_sessions gs on gs.id = gp.session_id
+        where ${where}
+        order by gs.finished_at desc limit ${RECENT}`,
+      [playerId, stakes],
+    ),
+  ]);
+  const b = summary.rows[0];
+  const last = [overall.time.lastPlayedAt, b.last_played_at].filter(Boolean).sort((x, y) => y - x)[0] ?? null;
+  const tables = recent.rows.map((r) => ({
+    id: r.id,
+    game: "blackjack",
+    place: null,
+    of: null,
+    won: false,
+    leftEarly: false,
+    solo: false,
+    score: null,
+    rounds: int(r.rounds),
+    seconds: int(r.seconds),
+    finishedAt: r.finished_at,
+    tier: r.credit_tier,
+    net: int(r.final_score), // chips at a free table, credits at a credit one
+  }));
+  return {
+    ...overall,
+    time: { ...overall.time, totalSeconds: overall.time.totalSeconds + int(b.seconds), lastPlayedAt: last },
+    credits: {
+      games: overall.credits.games + int(b.credit_tables),
+      net: overall.credits.net + int(b.credit_net),
+      potsWon: overall.credits.potsWon + int(b.credit_rounds_won),
+      biggestPot: Math.max(overall.credits.biggestPot, int(b.credit_biggest)),
+    },
+    blackjack: { tables: int(b.tables), rounds: int(b.rounds), net: int(b.net), seconds: int(b.seconds) },
+    recent: [...overall.recent, ...tables].sort((x, y) => new Date(y.finishedAt) - new Date(x.finishedAt)).slice(0, RECENT),
+  };
+}
+
+/** { stakes, overall, thirteen, muushig, poker, blackjack } for one signed-in player; all but poker for `stakes` only. */
 export async function playerStats(playerId, stakes = "all") {
   if (!STAKE_VIEWS.includes(stakes)) stakes = "all";
-  const [entries, poker] = await Promise.all([
+  const [entries, poker, blackjack] = await Promise.all([
     Promise.all(Object.entries(VIEWS).map(async ([name, gameType]) => [name, await statsFor(playerId, gameType, stakes)])),
     pokerStatsFor(playerId),
+    blackjackStatsFor(playerId),
   ]);
   const views = Object.fromEntries(entries);
-  views.overall = await withPoker(playerId, stakes, views.overall);
-  return { stakes, ...views, poker };
+  views.overall = await withBlackjack(playerId, stakes, await withPoker(playerId, stakes, views.overall));
+  return { stakes, ...views, poker, blackjack };
 }

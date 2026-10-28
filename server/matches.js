@@ -68,7 +68,7 @@ function roundsWonBy(gameType, rounds, seat) {
 async function creditMatchOf(sessionId) {
   const {
     rows: [h],
-  } = await pool.query("select tier, seats, cpu_take from credit_hands where session_id = $1 and game_type <> 'poker' limit 1", [sessionId]);
+  } = await pool.query("select tier, seats, cpu_take from credit_hands where session_id = $1 and game_type not in ('poker', 'blackjack') limit 1", [sessionId]);
   if (!h) return null;
   const staked = h.seats.filter((x) => x.user_id);
   const stake = staked[0]?.stack_before ?? 0;
@@ -93,6 +93,7 @@ export async function matchDetail(id, viewerId = null) {
   );
   if (!s || s.status !== "finished" || s.solo) return null;
   if (s.game_type === "poker") return pokerTable(s, viewerId);
+  if (s.game_type === "blackjack") return blackjackTable(s, viewerId);
 
   const { rows: players } = await pool.query(
     `select gp.seat_index, gp.player_id, gp.guest_name, gp.guest_tag, gp.final_score, gp.final_position,
@@ -250,6 +251,60 @@ async function pokerTable(s, viewerId) {
       hands: Array.isArray(t.hands) ? t.hands : null,
     },
     players: table,
+  };
+}
+
+/**
+ * A blackjack table's page for a player who sat at it: their tally and log of
+ * rounds (their hands and the dealer's), and everyone's net there. It says
+ * whether the table was for credits, never which house tier. Only humans have
+ * rows; the house is not a seat.
+ */
+async function blackjackTable(s, viewerId) {
+  if (!viewerId) return null;
+  const { rows: players } = await pool.query(
+    `select gp.player_id, gp.guest_name, gp.guest_tag, gp.final_score, gp.joined_at, gp.left_at, gp.stats, p.username, p.tag,
+            p.level as xp_level
+       from game_players gp
+       left join profiles p on p.id = gp.player_id
+      where gp.session_id = $1`,
+    [s.id],
+  );
+  const mine = players.find((p) => p.player_id === viewerId);
+  if (!mine) return null;
+
+  const seated = players
+    .map((p) => ({
+      name: playerName(p),
+      xpLevel: p.player_id ? p.xp_level : null,
+      net: int(p.final_score) ?? 0,
+      rounds: int(p.stats?.rounds_played) ?? 0,
+      you: p === mine,
+    }))
+    .sort((a, b) => b.net - a.net || b.rounds - a.rounds);
+
+  const t = mine.stats ?? {};
+  return {
+    id: s.id,
+    gameType: "blackjack",
+    table: s.name,
+    credit: s.credit_tier != null,
+    isPrivate: s.is_private,
+    startedAt: s.started_at,
+    finishedAt: s.finished_at,
+    durationSeconds: s.started_at && s.finished_at ? Math.round((s.finished_at - s.started_at) / 1000) : null,
+    roundCount: s.round_count,
+    you: {
+      name: playerName(mine),
+      net: int(mine.final_score) ?? 0,
+      seconds: secondsAt(mine, s),
+      roundsPlayed: int(t.rounds_played) ?? 0,
+      roundsWon: int(t.rounds_won) ?? 0,
+      blackjacks: int(t.blackjacks) ?? 0,
+      biggestWin: int(t.biggest_win) ?? 0,
+      rounds: t.rounds ?? [],
+    },
+    players: seated,
   };
 }
 

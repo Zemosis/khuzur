@@ -284,4 +284,70 @@ describe.skipIf(!TEST_DATABASE_URL)("match page (Postgres)", () => {
     expect(body).not.toContain(alice.id);
     expect(body).not.toContain("guest:");
   });
+
+  // A blackjack table: alice and bob sat, each with a tally.
+  async function blackjackTable({ tier = null } = {}) {
+    const id = await m.createSession({
+      gameType: "blackjack",
+      lobbyId: "PUB-BJ0001",
+      lobbyName: "Green Felt",
+      isPrivate: false,
+      hostDisplayName: "ALICE #0001",
+      maxPlayers: 5,
+      playerCount: 2,
+      startedAt: new Date(Date.now() - 600_000),
+      creditTier: tier,
+    });
+    const dealer = { type: "dealer", cards: ["9♦0", "7♣0", "5♠0"], total: 21 };
+    const rounds = [
+      { n: 1, net: 100, hands: [{ cards: ["K♠0", "A♥0"], bet: 100, result: "blackjack", payout: 250 }], dealer },
+      { n: 2, net: -30, hands: [{ cards: ["9♠0", "7♥0"], bet: 30, result: "lose", payout: 0 }], dealer },
+    ];
+    const tally = { rounds_played: 2, rounds_won: 1, rounds_pushed: 0, blackjacks: 1, doubles: 0, splits: 0, biggest_win: 100, net: 70, rounds };
+    const bobTally = { rounds_played: 2, rounds_won: 0, rounds_pushed: 0, blackjacks: 0, doubles: 0, splits: 0, biggest_win: 0, net: -60 };
+    await m.finishSession({
+      sessionId: id,
+      gameType: "blackjack",
+      completed: true,
+      endedReason: "completed",
+      roster: [roster(0, alice, { blackjack: tally }), roster(1, bob, { blackjack: bobTally })],
+      rounds: [],
+      state: { roundNumber: 2 },
+    });
+    return id;
+  }
+
+  it("a blackjack table page opens for a player who sat there, 404 for anyone else, with no tier field", async () => {
+    const id = await blackjackTable({ tier: "HOUSE" });
+    expect((await get(id)).status).toBe(404);
+    const carol = await makeUser(m.pool, "carol2@test.dev", { username: "CAROL", tag: "0003" });
+    expect((await get(id, carol)).status).toBe(404);
+
+    const res = await get(id, alice);
+    expect(res.status).toBe(200);
+    const t = res.body;
+    expect(t).toMatchObject({ gameType: "blackjack", table: "Green Felt", credit: true, isPrivate: false, roundCount: 2 });
+    expect(t.you).toMatchObject({ name: "ALICE #0001", net: 70, roundsPlayed: 2, roundsWon: 1, blackjacks: 1, biggestWin: 100 });
+    expect(t.you.seconds).toBeGreaterThan(0);
+    expect(t.you.rounds.map((r) => r.net)).toEqual([100, -30]);
+    expect(t.players).toEqual([
+      { name: "ALICE #0001", xpLevel: 7, net: 70, rounds: 2, you: true },
+      { name: "BOB #0002", xpLevel: 1, net: -60, rounds: 2, you: false },
+    ]);
+    // Bob never sees alice's rounds.
+    expect((await get(id, bob)).body.you.rounds).toEqual([]);
+    const body = JSON.stringify(t);
+    expect(body).not.toContain("HOUSE");
+    expect(body).not.toContain('"tier"');
+    expect(body).not.toContain(alice.id);
+    expect(body).not.toContain("guest:");
+    const free = await blackjackTable();
+    expect((await get(free, alice)).body.credit).toBe(false);
+  });
+
+  it("player_match_history leaves blackjack out", async () => {
+    await blackjackTable();
+    const { rows } = await m.pool.query("select 1 from player_match_history where game_type = 'blackjack'");
+    expect(rows).toEqual([]);
+  });
 });

@@ -214,6 +214,53 @@ describe.skipIf(!TEST_DATABASE_URL)("solo matches and per-game stats (Postgres)"
     expect(free.overall.credits.games).toBe(0);
   });
 
+  it("a blackjack table shows in blackjack.free / .credits and in overall recent, time and credits, never in wins or places", async () => {
+    await report(thirteen(1, 60));
+    const {
+      rows: [me],
+    } = await m.pool.query("select id from users where email = 'solo@test.dev'");
+    const table = async (minutesAgo, creditTier, tally) => {
+      const id = await m.createSession({ gameType: "blackjack", lobbyId: `PUB-BJ${minutesAgo}`, lobbyName: "Green", isPrivate: false, hostDisplayName: "ME #0001", maxPlayers: 5, startedAt: new Date(Date.now() - (minutesAgo + 30) * 60_000), creditTier });
+      await m.finishSession({
+        sessionId: id,
+        gameType: "blackjack",
+        completed: true,
+        endedReason: "completed",
+        finishedAt: new Date(Date.now() - minutesAgo * 60_000),
+        roster: [{ playerKey: me.id, userId: me.id, name: "ME", tag: "0001", seatIndex: 0, joinedAt: null, leftAt: null, leftEarly: false, cpuTookOver: false, disconnectCount: 0, blackjack: tally }],
+        rounds: [],
+        state: null,
+      });
+      return id;
+    };
+    const base = { rounds_pushed: 0, doubles: 0, splits: 0, rounds: [] };
+    await table(30, null, { ...base, rounds_played: 10, rounds_won: 4, blackjacks: 1, biggest_win: 50, net: 120 });
+    const creditId = await table(10, "HOUSE", { ...base, rounds_played: 8, rounds_won: 3, blackjacks: 2, biggest_win: 250, net: -90 });
+    await table(5, "HOUSE", { ...base, rounds_played: 0, rounds_won: 0, blackjacks: 0, biggest_win: 0, net: 0 }); // never dealt in
+
+    const all = await stats();
+    expect(all.blackjack.free).toMatchObject({ tables: 1, rounds: 10, roundsWon: 4, winRate: 40, blackjacks: 1, biggestWin: 50, net: 120 });
+    expect(all.blackjack.credits).toMatchObject({ tables: 2, rounds: 8, roundsWon: 3, winRate: 37.5, blackjacks: 2, biggestWin: 250, net: -90 });
+    expect(all.blackjack.credits.recent).toHaveLength(1);
+    expect(all.blackjack.credits.recent[0]).toMatchObject({ id: creditId, tier: "HOUSE", table: "Green", net: -90, rounds: 8 });
+    expect(all.blackjack.free.time.totalSeconds).toBeGreaterThan(0);
+
+    expect(all.overall).toMatchObject({ games: 1, wins: 1, blackjack: { tables: 2, rounds: 18, net: 30 } });
+    expect(all.overall.credits).toMatchObject({ games: 1, net: -90, potsWon: 3, biggestPot: 250 });
+    expect(all.overall.placements).toEqual([{ place: 1, times: 1 }]);
+    expect(all.overall.recent.map((r) => [r.game, r.tier, r.net, r.rounds])).toEqual([
+      ["blackjack", "HOUSE", -90, 8],
+      ["blackjack", null, 120, 10],
+      ["thirteen", null, null, undefined],
+    ]);
+    expect(all.overall.time.totalSeconds).toBeGreaterThanOrEqual(60 * 60);
+    expect(all.thirteen.recent).toHaveLength(1);
+
+    const free = (await request(app).get("/api/auth/stats?stakes=free").set(auth())).body;
+    expect(free.overall.blackjack).toMatchObject({ tables: 1, net: 120 });
+    expect(free.overall.credits.games).toBe(0);
+  });
+
   it("never exposes rating", async () => {
     await report(thirteen(1));
     expect(JSON.stringify(await stats())).not.toMatch(/rating/i);
