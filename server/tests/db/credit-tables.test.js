@@ -79,7 +79,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables (Postgres)", () => {
     expect(await ct.sit({ userId: ann, name: "ANN" }, 50)).toEqual({ ok: false, error: "This table's minimum is 200" });
     const email = await makePlayer(m.pool, "EMMA", { linked: false });
     expect(await ct.sit({ userId: email, name: "EMMA" }, 500)).toEqual({ ok: false, error: "Link Google or Discord on your profile to play for credits" });
-    for (const n of ["P1", "P2", "P3", "P4", "P5", "P6"]) await ct.sit({ userId: await makePlayer(m.pool, n), name: n }, 200);
+    for (const n of ["P1", "P2", "P3", "P4", "P5", "P6", "P7"]) await ct.sit({ userId: await makePlayer(m.pool, n), name: n }, 200);
     expect(await ct.sit({ userId: ann, name: "ANN" }, 200)).toEqual({ ok: false, error: "The table is full" });
     expect(await balance(ann)).toBe(1000);
   });

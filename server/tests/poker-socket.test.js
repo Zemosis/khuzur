@@ -184,7 +184,7 @@ describe("poker tables online", () => {
     const watcher = await guest();
     watcher.emit("get_public_lobbies", { gameType: "poker" });
     const list = await waitFor(watcher, "public_lobbies_update", (l) => l.some((t) => t.id === lobbyId));
-    expect(list.find((t) => t.id === lobbyId)).toMatchObject({ gameType: "poker", current: 2, max: 6, inProgress: false });
+    expect(list.find((t) => t.id === lobbyId)).toMatchObject({ gameType: "poker", current: 2, max: 7, inProgress: false });
   });
 
   it("a player stood up for sitting out no longer hears the table's chat", async () => {

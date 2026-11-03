@@ -11,7 +11,7 @@ import { randomInt, randomUUID } from "node:crypto";
 import { ThirteenGame, redactState, DEFAULT_DELAYS } from "./game/engine.js";
 import { MuushigGame, muushigView, DEFAULT_MUUSHIG_DELAYS } from "./game/muushigGame.js";
 import { PokerTable, DEFAULT_POKER_DELAYS } from "./game/poker/table.js";
-import { viewFor } from "./game/poker/engine.js";
+import { MAX_SEATS as POKER_SEATS, viewFor } from "./game/poker/engine.js";
 import { tallyHand } from "./game/pokerTally.js";
 import { pokerHandReward, POKER_REWARD_SPACING_MS } from "./game/progression.js";
 import { BOT_NAMES } from "./game/constants.js";
@@ -99,7 +99,7 @@ const GAMES = {
   // A poker table is made with its lobby (createPokerTable) and seats people
   // itself: there is no waiting table, and no match end or rematch.
   poker: {
-    seats: 6,
+    seats: POKER_SEATS,
     stateEvent: "poker_state",
     view: pokerView,
   },

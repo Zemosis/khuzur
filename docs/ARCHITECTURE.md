@@ -29,7 +29,7 @@ The shape of the thing:
 * A **main menu** as the hub — profile in the top right, settings, live server
   stats, and a horizontally scrollable rack of game modes.
 * **Multiple game modes**, currently Thirteen (Tiến lên, 2–4 players), Muushig
-  (5 players) and Poker (no-limit Hold'em, up to 6). Rules in
+  (5 players) and Poker (no-limit Hold'em, up to 7). Rules in
   [thirteen-rulebook.md](thirteen-rulebook.md),
   [muushig-rulebook.md](muushig-rulebook.md) and
   [poker-rulebook.md](poker-rulebook.md).
@@ -57,7 +57,7 @@ Honest status, as of October 2026.
 | Database schema, views | Built; applied automatically on server start |
 | **Thirteen** | **Playable online and in practice.** 2–4 players, server-authoritative, reconnect handling, match recording; CPUs at three levels (see [CPU players](#cpu-players)) |
 | **Muushig** | **Playable online and in practice.** Online: server-authoritative, up to 5 humans with CPUs in the empty seats, reconnect handling, match recording. Practice: 4 CPUs (Easy/Medium/Hard) in the browser |
-| **Poker** | **Playable online and in practice.** Free chips, 2–6 players, CPUs at free tables, joining between hands, recorded with its own stats |
+| **Poker** | **Playable online and in practice.** Free chips, 2–7 players, CPUs at free tables, joining between hands, recorded with its own stats |
 | **Credits** | **Built.** Balances with a daily CLAIM, credit poker tables (LOW / MID / HIGH, humans only), an all-time leaderboard, a ledger of every credit movement, pair flags and an admin page (§5 Credits) |
 | Shop / economy | **Started.** The shop opens over the main menu at `/shop`. It sells extra painted-avatar slots for gold. Borders, titles and card variants show as SOON. Pricing and the economy rules: [`gold-economy.md`](gold-economy.md) |
 | Deployment | **Live** at https://khuzur.onrender.com — Render (site + game server) and Supabase (Postgres). See §9 |

@@ -82,6 +82,15 @@ export function snapAvatarSize(size, dpr = 1) {
   return { device, css: device / dpr };
 }
 
+/**
+ * How far to move something that starts at CSS position `at` so it starts on
+ * a whole device pixel: an avatar between two would be redrawn by the browser
+ * with some of its pixels shifted. In CSS px; 0 when it's already there.
+ */
+export function gridNudge(at, dpr = 1) {
+  return Math.round(at * dpr) / dpr - at || 0;
+}
+
 export function createEmptyGrid() {
   return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
 }

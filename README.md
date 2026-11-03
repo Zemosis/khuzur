@@ -10,7 +10,7 @@ A retro pixel-art card hall in the browser. Play classic card games with friends
 | ------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | **Thirteen** | 2–4     | A shedding game in the style of Vietnam's _Tiến lên_: beat the last play with a higher single, pair, triple or 5-card hand, and be the first to empty your hand. | [Rulebook](docs/thirteen-rulebook.md) |
 | **Muushig**  | 5       | A Mongolian trick-taking game with trumps. Everyone starts on 15 points, each trick you win takes one off, and the first to reach 0 wins.                        | [Rulebook](docs/muushig-rulebook.md)  |
-| **Poker**    | 2–6     | No-limit Texas Hold'em, for free chips or for credits.                                                                                                           | [Rulebook](docs/poker-rulebook.md)    |
+| **Poker**    | 2–7     | No-limit Texas Hold'em, for free chips or for credits.                                                                                                           | [Rulebook](docs/poker-rulebook.md)    |
 
 Every game also has its rules built in: open **RULES** at any table.
 

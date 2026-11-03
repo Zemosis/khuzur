@@ -6,7 +6,7 @@ No-limit Texas Hold'em, as Khuzur plays it. Make the best 5-card hand from your 
 
 | | |
 | --- | --- |
-| **Players** | 2 to 6 per table |
+| **Players** | 2 to 7 per table |
 | **Game** | No-limit Texas Hold'em |
 | **Free tables** | Everyone sits down with 1000 chips; blinds 5/10. The chips are free and count for nothing outside the table. |
 | **Credit tables** | Played for credits that stay with your account (see [§10](#10-credit-tables)) |
@@ -102,7 +102,7 @@ Best first:
 - **Leaving.** Leave at any time. A hand you're in is folded, and no CPU takes your seat.
 - **The turn clock.** Online, each turn has 20 seconds. When it runs out you check if you can, otherwise you fold. Time out twice in a row and you sit out: you keep your seat and chips, but aren't dealt in until you press **I'M BACK**. After five minutes sitting out, you leave the table.
 - **Out of chips?** Press **REBUY** for another 1000. CPUs rebuy on their own.
-- **The host** presses **START** once; hands then follow each other while two or more players have chips. At a free table the host can add CPUs (**Easy**, **Medium** or **Hard**), remove them, and close the table. Practice seats you with five CPUs and has no turn clock.
+- **The host** presses **START** once; hands then follow each other while two or more players have chips. At a free table the host can add CPUs (**Easy**, **Medium** or **Hard**), remove them, and close the table. Practice seats you with six CPUs and has no turn clock.
 
 ---
 
@@ -125,7 +125,7 @@ A stack is drawn with the fewest chips that make its amount, biggest value first
 
 ## 8. CPU levels
 
-CPU players come in three levels. Practice seats you with five CPUs at the level you pick. At a free table online, the host adds each CPU at its own level. Credit tables are for people only.
+CPU players come in three levels. Practice seats you with six CPUs at the level you pick. At a free table online, the host adds each CPU at its own level. Credit tables are for people only.
 
 | Level | Plays like | How it plays |
 | --- | --- | --- |

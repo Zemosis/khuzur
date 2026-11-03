@@ -25,7 +25,7 @@ describe("starting a hand", () => {
   it("posts the blinds left of the button and starts left of the big blind", () => {
     const s = three();
     expect(s.phase).toBe(PHASES.BETTING);
-    expect(s.seats.map((p) => p?.bet)).toEqual([0, 5, 10, undefined, undefined, undefined]);
+    expect(s.seats.map((p) => p?.bet)).toEqual([0, 5, 10, undefined, undefined, undefined, undefined]);
     expect(s.turn).toBe(0);
     expect(s.seats[0].hole).toHaveLength(2);
     expect(s.events[0]).toMatchObject({ type: "hand", handNumber: 1, button: 0 });
@@ -169,7 +169,7 @@ describe("all-in and showdown", () => {
     s = play(s, [0, "call"], [1, "fold"], [2, "check"]);
     for (let street = 0; street < 3; street++) s = play(s, [2, "check"], [0, "check"]);
     expect(potSize(s)).toBe(25);
-    expect(s.result.won).toEqual([12, 0, 13, 0, 0, 0]);
+    expect(s.result.won).toEqual([12, 0, 13, 0, 0, 0, 0]);
   });
 });
 
@@ -182,7 +182,7 @@ describe("uncalled chips", () => {
     });
     s = play(s, [0, "call"], [2, "allin"], [0, "call"]);
     while (s.phase === PHASES.RUNOUT) s = advance(s);
-    expect(s.result.won).toEqual([600, 0, 0, 0, 0, 0]);
+    expect(s.result.won).toEqual([600, 0, 0, 0, 0, 0, 0]);
     expect(s.seats[2].stack).toBe(700);
     expect(s.events).toContainEqual({ type: "return", seat: 2, amount: 700 });
     expect(s.result.pots).toEqual([{ amount: 600, winners: [0] }]);

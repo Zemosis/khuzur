@@ -91,8 +91,8 @@ describe("poker table", () => {
 
   it("seats people in the first empty seat until the table is full", () => {
     make();
-    for (let i = 0; i < 6; i++) expect(human(`P${i}`)).toEqual({ ok: true, seat: i });
-    expect(human("P6")).toEqual({ ok: false, error: "The table is full" });
+    for (let i = 0; i < 7; i++) expect(human(`P${i}`)).toEqual({ ok: true, seat: i });
+    expect(human("P7")).toEqual({ ok: false, error: "The table is full" });
   });
 
   it("CPUs play their turns by themselves, hand after hand", () => {

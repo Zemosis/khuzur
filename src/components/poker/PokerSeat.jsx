@@ -1,108 +1,94 @@
-// POKER SEAT — one player beside the table, drawn like the seats in Thirteen
-// and Muushig: a plate with the face, name and stack, and the two cards
-// beside it on the table side (backs, or faces once shown). Chips on the
-// plate's edges: its status at the top right (TURN, FOLDED, ALL-IN, WIN…)
-// and its place in line to act (2ND, 3RD…) on the bottom edge. The seat on turn glows gold under a bobbing arrow, its
-// turn clock draining under the plate. A CPU's level is a line under its
-// stack (on a phone, its chip if nothing more pressing; a short screen has
-// no room for it). An empty seat is a dashed plate, with
-// + CPU for the host, which asks for the CPU's level.
+// POKER SEAT — one player at the table, drawn like Blackjack's: a plate on the
+// rim with the face, name and stack, and (SeatCards) their two cards on the
+// felt in front of them, backs or faces once shown. Tags over the plate: its
+// status (TURN, FOLDED, ALL-IN, WIN…), and under it its place in line to act
+// (2ND, 3RD…). The seat on turn has a cyan border, under a bobbing arrow (yours
+// has your cards outlined instead), its turn clock draining under the plate;
+// your own plate is gold. What a player
+// does pops over the plate (a Callout). A CPU's level is a line under its
+// stack (on a phone, its tag if nothing more pressing). An empty seat is a
+// dashed plate, with + CPU for the host, which asks for the CPU's level.
 //
-// `position` says where the seat is: "left" and "right" columns (tall
-// plates), "top" (a wide plate). `layout` follows the table: "row" (short
-// screens) slim plates, "strip" (phones) a tiny plate with its cards under
-// it. The cards hang off the plate, so the seat is exactly its plate.
+// `layout` follows the table: "compact" (phones) is a tiny plate.
 
-import React, { useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
+import gsap from "gsap";
+import { reducedMotion } from "../../utils/motion";
 import { PixelAvatar, PixelCard } from "../PixelCard";
 import PixelIcon from "../PixelIcon";
 import LevelTag from "../LevelTag";
+import Callout from "../Callout";
+import { HandReward } from "../RewardPanel";
 import { LEVEL_COLOR } from "./seatInfo";
 import { useMuck } from "./cardMotion";
 
 const short = (name = "") => name.split(" #")[0];
 
-// Plate sizes: [width, avatar] by layout and position.
 const PLATE = {
-  side: { w: 124, face: 68 },
-  top: { w: 184, face: 51 },
-  row: { w: 140, face: 34 },
-  strip: { w: 68, face: 20 },
-};
-const CARD_W = { full: 44, row: 28, strip: 30 };
-// Where the cards hang: toward the felt.
-const CARDS_PLACE = {
-  right: { left: "100%", top: "50%", marginLeft: 10, transform: "translateY(-50%)" },
-  left: { right: "100%", top: "50%", marginRight: 10, transform: "translateY(-50%)" },
-  below: { top: "100%", left: "50%", marginTop: 8, transform: "translateX(-50%)" },
+  full: { w: 156, h: 66, face: 36 },
+  compact: { w: 66, h: 62, face: 17 },
 };
 
-function Chip({ label, bg, fg = "#1a1024", big = false, blink = false, className = "" }) {
+function Chip({ label, bg, fg = "#1a1024", blink = false }) {
   return (
-    <span
-      className={`font-pixel-display leading-none whitespace-nowrap ${big ? "text-[12px] px-2 py-1.5" : "text-[9px] px-1.5 py-1"} ${blink ? "blink" : ""} ${className}`}
-      style={{ backgroundColor: bg, color: fg, boxShadow: "0 0 0 2px #0a0712" }}
-    >
+    <span className={`font-pixel-display leading-none whitespace-nowrap text-[9px] px-1.5 py-1 ${blink ? "blink" : ""}`} style={{ backgroundColor: bg, color: fg, boxShadow: "0 0 0 2px #0a0712" }}>
       {label}
     </span>
   );
 }
 
-const plateOf = (layout, position) => (layout === "full" ? (position === "top" ? PLATE.top : PLATE.side) : PLATE[layout]);
-const cardsAt = (layout, position) => (layout === "strip" ? "below" : position === "right" ? "left" : "right");
-
 /**
- * player: an engine seat (null: empty). face: PixelAvatar props. rel: the
- * seat relative to you, which the deal looks for (see useDeal).
+ * player: an engine seat (null: empty). face: PixelAvatar props. isMe: your own.
  * tags: seatTags() for it. place: its place in line to act ("2ND"), or null.
  * clockMs / clockKey: the turn clock's time left, restarted when the key changes.
- * best: card ids to light up (the winning hand at a showdown).
+ * callout: { id, label, bg, fg, delay } to pop over it, or null; onCalloutDone(id).
+ * reward: what the hand paid you, floating up from your plate until onRewardDone.
+ * below: a line under the stack ("+300 next hand").
+ * opensUp: the + CPU menu opens over the plate, for seats near the table's foot.
  * onAddCpu(level): the host adds a CPU here at EASY | MEDIUM | HARD.
  */
-export default function PokerSeat({ layout = "full", position = "left", ...props }) {
-  const plate = plateOf(layout, position);
-  if (!props.player) return <EmptySeat layout={layout} position={position} plate={plate} onAddCpu={props.isHost ? props.onAddCpu : null} />;
-  return <TakenSeat layout={layout} position={position} plate={plate} {...props} />;
+export default function PokerSeat({ layout = "full", ...props }) {
+  const plate = PLATE[layout] ?? PLATE.full;
+  if (!props.player) return <EmptySeat plate={plate} onAddCpu={props.isHost ? props.onAddCpu : null} opensUp={props.opensUp} />;
+  return <TakenSeat compact={layout === "compact"} plate={plate} {...props} />;
 }
 
-function TakenSeat({ player, face, rel, layout, position, plate, tags = [], isTurn = false, place = null, clockMs = null, clockKey, best = [], winner = false, isHost = false, onRemoveCpu, xpLevel = null }) {
-  const [showCards, cardsRef] = useMuck(player.inHand && !player.folded && player.hole.length > 0, player.folded);
-  const strip = layout === "strip";
-  const slim = layout === "row";
-  const tall = layout === "full" && position !== "top";
-  const cardW = CARD_W[layout];
+function TakenSeat({ player, face, compact, plate, isMe = false, tags = [], isTurn = false, place = null, clockMs = null, clockKey, winner = false, isHost = false, onRemoveCpu, xpLevel = null, callout = null, onCalloutDone, reward = null, onRewardDone, below = null }) {
   const dim = player.folded || player.sittingOut || player.leaving;
   const level = tags.find((t) => LEVEL_COLOR[t.label]);
   const status = [
-    isTurn && { label: "TURN", bg: "#f4c430", big: !strip, blink: true },
+    isTurn && { label: "TURN", bg: "#f4c430", blink: true },
     winner && { label: "WIN", bg: "#9bd14f", fg: "#1a3a0e" },
     ...tags.filter((t) => !LEVEL_COLOR[t.label]),
   ].filter(Boolean);
 
   return (
     <div className="relative" style={{ width: plate.w }} data-seat-name={short(player.name)}>
-      {isTurn && !strip && (
+      {callout && <Callout key={callout.id} label={callout.label} bg={callout.bg} fg={callout.fg} delay={callout.delay} onDone={() => onCalloutDone?.(callout.id)} />}
+      {reward && (
+        <div className="absolute z-40 bottom-full mb-2 left-1/2" style={{ transform: "translateX(-50%)" }}>
+          <HandReward key={`${reward.expAfter}`} reward={reward} onDone={onRewardDone} />
+        </div>
+      )}
+      {isTurn && !compact && !isMe && (
         <span data-testid="turn-arrow" className="turn-arrow absolute left-1/2 -top-9 z-30 pointer-events-none" style={{ color: "#f4c430", filter: "drop-shadow(2px 2px 0 #0a0712)" }}>
           <PixelIcon name="down" size={18} />
         </span>
       )}
       <div
         data-seat-plate
-        className={`relative flex items-center ${
-          strip ? "flex-col text-center gap-1 px-1 pt-3 pb-2" : tall ? "flex-col text-center gap-2 px-2 pt-4 pb-3" : slim ? "gap-2 px-1.5 pt-2 pb-1.5" : "gap-2 px-2 pt-3 pb-2"
-        }`}
+        className={`relative flex items-center ${compact ? "flex-col text-center gap-1 px-1 pt-2.5 pb-1.5" : "gap-2 p-2 pt-2.5"}`}
         style={{
           width: plate.w,
-          backgroundColor: isTurn ? "#241a3a" : "#14102a",
-          border: `${strip || slim ? 3 : 4}px solid ${isTurn ? "#f4c430" : winner ? "#9bd14f" : "#0a0712"}`,
-          boxShadow: isTurn ? "0 0 0 4px #0a0712, 0 0 18px rgba(244,196,48,0.45)" : "0 0 0 4px #0a0712, inset 0 4px 0 rgba(255,255,255,0.04)",
-          animation: isTurn ? "pulse-glow 1.6s ease-in-out infinite" : "none",
-          opacity: dim ? 0.55 : 1,
+          backgroundColor: "#1f1a3d",
+          border: `3px solid ${isTurn ? "#5fd4d6" : winner ? "#9bd14f" : isMe ? "#f4c430" : "#2a234d"}`,
+          boxShadow: "3px 3px 0 #0a0712",
+          opacity: dim ? 0.6 : 1,
           transition: "opacity 300ms ease-out",
         }}
       >
-        {/* A phone's tiny plate has room for one chip: the most important. */}
-        {strip ? (
+        {/* A phone's tiny plate has room for one tag: the most important. */}
+        {compact ? (
           (status[0] || place || level) && (
             <span className="absolute -top-3 inset-x-0 flex justify-center pointer-events-none">
               <Chip {...(status[0] || (place ? { label: place, bg: "#1f1a3d", fg: "#f4c430" } : level))} />
@@ -111,7 +97,7 @@ function TakenSeat({ player, face, rel, layout, position, plate, tags = [], isTu
         ) : (
           <>
             {status.length > 0 && (
-              <span className="absolute -top-3 right-1.5 flex gap-1 pointer-events-none">
+              <span className="absolute -top-3 right-1 flex gap-1 pointer-events-none">
                 {status.map((t) => (
                   <Chip key={t.label} {...t} />
                 ))}
@@ -124,20 +110,23 @@ function TakenSeat({ player, face, rel, layout, position, plate, tags = [], isTu
             )}
           </>
         )}
-        <PixelAvatar variant={face?.variant} customAvatarData={face?.customAvatarData} size={plate.face} active={isTurn} eliminated={player.folded} />
-        <div className={`min-w-0 ${tall || strip ? "w-full" : "flex-1"}`}>
-          <div className={`flex items-center gap-1 min-w-0 ${tall || strip ? "justify-center" : ""}`}>
-            <span className={`font-pixel-display text-parchment truncate ${strip ? "text-[8px]" : "text-[10px]"}`} title={short(player.name)}>
+        <PixelAvatar variant={face?.variant} customAvatarData={face?.customAvatarData} size={plate.face} eliminated={player.folded} />
+        <div className={`min-w-0 ${compact ? "w-full" : "flex-1"}`}>
+          <div className={`flex items-center gap-1 min-w-0 ${compact ? "justify-center" : ""}`}>
+            <span className={`font-pixel-display truncate ${compact ? "text-[8px]" : "text-[10px]"}`} style={{ color: isMe ? "#f4c430" : "#ead8b1" }} title={short(player.name)}>
               {short(player.name)}
             </span>
-            {!strip && <LevelTag level={xpLevel} />}
           </div>
-          <div className={`font-pixel-body leading-none mt-1 text-glow-gold tabular-nums ${strip ? "text-[16px]" : "text-[20px]"}`}>{player.stack}</div>
-          {level && !strip && !slim && (
-            <div className="font-pixel-display text-[8px] leading-none mt-1.5" style={{ color: level.bg }}>
+          <div className={`flex items-center gap-1.5 mt-1 ${compact ? "justify-center" : ""}`}>
+            <span className={`font-pixel-body leading-none text-bone tabular-nums ${compact ? "text-[18px]" : "text-[20px]"}`}>{player.stack.toLocaleString("en-US")}</span>
+            {!compact && <LevelTag level={xpLevel} />}
+          </div>
+          {level && !compact && (
+            <div className="font-pixel-display text-[8px] leading-none mt-1" style={{ color: level.bg }}>
               {level.label}
             </div>
           )}
+          {below && <div className="font-pixel-body text-[18px] leading-none mt-1" style={{ color: "#9bd14f" }}>{below}</div>}
         </div>
         {isHost && onRemoveCpu && player.type === "AI" && (
           <button
@@ -155,33 +144,52 @@ function TakenSeat({ player, face, rel, layout, position, plate, tags = [], isTu
           </div>
         )}
       </div>
-      {showCards && (
-        <div ref={cardsRef} className="absolute flex z-[5]" style={CARDS_PLACE[cardsAt(layout, position)]} aria-label={`${short(player.name)}'s cards`}>
-          {player.hole.map((c, i) => (
-            // Backs tuck together; shown faces spread so both ranks read.
-            <div key={c.id ?? i} data-deal-rel={rel} data-deal-card={i} style={{ marginLeft: i ? -Math.round(cardW * (c.hidden ? 0.45 : 0.1)) : 0 }}>
-              {c.hidden ? (
-                <PixelCard faceDown width={cardW} />
-              ) : (
-                <PixelCard rank={c.rank} suit={c.suit} width={cardW} style={{ boxShadow: best.includes(c.id) ? "0 0 0 3px #9bd14f" : undefined }} />
-              )}
-            </div>
-          ))}
+    </div>
+  );
+}
+
+/**
+ * A seat's two cards on the felt, flying to the muck when it folds. rel: the
+ * seat relative to you, which the deal looks for (see useDeal). best: card ids
+ * to light up (the winning hand at a showdown). Your own lie wider apart; a
+ * label names whose they are. Cards shown at a showdown turn over.
+ */
+export function SeatCards({ player, rel, cardW, best = [], label, spread = 0.1 }) {
+  const holding = !!player?.inHand && !player.folded && player.hole.length > 0;
+  const [show, ref] = useMuck(holding, !!player?.folded);
+  const hidden = (player?.hole ?? []).map((c) => !!c.hidden);
+  const wasHidden = useRef(hidden);
+  useLayoutEffect(() => {
+    const before = wasHidden.current;
+    wasHidden.current = hidden;
+    const el = ref.current;
+    if (!el) return;
+    const turned = [...el.children].filter((_, i) => before[i] && !hidden[i]);
+    if (!turned.length) return;
+    const tween = gsap.fromTo(turned, { scaleX: 0 }, { scaleX: 1, duration: reducedMotion() ? 0.05 : 0.24, stagger: 0.08, ease: "power2.out", clearProps: "transform" });
+    return () => tween.progress(1).kill();
+  });
+  if (!show || !player) return null;
+  return (
+    <div ref={ref} className="flex" aria-label={label}>
+      {player.hole.map((c, i) => (
+        // Backs tuck together; shown faces spread so both ranks read.
+        <div key={c.id ?? i} className="relative" data-deal-rel={rel} data-deal-card={i} style={{ marginLeft: i ? -Math.round(cardW * (c.hidden ? 0.45 : spread)) : 0 }}>
+          {c.hidden ? <PixelCard faceDown width={cardW} /> : <PixelCard rank={c.rank} suit={c.suit} width={cardW} style={{ boxShadow: best.includes(c.id) ? "0 0 0 3px #9bd14f" : undefined }} />}
         </div>
-      )}
+      ))}
     </div>
   );
 }
 
 /** A dashed plate; for the host, + CPU opens a pick of the CPU's level. */
-function EmptySeat({ layout, position, plate, onAddCpu }) {
+function EmptySeat({ plate, onAddCpu, opensUp = false }) {
   const [picking, setPicking] = useState(false);
-  const tall = layout === "full" && position !== "top";
   return (
     <div
       className="relative flex flex-col items-center justify-center gap-2 font-pixel-display text-[9px] text-bone/50"
       data-seat-plate
-      style={{ width: plate.w, height: tall ? 165 : layout === "full" ? 81 : layout === "row" ? 59 : 64, border: "3px dashed #2a234d" }}
+      style={{ width: plate.w, height: plate.h, border: "3px dashed #463a78", backgroundColor: "rgba(20,16,42,0.6)" }}
     >
       {!onAddCpu && "EMPTY"}
       {onAddCpu && (
@@ -199,7 +207,7 @@ function EmptySeat({ layout, position, plate, onAddCpu }) {
         <div
           role="menu"
           aria-label="CPU level"
-          className="absolute left-1/2 top-full z-40 mt-2 flex flex-col gap-1 p-1.5"
+          className={`absolute left-1/2 z-40 flex flex-col gap-1 p-1.5 ${opensUp ? "bottom-full mb-2" : "top-full mt-2"}`}
           style={{ transform: "translateX(-50%)", backgroundColor: "#1f1a3d", border: "3px solid #0a0712", boxShadow: "4px 4px 0 #0a0712" }}
         >
           {["EASY", "MEDIUM", "HARD"].map((level) => (

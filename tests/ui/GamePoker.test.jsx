@@ -184,10 +184,28 @@ describe("poker table online", () => {
 
 describe("poker on a phone", () => {
   const size = { w: window.innerWidth, h: window.innerHeight };
-  beforeEach(() => Object.assign(window, { innerWidth: 390, innerHeight: 844 }));
-  afterEach(() => Object.assign(window, { innerWidth: size.w, innerHeight: size.h }));
+  const Observer = globalThis.ResizeObserver;
+  // The table measures itself: on a 390px phone it's about 360px across (the setup's stub says 900).
+  class PhoneTable {
+    constructor(cb) {
+      this.cb = cb;
+    }
+    observe(el) {
+      this.cb([{ target: el, contentRect: { width: 360, height: 600 } }]);
+    }
+    unobserve() {}
+    disconnect() {}
+  }
+  beforeEach(() => {
+    Object.assign(window, { innerWidth: 390, innerHeight: 844 });
+    globalThis.ResizeObserver = PhoneTable;
+  });
+  afterEach(() => {
+    Object.assign(window, { innerWidth: size.w, innerHeight: size.h });
+    globalThis.ResizeObserver = Observer;
+  });
 
-  it("the five other seats and the five board cards fit across a 390px screen", async () => {
+  it("all seven seats get a tiny plate, and the five board cards fit across a 390px screen", async () => {
     open();
     await act(async () => {});
     const five = named(dealt(tableWith([1000, 1000, 1000, 1000, 1000, 1000]), { button: 0, board: "2♣ 7♦ 9♥ J♠ 3♣" }));
@@ -196,9 +214,9 @@ describe("poker on a phone", () => {
     s = play(s, 2, { type: "check" }); // the flop is out
     serverSends("poker_state", view({ ...s, mySeat: 0 }));
     const plates = [...document.querySelectorAll("[data-seat-plate]")].map((el) => parseInt(el.style.width, 10));
-    expect(plates).toHaveLength(5);
-    expect(plates.reduce((a, w) => a + w, 0) + 4 * 6).toBeLessThanOrEqual(390 - 16);
-    const board = [...screen.getByLabelText("Board").children].map((el) => parseInt(el.style.width, 10));
+    expect(plates).toEqual([66, 66, 66, 66, 66, 66, 66]);
+    // A dealt card sits in a wrapper (it turns over as it lands); an empty place is a dashed outline.
+    const board = [...screen.getByLabelText("Board").children].map((el) => parseInt((el.querySelector(".pixel-card") ?? el).style.width, 10));
     expect(board.reduce((a, w) => a + w, 0) + 4 * 6).toBeLessThanOrEqual(300);
   });
 });

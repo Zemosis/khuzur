@@ -165,7 +165,7 @@ describe.skipIf(!TEST_DATABASE_URL)("credit tables over sockets (Postgres)", () 
     const watcher = await client(null);
     watcher.emit("get_public_lobbies", { gameType: "poker" });
     const list = await waitFor(watcher, "public_lobbies_update", (l) => l.some((t) => t.id === lobbyId));
-    expect(list.find((t) => t.id === lobbyId)).toMatchObject({ tier: "LOW", current: 1, max: 6 });
+    expect(list.find((t) => t.id === lobbyId)).toMatchObject({ tier: "LOW", current: 1, max: 7 });
   });
 
   it("guests, email-only accounts and unknown tiers are turned away with a reason", async () => {

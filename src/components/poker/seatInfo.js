@@ -1,6 +1,7 @@
-// SEAT INFO — what the poker table shows about a seat, shared by the seats,
-// your own area and the scoreboard. (The dealer button and the blinds are
-// drawn on the felt, not as tags: see OvalTable.)
+// SEAT INFO — what the poker table shows about a seat, shared by the seats and
+// the scoreboard, and what the dealer calls and each seat's moves announce.
+// (The dealer button and the blinds are drawn on the felt, not as tags: see
+// OvalTable.)
 
 export const LEVEL_COLOR = { EASY: "#9bd14f", MEDIUM: "#f4c430", HARD: "#e85a7a" };
 
@@ -37,3 +38,42 @@ export const ordinal = (n) => `${n}${SUFFIX[n] || "TH"}`;
 
 /** Chips a seat holds, counting what it has in the pot while a hand is played (once it's over, the pot is paid). */
 export const chipsOf = (p, running) => p.stack + (running ? p.committed : 0);
+
+const short = (name = "") => name.split(" #")[0];
+
+/**
+ * What the dealer says: by what the table is doing. dealing: the cards are
+ * still going round. result: the hand's winners, as the table shows them.
+ */
+export function dealerLine(view, { dealing = false, result = null, firstHandSoon = false } = {}) {
+  if (result?.length) return result.length > 1 ? "SPLIT POT" : `${short(result[0].name).toUpperCase()} WINS ${result[0].amount}`;
+  if (dealing) return "SHUFFLE UP AND DEAL";
+  if (firstHandSoon) return "CARDS IN THE AIR SOON";
+  if (view.phase === "WAITING") return "TAKE YOUR SEATS";
+  if (view.phase === "RUNOUT") return "ALL-IN: THE BOARD RUNS OUT";
+  if (view.phase === "BETTING" && view.turn != null) {
+    const who = short(view.seats[view.turn]?.name).toUpperCase();
+    return view.street === "PREFLOP" ? `${who} TO ACT` : `${view.street} · ${who} TO ACT`;
+  }
+  return null;
+}
+
+const MOVE_CALLOUT = {
+  fold: { label: "FOLD", bg: "#463a78", fg: "#ead8b1" },
+  check: { label: "CHECK", bg: "#ead8b1" },
+  call: { label: "CALL", bg: "#5fd4d6" },
+  bet: { label: "BET", bg: "#f4c430" },
+  raise: { label: "RAISE", bg: "#f4c430" },
+  allin: { label: "ALL-IN", bg: "#e85a7a", fg: "#2a0a14" },
+};
+
+/** The moves `view` brings since `prev`, to pop over the seats' plates: [{ id, seat, type, label, bg, fg, delay }]. */
+export function moveCallouts(prev, view) {
+  const before = prev.handNumber === view.handNumber ? (prev.events ?? []).length : 0;
+  return (view.events ?? []).slice(before).flatMap((e, i) => {
+    const look = e.type === "act" ? MOVE_CALLOUT[e.action] : null;
+    if (!look) return [];
+    const amount = e.action === "fold" || e.action === "check" || e.action === "allin" ? "" : ` ${e.amount}`;
+    return [{ ...look, label: `${look.label}${amount}`, id: `${view.handNumber}-${before + i}`, seat: e.seat, type: e.action, delay: 0 }];
+  });
+}

@@ -1,7 +1,8 @@
-// POKER TABLE PAGE — practice against five CPUs in the browser, or an online
+// POKER TABLE PAGE — practice against six CPUs in the browser, or an online
 // table driven by the server's poker_state. Both draw the same PokerScreen:
-// the oval with the other five seats around it and yours at its bottom edge,
-// and the bet controls under it; the sidebar holds the scoreboard, chat and the hand log.
+// the table with the hooded dealer at its head, you at its foot and the other
+// six round the rim, and the bet controls under it; the sidebar holds the
+// scoreboard, chat and the hand log.
 //
 // Practice runs a PokerTable (utils/poker/table.js) right here, with no turn
 // clock. Online, every state is applied as it arrives: the server already
@@ -14,23 +15,21 @@ import { useServerStats } from "../../hooks/useServerStats";
 import { useChatLimit } from "../../hooks/useChatLimit";
 import { useChatBubbles } from "../../hooks/useChatBubbles";
 import { useTurnTitle } from "../../hooks/useTurnTitle";
-import { CARD_RATIO, useTableMetrics } from "../../hooks/useTableMetrics";
+import { useTableMetrics } from "../../hooks/useTableMetrics";
 import { useUnread } from "../../hooks/useUnread";
 import { socket, connectSocket } from "../../utils/socket";
 import { seatAvatar } from "../../utils/avatarConstants";
 import TurnBanner from "../../components/TurnBanner";
-import YourTurnMark from "../../components/YourTurnMark";
 import ChatBubble from "../../components/ChatBubble";
 import GameChat from "../../components/thirteen/GameChat";
 import { TableHeader, TableSidebar, ConnectionSignal } from "../../components/TableChrome";
-import { PixelCard } from "../../components/PixelCard";
 import OvalTable from "../../components/poker/OvalTable";
-import PokerSeat from "../../components/poker/PokerSeat";
-import { LEVEL_COLOR, actingOrder, ordinal, seatTags } from "../../components/poker/seatInfo";
+import PokerSeat, { SeatCards } from "../../components/poker/PokerSeat";
+import { LEVEL_COLOR, actingOrder, dealerLine, moveCallouts, ordinal, seatTags } from "../../components/poker/seatInfo";
+import { useSeatCallouts } from "../../components/blackjack/seatCallouts";
 import BetControls from "../../components/poker/BetControls";
 import PokerScoreBoard from "../../components/poker/PokerScoreBoard";
 import PokerRules from "../../components/poker/PokerRules";
-import { useMuck } from "../../components/poker/cardMotion";
 import Countdown from "../../components/poker/Countdown";
 import { PokerTable } from "../../utils/poker/table";
 import { MAX_SEATS, PHASES, potSize, viewFor } from "../../utils/poker/engine";
@@ -49,25 +48,35 @@ const CPUS = [
   { name: "Bot Mars", variant: 4 },
   { name: "Bot Jupiter", variant: 5 },
   { name: "Bot Mercury", variant: 1 },
+  { name: "Bot Neptune", variant: 2 },
 ];
 const AVATAR_COLOR = { 1: "#f4c430", 2: "#5fd4d6", 3: "#e85a7a", 4: "#9bd14f", 5: "#c5a8ff", custom: "#ead8b1" };
 const short = (name = "") => name.split(" #")[0];
 const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const running = (phase) => phase === PHASES.BETTING || phase === PHASES.RUNOUT;
-const EXTRA_BTN = "pixel-btn font-pixel-display text-[11px] px-4 py-3 whitespace-nowrap";
-// Where each seat's chat bubble opens (by seat relative to you, see
-// OvalTable), into space no other seat uses, as in Muushig: the upper side
-// seats' toward the middle, the lower side seats' below, the top seat's to
-// its left (its cards are on its right). On a phone they open below the
-// strip, the end seats' lined up with their outer edge.
+const EXTRA_BTN = "pixel-btn font-pixel-display text-[10px] px-3 py-2.5 whitespace-nowrap";
+// Where each seat's chat bubble opens (by seat relative to you, see OvalTable),
+// over the felt, into space no other seat uses. On a phone the plates sit on
+// the rim, so they open inward too.
 const BUBBLE_AT = {
-  1: { side: "below", align: "center" },
-  2: { side: "right", align: "start" },
-  3: { side: "left", align: "start" },
+  0: { side: "right", align: "center" },
+  1: { side: "above", align: "start" },
+  2: { side: "right", align: "center" },
+  3: { side: "right", align: "start" },
   4: { side: "left", align: "start" },
-  5: { side: "below", align: "center" },
+  5: { side: "left", align: "center" },
+  6: { side: "above", align: "end" },
 };
-const STRIP_ALIGN = { 1: "start", 5: "end" };
+const COMPACT_BUBBLE_AT = {
+  0: { side: "above", align: "center" },
+  1: { side: "right", align: "start" },
+  2: { side: "right", align: "start" },
+  3: { side: "right", align: "start" },
+  4: { side: "left", align: "start" },
+  5: { side: "left", align: "start" },
+  6: { side: "left", align: "start" },
+};
+const LOWER_SEATS = new Set([0, 1, 6]); // the + CPU menu opens over these plates
 
 export default function GamePoker() {
   const { lobbyId, playerName, aiDifficulty = "MEDIUM" } = useLocation().state || {};
@@ -75,7 +84,7 @@ export default function GamePoker() {
   return isSolo ? <PracticePoker playerName={playerName} level={aiDifficulty} /> : <OnlinePoker lobbyId={lobbyId} playerName={playerName} />;
 }
 
-/** Practice: you in seat 0 against five CPUs, the table running in the browser, no turn clock. */
+/** Practice: you in seat 0 against six CPUs, the table running in the browser, no turn clock. */
 function PracticePoker({ playerName, level }) {
   const navigate = useNavigate();
   const { identity } = useAuth();
@@ -318,7 +327,8 @@ function potsOf(view) {
 
 function PokerScreen({ view, practice = null, online = null, actions, messages, setMessages, warning }) {
   const { identity } = useAuth();
-  const { handW, deckW, compact, narrow, seats: layout } = useTableMetrics();
+  const { compact, narrow, seats } = useTableMetrics();
+  const layout = narrow ? "compact" : "full";
   const { connected, ping } = useServerStats({ enabled: !!online });
   const [panelOpen, setPanelOpen] = useState(false);
   const closePanel = useCallback(() => setPanelOpen(false), []);
@@ -327,6 +337,7 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
   const unread = useUnread(messages, panelOpen);
   const bubbles = useChatBubbles(messages);
   usePokerLog(view, setMessages);
+  const [calloutFor, calloutDone] = useSeatCallouts(view, moveCallouts);
 
   const me = Math.max(0, view.mySeat);
   const mine = view.seats[view.mySeat] || null;
@@ -413,34 +424,44 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
             ? "Next hand soon…"
             : banner || "";
 
-  const seatNode = (rel, position) => {
-    const seat = (me + rel) % MAX_SEATS;
+  const seatOfRel = (rel) => (me + rel) % MAX_SEATS;
+  const platesAt = layout === "compact" ? COMPACT_BUBBLE_AT : BUBBLE_AT;
+  const plateNode = (rel) => {
+    const seat = seatOfRel(rel);
     const p = view.seats[seat];
-    const bubble = p ? bubbles.bubbleFor(p.name) : null;
-    const place = layout === "strip" ? { side: "below", align: STRIP_ALIGN[rel] ?? "center" } : BUBBLE_AT[rel];
+    const yours = seat === view.mySeat;
+    const bubble = yours ? bubbles.mine : p ? bubbles.bubbleFor(p.name) : null;
     return (
       <div className="relative">
-        {bubble && <ChatBubble name={short(p.name)} lines={bubble} {...place} />}
+        {bubble && <ChatBubble name={yours ? "You" : short(p.name)} lines={bubble} {...platesAt[rel]} />}
         <PokerSeat
           player={p}
           face={p ? faceFor(seat) : null}
+          isMe={yours}
           tags={p ? tagsFor(seat) : []}
           isTurn={!dealing && view.turn === seat}
-          rel={rel}
           place={placeOf[seat] ?? null}
           clockMs={!dealing && view.turn === seat ? (view.turnMsLeft ?? null) : null}
           clockKey={`${view.received}-${view.turn}`}
-          best={best}
           winner={winners.has(seat)}
           xpLevel={online ? view.levels?.[seat] : null}
           layout={layout}
-          position={position}
           isHost={isHost}
+          opensUp={LOWER_SEATS.has(rel)}
           onAddCpu={isHost && !tier ? (level) => actions.addCpu(seat, level) : undefined}
           onRemoveCpu={isHost ? () => actions.removeCpu(seat) : undefined}
+          callout={p ? calloutFor(seat) : null}
+          onCalloutDone={(id) => calloutDone(seat, id)}
+          below={yours && mine?.pending > 0 ? `+${fmt(mine.pending)} next hand` : null}
         />
       </div>
     );
+  };
+  const cardsNode = (rel, cardW) => {
+    const seat = seatOfRel(rel);
+    const p = view.seats[seat];
+    if (seat === view.mySeat) return <YourCards mine={mine} cardW={cardW} myTurn={myTurn} best={best} hand={myHand} narrow={layout === "compact"} />;
+    return <SeatCards player={p} rel={rel} cardW={cardW} best={best} label={p ? `${short(p.name)}'s cards` : undefined} />;
   };
   const relOf = (seat) => (seat - me + MAX_SEATS) % MAX_SEATS;
   // This street's bets; before the flop the blinds' chips say SB / BB.
@@ -449,12 +470,13 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
   );
   const dealer = (inPlay || over) && view.button != null ? { rel: relOf(view.button), seat: view.button } : null;
   // Dealt from the button's left.
-  const deal = dealKey != null && dealer ? { key: dealKey, order: [1, 2, 3, 4, 5, 6].map((k) => (dealer.rel + k) % MAX_SEATS) } : null;
+  const deal = dealKey != null && dealer ? { key: dealKey, order: Array.from({ length: MAX_SEATS }, (_, k) => (dealer.rel + k + 1) % MAX_SEATS) } : null;
+  const line = dealerLine(view, { dealing, result, firstHandSoon: firstHandAt != null });
   const myHand = !dealing && mine?.inHand && !mine.folded && mine.hole.every((c) => c.id) ? evaluate([...mine.hole, ...view.board]).name : null;
 
   return (
     <div className="relative w-full h-full font-pixel-body text-parchment overflow-hidden flex flex-col" style={{ position: "fixed", inset: 0 }}>
-      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, #123526 0%, #14102a 60%, #0a0712 100%)" }} />
+      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 30%, #1f1a3d 0%, #14102a 60%, #0a0712 100%)" }} />
       <TableHeader
         compact={compact}
         narrow={narrow}
@@ -483,43 +505,35 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
       {showRules && <PokerRules onClose={closeRules} />}
 
       <div className="relative flex-1 grid min-h-0" style={{ gridTemplateColumns: compact ? "minmax(0, 1fr)" : "minmax(0, 1fr) 300px" }}>
-        <div className={`relative flex flex-col gap-2 min-h-0 ${narrow ? "px-2 pt-4 pb-2" : layout === "row" ? "px-4 pt-3 pb-2" : "px-4 pt-6 pb-2"}`}>
-          <OvalTable
-            layout={layout}
-            seat={seatNode}
-            bets={bets}
-            dealer={dealer}
-            board={view.board}
-            best={best}
-            pots={potsOf(view)}
-            deal={deal}
-            onDealt={setDealtKey}
-            muck={view.seats.filter((p) => p?.inHand && p.folded).length * 2}
-            countdown={firstHandAt}
-            banner={banner}
-            result={result}
-            cardWidth={Math.min(deckW, 40)}
-            heroWidth={layout === "strip" ? Math.min(handW, 76) : layout === "row" ? 40 : Math.min(Math.round(handW * 0.85), 104)}
-            hero={(cardW, cramped) => (
-              <YourSeat
-                mine={mine}
-                cardW={cardW}
-                myTurn={myTurn}
-                place={placeOf[view.mySeat]}
-                tags={mine ? tagsFor(view.mySeat) : []}
-                best={best}
-                winner={winners.has(view.mySeat)}
-                hand={myHand}
-                bubble={bubbles.mine}
-                small={layout === "strip"}
-                cramped={cramped}
-              />
-            )}
-          >
-            <TurnBanner active={myTurn} />
-          </OvalTable>
+        <div className="relative flex flex-col min-h-0">
+          <div className={`relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${narrow ? "px-2 pt-2 pb-1" : "px-4 pt-4 pb-3"}`}>
+            <OvalTable
+              layout={layout}
+              plate={plateNode}
+              cards={cardsNode}
+              bets={bets}
+              turnRel={!dealing && view.turn != null ? relOf(view.turn) : null}
+              winners={[...winners].map(relOf)}
+              hand={view.handNumber}
+              dealer={dealer}
+              line={line}
+              board={view.board}
+              best={best}
+              pots={potsOf(view)}
+              deal={deal}
+              onDealt={setDealtKey}
+              muck={view.seats.filter((p) => p?.inHand && p.folded).length * 2}
+              countdown={firstHandAt}
+              banner={banner}
+              print={["NO-LIMIT HOLD'EM", `BLINDS ${fmt(view.smallBlind)}/${fmt(view.bigBlind)}`]}
+              result={result}
+            >
+              <TurnBanner active={myTurn} />
+            </OvalTable>
+          </div>
 
-          <BetControls legal={legal} pot={potSize(view)} currentBet={view.currentBet} onMove={actions.move} message={message} warning={warning} compact={narrow} short={layout === "row"}>
+          <div className="relative px-4 py-2" style={{ backgroundColor: "#14102a", borderTop: "4px solid #0a0712" }}>
+          <BetControls legal={legal} pot={potSize(view)} currentBet={view.currentBet} bigBlind={view.bigBlind} onMove={actions.move} message={message} warning={warning} compact={narrow} short={seats === "row"}>
             {isHost && !view.started && (
               <button className={EXTRA_BTN} style={{ backgroundColor: "#9bd14f", borderColor: "#6a9a30", color: "#1a3a0e" }} onClick={actions.start}>
                 START
@@ -546,6 +560,7 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
               </button>
             )}
           </BetControls>
+          </div>
         </div>
 
         <TableSidebar compact={compact} open={panelOpen} onClose={closePanel}>
@@ -575,74 +590,24 @@ function PokerScreen({ view, practice = null, online = null, actions, messages, 
 }
 
 /**
- * Your hand under the felt: your two cards (a folded hand flies to the
- * muck), beside them your tags, stack and hand. Its box keeps its size,
- * empty between hands. Marked on your turn, as in the other games (not when
- * `cramped`: the bar's gold status line says it).
+ * Your two cards at the foot of the felt (a folded hand flies to the muck),
+ * with what you hold beside them (on a phone, in a narrow tag). Outlined in gold on
+ * your turn, like the hand being played at the Blackjack table.
  */
-function YourSeat({ mine, cardW, myTurn, place, tags, best, winner, hand, bubble, small, cramped = false }) {
-  const cardH = Math.round(cardW * CARD_RATIO);
-  const holding = !!mine?.inHand && !mine.folded && mine.hole.some((c) => c.id);
-  const [showCards, cardsRef] = useMuck(holding, !!mine?.folded);
-  const overlap = Math.round(cardW * 0.3);
-  const info = mine && (
-    <div className="flex flex-col items-start gap-1.5 w-max">
-      {(place || winner || tags.length > 0) && (
-        <div className="flex gap-1 flex-wrap">
-          {winner && <YouTag label="WIN" bg="#9bd14f" fg="#1a3a0e" />}
-          {place && <YouTag label={place} bg="#1f1a3d" fg="#f4c430" />}
-          {tags.map((t) => (
-            <YouTag key={t.label} {...t} />
-          ))}
-        </div>
-      )}
-      <div className={`font-pixel-display text-parchment ${small ? "text-[10px]" : "text-[12px]"}`}>
-        YOU <span className="text-glow-gold tabular-nums">{mine.stack}</span>
+function YourCards({ mine, cardW, myTurn, best, hand, narrow = false }) {
+  return (
+    <div className="relative" data-your-turn={myTurn ? "true" : undefined}>
+      <div className="relative" style={{ padding: 3, boxShadow: myTurn ? "0 0 0 3px #f4c430, 0 0 12px rgba(244,196,48,0.5)" : "none" }}>
+        <SeatCards player={mine} rel={0} cardW={cardW} best={best} label="Your cards" spread={0.3} />
       </div>
-      {mine.pending > 0 && <div className="font-pixel-body text-[18px] leading-none" style={{ color: "#9bd14f" }}>+{fmt(mine.pending)} next hand</div>}
-      {hand && <div className="font-pixel-body text-[18px] leading-none text-bone/80">{hand}</div>}
-    </div>
-  );
-  const cards = (
-    <div className="relative shrink-0" style={{ width: cardW * 2 - overlap, height: cardH }}>
-      {showCards && mine && (
-        <div ref={cardsRef} className="absolute inset-0 flex" aria-label="Your cards">
-          {mine.hole.map((c, i) =>
-            c.id ? (
-              <div key={c.id} data-deal-rel={0} data-deal-card={i} style={{ marginLeft: i ? -overlap : 0 }}>
-                <PixelCard rank={c.rank} suit={c.suit} width={cardW} style={{ boxShadow: best.includes(c.id) ? "0 0 0 3px #9bd14f" : undefined }} />
-              </div>
-            ) : null,
-          )}
-        </div>
-      )}
-      {bubble && <ChatBubble name="You" lines={bubble} side="left" align="end" />}
-    </div>
-  );
-  return (
-    <div className="relative w-full h-full" data-your-turn={myTurn ? "true" : undefined}>
-      {myTurn && !cramped && <YourTurnMark />}
-      {small ? (
-        <div className="absolute inset-x-0 bottom-1 flex items-end justify-center gap-3">
-          {cards}
-          {info}
-        </div>
-      ) : (
-        <>
-          <div className="absolute left-1/2 bottom-1" style={{ transform: "translateX(-50%)" }}>
-            {cards}
-            <div className="absolute left-full bottom-0 ml-4">{info}</div>
-          </div>
-        </>
+      {hand && (
+        <span
+          className={`absolute left-full top-1/2 font-pixel-display px-1.5 py-1 ${narrow ? "ml-2 text-[8px] leading-tight w-[68px]" : "ml-3 text-[9px] leading-none whitespace-nowrap"}`}
+          style={{ transform: "translateY(-50%)", backgroundColor: "#0a0712", color: "#ead8b1", boxShadow: "0 0 0 2px #0a0712" }}
+        >
+          {hand}
+        </span>
       )}
     </div>
-  );
-}
-
-function YouTag({ label, bg, fg = "#1a1024" }) {
-  return (
-    <span className="font-pixel-display text-[9px] leading-none px-1.5 py-1 whitespace-nowrap" style={{ backgroundColor: bg, color: fg, boxShadow: "0 0 0 2px #0a0712" }}>
-      {label}
-    </span>
   );
 }

@@ -38,14 +38,15 @@ export function calloutsBetween(prev, view) {
 
 /**
  * Each seat's callout to show now (or none) for the views drawn so far.
- * Returns [calloutFor(seat), done(seat, id)].
+ * between(prev, view): what's new (Poker passes its own). Returns
+ * [calloutFor(seat), done(seat, id)].
  */
-export function useSeatCallouts(view) {
+export function useSeatCallouts(view, between = calloutsBetween) {
   const [seen, setSeen] = useState(view);
   const [queues, setQueues] = useState({});
   if (view !== seen) {
     setSeen(view);
-    const fresh = calloutsBetween(seen, view);
+    const fresh = between(seen, view);
     if (fresh.length)
       setQueues((q) => {
         const next = { ...q };

@@ -6,9 +6,13 @@
 // pixel — and the browser would draw some pixels 3 wide and some 4. Snapping
 // trades a pixel or two of layout size for every avatar pixel being the same
 // size. The border sits outside the art so it never crops the edge pixels.
+//
+// Its place is snapped too: an avatar laid out between two device pixels (a
+// table that places its seats by percentages) is nudged onto the nearest one,
+// or the browser redraws it with its eyes and mouth out of line.
 
-import React, { useEffect, useRef, useState } from "react";
-import { renderAvatarToCanvas, snapAvatarSize } from "../utils/avatarConstants";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { gridNudge, renderAvatarToCanvas, snapAvatarSize } from "../utils/avatarConstants";
 
 function useDevicePixelRatio() {
   const [dpr, setDpr] = useState(() => (typeof window === "undefined" ? 1 : window.devicePixelRatio || 1));
@@ -36,6 +40,22 @@ export default function CustomAvatarCanvas({ avatarData, size = 51, border = tru
     ctx.imageSmoothingEnabled = false;
     renderAvatarToCanvas(ctx, avatarData, device);
   }, [avatarData, device]);
+
+  // After every layout (and when the window changes), onto the device-pixel grid.
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const place = () => {
+      canvas.style.translate = "";
+      const r = canvas.getBoundingClientRect();
+      const x = gridNudge(r.left, dpr);
+      const y = gridNudge(r.top, dpr);
+      canvas.style.translate = x || y ? `${x}px ${y}px` : "";
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  });
 
   return (
     <canvas

@@ -1,68 +1,161 @@
-// OVAL TABLE — the poker felt and the seats around it, laid out like the
-// tables in Thirteen and Muushig: everyone sits outside the felt. The other
-// five sit clockwise from your left: two in a column on the left (1 lower,
-// 2 upper), one above the felt (3), two in a column on the right (4 upper,
-// 5 lower); your hand (`hero`) lies under the felt.
+// OVAL TABLE — the poker table, built like Blackjack's: the hooded dealer above
+// the felt with what they call in a bubble, the players' plates just off the
+// rim, their cards and betting circles on the felt in front of them. It's the
+// shape of a card room table (tableShape.js): straight sides and round ends,
+// with a curve cut into the top edge for the dealer. Green felt, oak rim.
 //
-// On the felt: the five board cards in the middle, the pot above them as a
-// pile of chips (side pots as extra tags) and the hand's result below; each
-// player's bet this street as a chip stack at the edge in front of them (the
-// blinds' marked SB / BB), and the dealer button beside the dealer's bet.
-// The house's deck lies left of the board and the muck right of it: hands
-// are shuffled and dealt from the middle, folded hands land on the muck (see
-// TablePiles and cardMotion.js). Before the first hand a countdown stands
-// over the board.
+// Seven seats, mirrored: you at the foot, the other six clockwise from your
+// left, three up each side, the dealer between them at the head. On the felt:
+// the board in the middle, the pot over it, the deck to the dealer's left and
+// the muck to their right (see TablePiles). The dealer button travels round a
+// track on the felt, always clockwise. Before the first hand a countdown
+// stands over the board.
 //
-// The felt is sized from the room it gets, and your hand's box has a fixed
-// height, so nothing on the table moves or resizes whatever is (or isn't)
-// dealt. `layout`: "full"; "row" (short screens: slim plates); "strip"
-// (phones: all five in a row above the felt).
+// Everything moves the way a dealer would move it (cardMotion.js): a hand's
+// cards are swept to the muck and back into the deck, which is riffled and
+// dealt round the table; the board comes off the deck face down and turns
+// over; chips fly from a plate to its circle, into the pot at the end of a
+// street, and from the pot to whoever won it.
+//
+// The table keeps its shape whatever the space: a box of a fixed aspect ratio,
+// everything in it placed by percentages, and cards, chips and circles scaled
+// to its width, so nothing runs into anything on a smaller screen. `layout`
+// "compact" (phones under 640 px wide) stands the table up. Under its minimum
+// height (a phone on its side) the table keeps that height and its area scrolls.
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useRef } from "react";
+import gsap from "gsap";
 import { PixelCard } from "../PixelCard";
 import { CARD_RATIO } from "../../hooks/useTableMetrics";
+import { useElementWidth } from "../../hooks/useElementWidth";
+import { reducedMotion } from "../../utils/motion";
+import DealerPortrait from "../blackjack/DealerPortrait";
 import ChipStack from "./ChipStack";
-import { useBoardReveal, useDeal } from "./cardMotion";
+import { useBoardReveal, useChipMotion, useDeal } from "./cardMotion";
 import { Deck, Muck } from "./TablePiles";
 import Countdown from "./Countdown";
+import { nextLap, stadiumPath, stadiumPoint } from "./tableShape";
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const pct = (f) => `${f * 100}%`;
 
-// The felt's width / height, and its largest width.
-const ASPECT = { full: 1.75, row: 2.2 };
-const MAX_FELT_W = 980;
-// A side column: the plate plus its cards hanging toward the felt.
-const COL_W = { full: 206, row: 190 };
-const GAP = 28; // between a column and the felt's rim
-// The top seat's plate, and the room from it to the felt (its cards hang beside it).
-const TOP_H = { full: 81, row: 54 };
-const TOP_GAP = { full: 30, row: 10 };
-const COLUMN_H = 2 * 165 + 40; // two tall plates and the room between
-// Each seat's bet at the felt's edge in front of it, and the dealer button
-// beside it: [x%, y%] of the felt, by seat relative to you (0 = you).
-const BET_AT = { 0: [50, 84], 1: [13, 66], 2: [13, 34], 3: [50, 15], 4: [87, 34], 5: [87, 66] };
-const DEALER_AT = { 0: [61, 86], 1: [16, 80], 2: [16, 20], 3: [62, 13], 4: [84, 20], 5: [84, 80] };
-// On a phone the five sit above the felt.
-// The side bets and buttons keep clear of the deck and the muck either side of the board.
-const STRIP_BET_AT = { 0: [50, 84], 1: [18, 67], 2: [22, 22], 3: [50, 12], 4: [78, 22], 5: [82, 67] };
-const STRIP_DEALER_AT = { 0: [64, 86], 1: [13, 34], 2: [30, 13], 3: [64, 12], 4: [70, 13], 5: [87, 34] };
+// Each table in its own units: its size, the felt, and by seat relative to you
+// (0 = you): how far round the rim it sits (t, see tableShape), how far in its
+// cards lie and where its betting circle is ([t, inset]). The seats mirror each
+// other across the table: three up each side, you at the foot with your circle
+// straight in front of you. button: how far past a seat's t the dealer button
+// sits (unless the seat says otherwise: the right side's mirror the left's,
+// sitting before their seat), on a track `track` in from the rim; it still
+// always travels clockwise.
+// deckAt / muckAt / potAt / boardAt / printAt: where those lie, as fractions of
+// the table. Sizes are px on a table this wide, and scale with it; plateW
+// doesn't, its words being a fixed size.
+const GEOMETRY = {
+  full: {
+    width: 1100,
+    height: 540,
+    felt: { x0: 150, y0: 92, x1: 950, y1: 468 },
+    notch: { half: 92, depth: 24 },
+    minHeight: 460,
+    portraitPx: 3,
+    outside: true,
+    plateW: 156,
+    seats: [
+      { t: 0, cards: 120, bet: [0, 40], button: 0.06 },
+      { t: 0.15, cards: 58, bet: [0.122, 122] },
+      { t: 0.25, cards: 54, bet: [0.25, 122], button: 0.045 },
+      { t: 0.35, cards: 58, bet: [0.378, 122], button: 0.046 },
+      { t: 0.65, cards: 58, bet: [0.622, 122], button: -0.046 },
+      { t: 0.75, cards: 54, bet: [0.75, 122], button: -0.045 },
+      { t: 0.85, cards: 58, bet: [0.878, 122], button: -0.03 },
+    ],
+    button: 0.03,
+    track: 34,
+    deckAt: [0.61, 0.262],
+    muckAt: [0.39, 0.262],
+    potAt: 0.348,
+    printAt: 0.275,
+    boardAt: 0.43,
+    sizes: { seatCard: 46, heroCard: 60, boardCard: 58, pileCard: 40, circle: 58, button: 30, chip: 16 },
+  },
+  compact: {
+    width: 380,
+    height: 640,
+    felt: { x0: 46, y0: 74, x1: 334, y1: 596 },
+    notch: null,
+    minHeight: 500,
+    portraitPx: 2,
+    outside: false,
+    plateW: 66,
+    seats: [
+      { t: 0, cards: 150, bet: [0, 96], button: 0.07 },
+      { t: 0.125, cards: 58, bet: [0.17, 104], button: 0.058 },
+      { t: 0.22, cards: 58, bet: [0.205, 104] },
+      { t: 0.345, cards: 50, bet: [0.33, 96] },
+      { t: 0.655, cards: 50, bet: [0.67, 96] },
+      { t: 0.78, cards: 58, bet: [0.795, 104] },
+      { t: 0.875, cards: 58, bet: [0.83, 104], button: -0.058 },
+    ],
+    button: 0.035,
+    track: 40,
+    deckAt: [0.6, 0.17],
+    muckAt: [0.4, 0.17],
+    potAt: 0.3,
+    printAt: 0.222,
+    boardAt: 0.445,
+    sizes: { seatCard: 24, heroCard: 42, boardCard: 46, pileCard: 22, circle: 36, button: 22, chip: 10 },
+  },
+};
 
-const pct = ([x, y]) => ({ left: `${x}%`, top: `${y}%` });
+/** A point of the table as a fraction of its width and height. */
+const fractionOf = (geo, { x, y }) => ({ left: pct(x / geo.width), top: pct(y / geo.height) });
 
-/** The dealer button: a white pixel disc marked D. */
-function DealerButton({ at, seat }) {
+/**
+ * Where a seat's plate goes: just off the rim (`outside`), else on it, and
+ * never past the table's sides however narrow it gets. tableW: its width, px.
+ */
+function plateAt(geo, t, tableW) {
+  const p = stadiumPoint(geo.felt, t, geo.outside ? -6 : 0);
+  const most = Math.max(Math.abs(p.nx), Math.abs(p.ny));
+  const [pullX, pullY] = geo.outside ? [p.nx / most, p.ny / most] : [0, 0];
+  const shift = (k) => `calc(-50% + ${(k * 50).toFixed(1)}%)`;
+  const base = fractionOf(geo, p);
+  if (!tableW) return { ...base, transform: `translate(${shift(pullX)}, ${shift(pullY)})` };
+  const half = geo.plateW / 2;
+  const x = (p.x / geo.width) * tableW + pullX * half;
+  return { ...base, left: clamp(x, half + 2, tableW - half - 2), transform: `translate(-50%, ${shift(pullY)})` };
+}
+
+/** The dealer button: a white pixel disc marked D, carried clockwise round the felt to its seat. */
+function DealerButton({ geo, t, seat, size }) {
+  const ref = useRef(null);
+  const at = useRef(t);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const place = (v) => Object.assign(el.style, fractionOf(geo, stadiumPoint(geo.felt, v, geo.track)));
+    const to = nextLap(at.current, t);
+    const step = { v: at.current };
+    if (Math.abs(to - step.v) < 1e-6) return void place(to);
+    place(step.v);
+    const tween = gsap.to(step, { v: to, duration: reducedMotion() ? 0.05 : 0.7 + (to - step.v) * 0.8, ease: "power2.inOut", onUpdate: () => place(step.v), onComplete: () => (at.current = to) });
+    return () => {
+      at.current = step.v;
+      tween.kill();
+    };
+  }, [geo, t]);
   return (
     <div
+      ref={ref}
       data-testid="dealer-button"
       data-seat={seat}
       title="Dealer"
-      className="absolute z-[5] flex items-center justify-center font-pixel-display text-[11px] leading-none"
+      className="absolute z-[18] flex items-center justify-center font-pixel-display leading-none"
       style={{
-        ...pct(at),
-        width: 26,
-        height: 26,
+        ...fractionOf(geo, stadiumPoint(geo.felt, t, geo.track)),
+        width: size,
+        height: size,
+        fontSize: Math.max(8, Math.round((size * 0.4) / 2) * 2),
         transform: "translate(-50%, -50%)",
-        transition: "left 400ms ease-in-out, top 400ms ease-in-out",
         backgroundColor: "#ead8b1",
         color: "#1a1024",
         clipPath: "polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%)",
@@ -74,17 +167,28 @@ function DealerButton({ at, seat }) {
   );
 }
 
-/** One seat's bet: a chip stack centred on its spot. */
-function Bet({ at, bet }) {
+/** A deck or muck lying on the felt by the dealer, with its name printed under it. */
+function Pile({ at: [x, y], label, z, children }) {
   return (
-    <div className="absolute z-[5]" style={{ ...pct(at), transform: "translate(-50%, -50%)" }}>
-      <ChipStack amount={bet.amount} label={bet.label} />
+    <div className={`absolute ${z} flex flex-col items-center gap-1.5`} style={{ left: pct(x), top: pct(y), transform: "translate(-50%, -50%)" }}>
+      <div style={{ filter: "drop-shadow(3px 4px 0 rgba(10,7,18,0.55))" }}>{children}</div>
+      {label && <span className="font-pixel-display text-[8px] tracking-widest leading-none" style={{ color: "rgba(234,216,177,0.42)" }}>{label}</span>}
+    </div>
+  );
+}
+
+/** A seat's betting circle, printed on the felt, with its bet as a chip stack (data-bet-rel / data-amount, for the chips' motion). */
+function BetCircle({ rel, at, bet, size, chip, active }) {
+  return (
+    <div className="absolute z-[12] flex items-center justify-center" data-bet-circle data-bet-rel={rel} data-amount={bet?.amount ?? 0} style={{ ...at, width: size, height: size, transform: "translate(-50%, -50%)" }}>
+      <div className="absolute inset-0" style={{ borderRadius: "50%", border: active ? "3px solid #f4c430" : "3px dashed rgba(234,216,177,0.28)", boxShadow: active ? "0 0 14px rgba(244,196,48,0.5)" : "none" }} />
+      {bet?.amount > 0 && <ChipStack amount={bet.amount} label={bet.label} chipSize={chip} />}
     </div>
   );
 }
 
 /**
- * A hand's result under the board: for each winner the hand's rank as a big
+ * A hand's result over the board: for each winner the hand's rank as a big
  * gold label, what it was made of, and who won how much. On a shallow felt,
  * one line each.
  */
@@ -133,211 +237,169 @@ function ResultLabel({ label, size }) {
   );
 }
 
-/**
- * The middle of the felt: the pot over the board, the result under it, the
- * deck left of it and the muck right of it. None of them moves the board.
- * result: the hand's winners (see Result), shown instead of the banner.
- * countdown: when the first hand deals (a Date.now() time), shown over the board.
- */
-function Center({ board, best, pots, banner, result = null, cardWidth, muck = 0, countdown = null, shallow = false }) {
-  const total = pots.reduce((a, p) => a + p.amount, 0);
-  const boardRef = useRef(null);
-  useBoardReveal(boardRef, board.length);
-  const pileW = Math.max(16, Math.round(cardWidth * 0.62));
-  const side = Math.max(8, Math.round(cardWidth * 0.18));
+/** The first hand's countdown, over the board. */
+function FirstHand({ endsAt, cardWidth }) {
   return (
-    <div className="absolute left-1/2 top-1/2" style={{ transform: "translate(-50%, -50%)" }}>
-      <div className="absolute top-1/2 right-full z-20" style={{ marginRight: side, transform: "translateY(-50%)" }}>
-        <Deck cardWidth={pileW} />
-      </div>
-      <div className="absolute top-1/2 left-full z-[15]" style={{ marginLeft: side, transform: "translateY(-50%)" }}>
-        <Muck count={muck} cardWidth={pileW} />
-      </div>
-      <div className="absolute left-1/2 bottom-full flex items-end gap-2 w-max" style={{ marginBottom: shallow ? 4 : 12, transform: "translateX(-50%)" }} aria-label="Pot">
-        {total > 0 && <ChipStack amount={total} label="POT" big testId="pot" />}
-        {pots.length > 1 &&
-          pots.slice(1).map((p, i) => (
-            <span key={i} className="font-pixel-display text-[9px] px-1.5 py-1" style={{ backgroundColor: "#0a0712", color: "#ead8b1", boxShadow: "0 0 0 2px #1a3a2c" }}>
-              SIDE {p.amount}
-            </span>
-          ))}
-      </div>
-      <div ref={boardRef} className="flex gap-1.5" aria-label="Board" data-board>
-        {Array.from({ length: 5 }, (_, i) =>
-          board[i] ? (
-            <PixelCard
-              key={board[i].id}
-              rank={board[i].rank}
-              suit={board[i].suit}
-              width={cardWidth}
-              style={{ boxShadow: best.includes(board[i].id) ? "0 0 0 3px #9bd14f" : undefined }}
-            />
-          ) : (
-            <div key={i} style={{ width: cardWidth, height: Math.round(cardWidth * CARD_RATIO), border: "2px dashed rgba(155,209,79,0.22)" }} />
-          ),
-        )}
-      </div>
-      <div
-        className="absolute left-1/2 top-full mt-2.5 w-max max-w-[min(520px,80vw)] font-pixel-display text-[11px] leading-snug text-center"
-        style={{ transform: "translateX(-50%)", color: "#ead8b1", textShadow: "2px 2px 0 #0a0712" }}
-        role="status"
-        aria-live="polite"
-      >
-        {countdown == null && (result?.length ? <Result winners={result} cardWidth={cardWidth} shallow={shallow} /> : banner)}
-      </div>
-      {countdown != null && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10" role="timer" aria-label="First hand">
-          <Countdown endsAt={countdown}>
-            {(n) => (
-              <div
-                className="flex flex-col items-center gap-2 px-5 py-3"
-                style={{ backgroundColor: "rgba(10,7,18,0.85)", border: "3px solid #1f1a3d", boxShadow: "0 0 0 3px #0a0712, 4px 4px 0 3px #0a0712" }}
-              >
-                <div className="font-pixel-display text-[10px] tracking-widest whitespace-nowrap" style={{ color: "#ead8b1" }}>
-                  {n > 0 ? "FIRST HAND IN" : "SHUFFLE UP"}
-                </div>
-                {n > 0 && (
-                  <div key={n} className="countdown-tick font-pixel-display leading-none" style={{ color: "#f4c430", fontSize: Math.max(20, Math.round(cardWidth * 0.5)), textShadow: "3px 3px 0 #0a0712" }}>
-                    {n}
-                  </div>
-                )}
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10" role="timer" aria-label="First hand">
+      <Countdown endsAt={endsAt}>
+        {(n) => (
+          <div className="flex flex-col items-center gap-2 px-5 py-3" style={{ backgroundColor: "rgba(10,7,18,0.85)", border: "3px solid #1f1a3d", boxShadow: "0 0 0 3px #0a0712, 4px 4px 0 3px #0a0712" }}>
+            <div className="font-pixel-display text-[10px] tracking-widest whitespace-nowrap" style={{ color: "#ead8b1" }}>
+              {n > 0 ? "FIRST HAND IN" : "SHUFFLE UP"}
+            </div>
+            {n > 0 && (
+              <div key={n} className="countdown-tick font-pixel-display leading-none" style={{ color: "#f4c430", fontSize: Math.max(20, Math.round(cardWidth * 0.5)), textShadow: "3px 3px 0 #0a0712" }}>
+                {n}
               </div>
             )}
-          </Countdown>
-        </div>
+          </div>
+        )}
+      </Countdown>
+    </div>
+  );
+}
+
+/** The board's five places: cards as they come, dashed outlines until then. */
+function Board({ board, best, cardWidth }) {
+  const ref = useRef(null);
+  useBoardReveal(ref, board.length);
+  return (
+    <div ref={ref} className="flex gap-1.5" aria-label="Board" data-board>
+      {Array.from({ length: 5 }, (_, i) =>
+        board[i] ? (
+          <div key={board[i].id} className="relative" data-board-card>
+            <PixelCard rank={board[i].rank} suit={board[i].suit} width={cardWidth} style={{ boxShadow: best.includes(board[i].id) ? "0 0 0 3px #9bd14f" : undefined }} />
+          </div>
+        ) : (
+          <div key={i} style={{ width: cardWidth, height: Math.round(cardWidth * CARD_RATIO), border: "2px dashed rgba(234,216,177,0.2)" }} />
+        ),
       )}
     </div>
   );
 }
 
-function Felt({ style, children }) {
+/** The felt and its rim, drawn in the table's own units; hard edges, for the pixel look. */
+function Felt({ geo }) {
+  const { felt, notch } = geo;
+  const inner = notch && { ...notch, depth: notch.depth };
   return (
-    <div
-      className="absolute"
-      style={{
-        ...style,
-        borderRadius: "50% / 50%",
-        background: "radial-gradient(ellipse at 50% 45%, #2c6650 0%, #1a4030 45%, #0e2418 80%, #061810 100%)",
-        border: "6px solid #6b3a1f",
-        boxShadow: "0 0 0 4px #0a0712, 0 0 0 12px #2a1810, 0 0 0 16px #0a0712, inset 0 0 0 8px #1a3a2c, inset 0 0 80px rgba(0,0,0,0.6)",
-      }}
-    >
-      <div className="absolute pointer-events-none" style={{ inset: 14, borderRadius: "50% / 50%", border: "2px dashed rgba(155,209,79,0.18)" }} />
-      {children}
-    </div>
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${geo.width} ${geo.height}`} preserveAspectRatio="none" shapeRendering="crispEdges" aria-hidden>
+      <path d={stadiumPath(felt, notch, -3)} fill="#0a0712" transform="translate(0 7)" />
+      <path d={stadiumPath(felt, notch, -3)} fill="#6b3a1f" />
+      <path d={stadiumPath(felt, inner, 7)} fill="#0a3a2c" />
+      <path d={stadiumPath(felt, inner, 11)} fill="#17604a" />
+      <path d={stadiumPath(felt, null, geo.track + 15)} fill="none" stroke="rgba(234,216,177,0.14)" strokeWidth="2" strokeDasharray="10 8" />
+    </svg>
   );
 }
 
-/** The size of a box, kept current; re-attached when `key` swaps the box. */
-function useBox(key) {
-  const ref = useRef(null);
-  const [box, setBox] = useState(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setBox({ w: entry.contentRect.width, h: entry.contentRect.height }));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [key]);
-  return [ref, box];
-}
-
 /**
- * seat(rel, position): the seat node for 1..5; position is "left", "right" or
- *   "top" (strip: "top" for all).
- * bets: { 0..5: { amount, label } } (0 = yours; label "SB" / "BB").
+ * plate(rel): the seat's plate on the rim, for 0..6 (0 = you). cards(rel,
+ * cardWidth): its cards on the felt. bets: { 0..5: { amount, label } } (label
+ * "SB" / "BB"). turnRel: the seat on turn, whose circle lights up, or null.
+ * winners: the seats (rel) that won the hand, which the pot flies to. hand:
+ * the hand's number, so a new hand's chips aren't taken for the last one's.
  * dealer: { rel, seat } for the dealer button (rel as for seats), or null.
+ * line: what the dealer says (null: nothing).
  * board: card objects; best: card ids to light up (the winning hand).
  * pots: [{ amount }] main pot first (shown above the board).
- * banner: a line under the board ("Waiting for players…").
+ * banner: a line under the board ("Waiting for players…"); print: lines
+ * printed on the felt between the deck and the muck, the game and the stakes
+ * (a phone, or a table too narrow for them, prints only the last: the words
+ * don't shrink with the table).
  * result: once a hand is over, its winners: [{ name, amount, label, detail }]
- *   (label and detail null when nobody showed), shown under the board.
+ *   (label and detail null when nobody showed), shown over the board.
  * muck: cards folded this hand. countdown: when the first hand deals (a
  *   Date.now() time), counted down over the board; null for none.
  * deal: { key, order } to deal a new hand round the table (see useDeal), or
  *   null; onDealt(key) once its cards have landed.
- * hero: (cardWidth, cramped) => your hand, in a box under the felt sized for
- *   cards that wide; `cramped` on a short screen, where the box has no room to spare.
- * cardWidth: the board's cards on a phone (elsewhere the felt sizes them).
- * heroWidth: your cards' width.
- * children: drawn over the felt (the YOUR TURN banner).
+ * children: drawn over the table (the YOUR TURN banner).
  */
-export default function OvalTable({ layout = "full", seat, bets = {}, dealer = null, board = [], best = [], pots = [], banner = null, result = null, muck = 0, countdown = null, deal = null, onDealt, hero = null, cardWidth = 40, heroWidth = 100, children }) {
-  const [ref, box] = useBox(layout);
-  const tableRef = useRef(null);
-  useDeal(tableRef, deal, onDealt);
-  const placed = Object.entries(bets).filter(([, bet]) => bet?.amount > 0);
-  const strip = layout === "strip";
-  const row = layout === "row";
-  const heroBox = (
-    <div className="relative w-full shrink-0" style={{ height: Math.round(heroWidth * CARD_RATIO) + (row ? 8 : 22) }}>
-      {hero?.(heroWidth, row)}
-    </div>
-  );
-
-  if (strip) {
-    return (
-      <div ref={tableRef} data-poker-table className="flex-1 min-h-0 w-full flex flex-col">
-        {/* Room over the row for the seats' chips and under it for their cards, so the felt never moves. */}
-        <div className="flex justify-center gap-1.5 relative z-10" style={{ paddingTop: 12, paddingBottom: Math.round(30 * CARD_RATIO) + 8 }}>
-          {[1, 2, 3, 4, 5].map((rel) => (
-            <div key={rel}>{seat(rel, "top")}</div>
-          ))}
-        </div>
-        <div className="relative flex-1 min-h-[200px] mt-3">
-          <Felt style={{ inset: "4% 2%" }}>
-            <Center board={board} best={best} pots={pots} banner={banner} result={result} cardWidth={cardWidth} muck={muck} countdown={countdown} />
-            {placed.map(([rel, bet]) => (
-              <Bet key={rel} at={STRIP_BET_AT[rel]} bet={bet} />
-            ))}
-            {dealer && <DealerButton at={STRIP_DEALER_AT[dealer.rel]} seat={dealer.seat} />}
-            {children}
-          </Felt>
-        </div>
-        <div className="mt-3">{heroBox}</div>
-      </div>
-    );
-  }
-
-  const aspect = ASPECT[layout] ?? ASPECT.full;
-  const colW = COL_W[layout] ?? COL_W.full;
-  const topGap = TOP_GAP[layout] ?? TOP_GAP.full;
-  const topH = (TOP_H[layout] ?? TOP_H.full) + topGap;
-  const feltW = box ? clamp(Math.min(box.w - 2 * (colW + GAP), (box.h - topH - (row ? 0 : 24)) * aspect, MAX_FELT_W), 200, MAX_FELT_W) : 0;
-  const feltH = feltW / aspect;
-  const boardW = clamp(Math.round(feltH * 0.19), row ? 28 : 34, 84);
-  const colH = row ? topH + feltH : Math.max(topH + feltH, COLUMN_H);
+export default function OvalTable({ layout = "full", plate, cards, bets = {}, turnRel = null, winners = [], hand = null, dealer = null, line = null, board = [], best = [], pots = [], banner = null, print = null, result = null, muck = 0, countdown = null, deal = null, onDealt, children }) {
+  const geo = GEOMETRY[layout] ?? GEOMETRY.full;
+  const compact = layout === "compact";
+  const rootRef = useRef(null);
+  useDeal(rootRef, deal, onDealt);
+  useChipMotion(rootRef, { hand, winners });
+  const width = useElementWidth(rootRef);
+  const scale = width ? clamp(width / geo.width, 0.55, 1.35) : 1;
+  const size = Object.fromEntries(Object.entries(geo.sizes).map(([k, v]) => [k, Math.round(v * scale)]));
+  const ratio = geo.width / geo.height;
+  const centred = { left: "50%", transform: "translateX(-50%)" };
+  const total = pots.reduce((a, p) => a + p.amount, 0);
 
   return (
-    <div ref={tableRef} data-poker-table className="flex-1 min-h-0 w-full flex flex-col">
-      <div ref={ref} className="flex-1 min-h-0 w-full flex items-center justify-center" style={{ gap: GAP }}>
-        {box && (
-          <>
-            <div className="flex flex-col justify-around items-start shrink-0" style={{ width: colW, height: colH }}>
-              {seat(2, "left")}
-              {seat(1, "left")}
-            </div>
-            <div className="relative flex flex-col items-center shrink-0" style={{ gap: topGap }}>
-              <div className="relative z-10">{seat(3, "top")}</div>
-              <div className="relative" style={{ width: feltW, height: feltH }}>
-                <Felt style={{ inset: 0 }}>
-                  <Center board={board} best={best} pots={pots} banner={banner} result={result} cardWidth={boardW} muck={muck} countdown={countdown} shallow={row} />
-                  {placed.map(([rel, bet]) => (
-                    <Bet key={rel} at={BET_AT[rel]} bet={bet} />
-                  ))}
-                  {dealer && <DealerButton at={DEALER_AT[dealer.rel]} seat={dealer.seat} />}
-                  {children}
-                </Felt>
-              </div>
-            </div>
-            <div className="flex flex-col justify-around items-end shrink-0" style={{ width: colW, height: colH }}>
-              {seat(4, "right")}
-              {seat(5, "right")}
-            </div>
-          </>
+    // The minimum height goes on an outer box: a size container whose height came only from a
+    // min-height measured 0 tall in Chromium, and the table vanished on short screens.
+    <div className="relative w-full h-full" style={{ minHeight: geo.minHeight }}>
+      <div className="absolute inset-0" style={{ containerType: "size" }}>
+        <div
+          ref={rootRef}
+          data-poker-table
+          data-layout={layout}
+          className="absolute left-1/2 top-1/2"
+          style={{ width: `min(100cqw, calc(100cqh * ${ratio}))`, height: `min(100cqh, calc(100cqw / ${ratio}))`, transform: "translate(-50%, -50%)" }}
+        >
+          <Felt geo={geo} />
+          <div className="absolute z-10" style={{ ...centred, top: 0 }}>
+            <DealerPortrait px={geo.portraitPx} line={line} />
+          </div>
+
+          <Pile at={geo.muckAt} label={!compact && "MUCK"} z="z-[15]">
+          <Muck count={muck} cardWidth={size.pileCard} />
+        </Pile>
+        <Pile at={geo.deckAt} label={!compact && "DECK"} z="z-30">
+          <Deck cardWidth={size.pileCard} />
+        </Pile>
+
+        <div className="absolute z-[14] flex items-end gap-2 w-max" data-pot style={{ ...centred, top: pct(geo.potAt), transform: "translate(-50%, -100%)" }} aria-label="Pot">
+            {result?.length ? <Result winners={result} cardWidth={size.boardCard} shallow={compact} /> : total > 0 && <ChipStack amount={total} label="POT" chipSize={size.chip + 4} testId="pot" />}
+            {!result?.length &&
+              pots.length > 1 &&
+              pots.slice(1).map((p, i) => (
+                <span key={i} className="font-pixel-display text-[9px] px-1.5 py-1" style={{ backgroundColor: "#0a0712", color: "#ead8b1", boxShadow: "0 0 0 2px #0a3a2c" }}>
+                  SIDE {p.amount}
+                </span>
+              ))}
+          </div>
+
+          <div className="absolute z-[13]" style={{ left: "50%", top: pct(geo.boardAt), transform: "translate(-50%, -50%)" }}>
+            <Board board={board} best={best} cardWidth={size.boardCard} />
+            {countdown != null && <FirstHand endsAt={countdown} cardWidth={size.boardCard} />}
+          </div>
+          {print && (
+          <div
+            className={`absolute z-[13] text-center whitespace-nowrap pointer-events-none ${compact ? "font-pixel-body text-[18px] leading-none" : "font-pixel-display text-[10px] leading-[2] tracking-wider"}`}
+            style={{ left: "50%", top: pct(geo.printAt), transform: "translate(-50%, -50%)", color: "rgba(234,216,177,0.42)" }}
+          >
+            {(compact || scale < 0.95 ? print.slice(-1) : print).map((line) => (
+              <div key={line}>{line}</div>
+            ))}
+          </div>
         )}
+        <div className="absolute z-[13] text-center whitespace-nowrap" style={{ left: "50%", top: pct(geo.boardAt + 0.13), transform: "translate(-50%, -50%)" }} role="status" aria-live="polite">
+          {banner && (
+            <span className="font-pixel-display text-[10px] leading-snug" style={{ color: "#ead8b1", textShadow: "2px 2px 0 #0a0712" }}>
+              {banner}
+            </span>
+          )}
+        </div>
+
+        {geo.seats.map(({ t, cards: inset, bet }, rel) => (
+            <React.Fragment key={rel}>
+              <BetCircle rel={rel} at={fractionOf(geo, stadiumPoint(geo.felt, bet[0], bet[1]))} bet={bets[rel]} size={size.circle} chip={size.chip} active={turnRel === rel} />
+              <div className="absolute z-20" data-seat-cards={rel} style={{ ...fractionOf(geo, stadiumPoint(geo.felt, t, inset)), transform: "translate(-50%, -50%)" }}>
+                {cards?.(rel, rel === 0 ? size.heroCard : size.seatCard)}
+              </div>
+              <div className="absolute z-[25]" data-plate-rel={rel} style={plateAt(geo, t, width)}>
+                {plate?.(rel)}
+              </div>
+            </React.Fragment>
+          ))}
+          {dealer && <DealerButton geo={geo} t={geo.seats[dealer.rel].t + (geo.seats[dealer.rel].button ?? geo.button)} seat={dealer.seat} size={size.button} />}
+          {children}
+        </div>
       </div>
-      {heroBox}
     </div>
   );
 }

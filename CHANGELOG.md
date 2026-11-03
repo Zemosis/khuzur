@@ -8,6 +8,23 @@ The hall is in early access, so versions are 0.x: the middle number moves
 for a new game or a big new system, the last for everything else. 1.0.0 is
 the first stable release.
 
+## 0.6.4 — 3 November 2026
+
+### Poker has a new table
+- **A real card room table.** Poker now plays on a long green table with rounded ends, like the ones in a casino, built the same way as the Blackjack table.
+- **Seven seats.** A Poker table now seats up to 7: you at the foot of the table and three players up each side, mirrored. Practice seats you with six CPUs.
+- **The Hooded House deals Poker too.** The dealer sits at the head of the table and calls the game as it goes: who's to act, the flop, turn and river, and who wins the pot.
+- **Everyone sits round the rim.** Each player's plate sits just off the table's edge, with their cards and a betting circle on the felt in front of them.
+- **Watch the dealer work.** At the end of a hand the cards are swept onto the muck and gathered back into the deck, which is riffled right in front of the dealer and dealt round the table. Your cards land face down and turn over; the flop, turn and river come off the deck face down and turn over too, and at a showdown hidden cards flip face up.
+- **Chips move like chips.** A bet flies from the player into their betting circle, the circles' chips slide into the pot when a street ends, and the pot flies to whoever won it.
+- **The dealer button travels round the table.** After each hand the D chip slides round the felt to the next seat instead of jumping across.
+- **See what everyone does.** FOLD, CHECK, CALL, BET, RAISE and ALL-IN pop up over each player as they happen.
+- **New bet controls.** Tap Blackjack's chips at the lower left to add to your raise. The raise slider is now a row of pixel blocks with a chip-shaped handle, and ½ POT, POT and ALL-IN are still there.
+
+### Fixes
+- **Player pictures stay crisp.** Some avatars at the tables, often your own, came out smudged, with the eyes and mouth out of line. Every avatar now lines up exactly with your screen's pixels, whatever your zoom.
+- **Blackjack and Poker tables show on short screens.** On a short window or a phone held sideways, the table could go missing. It now shows, and scrolls when there isn't room.
+
 ## 0.6.3 — 2 November 2026
 
 - **The Blackjack table has its rulebook.** A **RULES** button now sits in the table's header, like the other games, so you can check a payout or a split without leaving your seat.

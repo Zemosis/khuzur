@@ -1,6 +1,6 @@
 // POKER LOBBY — the shared GameLobby configured for Poker. Tables are hosted
 // and joined on the same events as the other games; the game type keeps each
-// game's tables apart. Practice seats you with five CPUs at the chosen level.
+// game's tables apart. Practice seats you with six CPUs at the chosen level.
 // The CREDITS tab hosts and joins credit tables.
 
 import React from "react";

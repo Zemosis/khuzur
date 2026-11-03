@@ -9,6 +9,7 @@ import {
   presetAvatar,
   serializeAvatar,
   snapAvatarSize,
+  gridNudge,
 } from "../../src/utils/avatarConstants.js";
 
 const grid = (n, fill) => Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => fill(r, c)));
@@ -63,5 +64,24 @@ describe("avatar grid", () => {
     expect(snapAvatarSize(51)).toEqual({ device: 51, css: 51 });
     expect(snapAvatarSize(34, 2)).toEqual({ device: 68, css: 34 });
     expect(snapAvatarSize(64).device % 17).toBe(0);
+  });
+});
+
+describe("gridNudge", () => {
+  it("moves an avatar that lands between device pixels onto the nearest one", () => {
+    // At 1 CSS px = 1 device px, 100.4 rounds down to 100: move back 0.4.
+    expect(gridNudge(100.4, 1)).toBeCloseTo(-0.4);
+    expect(gridNudge(100.6, 1)).toBeCloseTo(0.4);
+  });
+
+  it("works in device pixels, so a scaled screen lands on its own grid", () => {
+    // At 125%, 10 CSS px is 12.5 device px: half a device pixel is 0.4 CSS px.
+    expect(gridNudge(10, 1.25)).toBeCloseTo(0.4);
+    expect(gridNudge(10.4, 1.25)).toBeCloseTo(0);
+  });
+
+  it("leaves an avatar already on the grid alone", () => {
+    expect(gridNudge(37, 1)).toBe(0);
+    expect(gridNudge(0, 0.75)).toBe(0);
   });
 });

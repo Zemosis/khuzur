@@ -217,7 +217,7 @@ const MainMenu = () => {
         <GameTile
           id="poker"
           title="POKER"
-          tag="2-6 PLAYERS"
+          tag="2-7 PLAYERS"
           desc="No-limit Texas Hold'em. Two cards of your own, five on the table: bet, bluff and take the pot."
           accent="moss"
           cards={[

@@ -157,7 +157,7 @@ export default function PokerRules({ onClose }) {
         <p>
           The host presses <Key>START</Key> once: after a short countdown the first hand deals, and hands follow while two or more players have
           chips. At a free table the host can add CPUs (<Hi color="#9bd14f">EASY</Hi>, <Hi color="#f4c430">MEDIUM</Hi> or{" "}
-          <Hi color="#e85a7a">HARD</Hi>), remove them, and close the table. Practice seats you with five CPUs and has no turn clock.
+          <Hi color="#e85a7a">HARD</Hi>), remove them, and close the table. Practice seats you with six CPUs and has no turn clock.
         </p>
       </Section>
 
@@ -196,7 +196,7 @@ export default function PokerRules({ onClose }) {
 
       <Section id="cpus" n={8} title="CPU levels">
         <p>
-          CPUs come in three levels. Practice seats you with five CPUs at the level you pick; at a free table online, the host
+          CPUs come in three levels. Practice seats you with six CPUs at the level you pick; at a free table online, the host
           adds each CPU at its own level. Credit tables are for people only.
         </p>
         <CpuLevels levels={LEVELS} />

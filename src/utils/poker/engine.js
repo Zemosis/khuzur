@@ -7,7 +7,7 @@
 // online tables run the same file (server/game/poker/ is a byte-identical
 // copy).
 //
-// A table has 6 seats, each empty (null) or a player. Players come and go
+// A table has 7 seats, each empty (null) or a player. Players come and go
 // between hands; one who sits down mid-hand is dealt in from the next hand.
 // Phases:
 //   WAITING    no hand: fewer than 2 players with chips, or not started yet
@@ -22,7 +22,7 @@
 import { createDeck, evaluate } from "./hands.js";
 import { awardPots, buildPots, fromLeftOf } from "./pots.js";
 
-export const MAX_SEATS = 6;
+export const MAX_SEATS = 7;
 export const SMALL_BLIND = 5;
 export const BIG_BLIND = 10;
 export const BUY_IN = 1000;

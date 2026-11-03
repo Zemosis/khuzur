@@ -6,19 +6,11 @@
 // an amount the table can't take, the table's bet is cleared. A free table's seat below the minimum gets REBUY instead.
 
 import React, { useState } from "react";
+import ChipRack from "../ChipRack";
 import Countdown from "../poker/Countdown";
 import { MIN_BET } from "../../utils/blackjack/rules";
 import { clock } from "./tableInfo";
 
-// The chip rack: value, label, face, ink.
-const CHIPS = [
-  [10, "10", "#ead8b1", "#0a0712"],
-  [50, "50", "#e85a7a", "#0a0712"],
-  [100, "100", "#2a8a8c", "#0a0712"],
-  [500, "500", "#c89820", "#0a0712"],
-  [1000, "1K", "#9bd14f", "#0a0712"],
-  [5000, "5K", "#463a78", "#ead8b1"],
-];
 const BTN = "pixel-btn font-pixel-display text-[10px] px-3 py-2.5 whitespace-nowrap";
 const TONE = {
   dusk: { backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" },
@@ -74,27 +66,7 @@ export default function BetBar({ seat, credit = false, endsAt = null, onBet, onD
 
   return (
     <div className={`flex flex-wrap items-center ${compact ? "gap-2" : "gap-2.5"}`}>
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Chips">
-        {CHIPS.map(([value, label, face, ink]) => (
-          <button
-            key={value}
-            onClick={() => change(amount + value)}
-            disabled={amount + value > bankroll}
-            className="pixel-pick font-pixel-display text-[10px] leading-none flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              width: compact ? 38 : 44,
-              height: compact ? 38 : 44,
-              borderRadius: "50%",
-              backgroundColor: face,
-              color: ink,
-              border: "4px dashed #ead8b1",
-              boxShadow: "0 3px 0 #0a0712, 0 0 0 2px #0a0712",
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <ChipRack onPick={(value) => change(amount + value)} canPick={(value) => amount + value <= bankroll} size={compact ? 38 : 44} />
       <input
         type="text"
         inputMode="numeric"

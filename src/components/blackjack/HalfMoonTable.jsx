@@ -21,13 +21,14 @@
 // Cards and chips move as each view arrives (cardMotion.js), and what each
 // player does pops over their plate (seatCallouts.js).
 
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useRef } from "react";
 import { PixelCard } from "../PixelCard";
 import DealerPortrait from "./DealerPortrait";
 import BlackjackSeat, { SeatPlate, TableCard } from "./BlackjackSeat";
 import { SEAT_SIZE, dealerLine, dealerTag, fanStep, handLanes } from "./tableInfo";
 import { useTableMotion } from "./cardMotion";
 import { useSeatCallouts } from "./seatCallouts";
+import { useElementWidth } from "../../hooks/useElementWidth";
 import { PHASES } from "../../utils/blackjack/engine";
 
 // The rim's curve: the felt's bottom corners are rounded this far up its height.
@@ -123,19 +124,6 @@ const HOLDER_GAP = 14; // kept clear of them, with room for a total hanging over
 const CARD_GAP = 6; // between the dealer's cards
 const TAG_ROOM = 64; // the dealer's total, beside the cards
 
-/** The table's width in px; 0 until it's been laid out. */
-function useTableWidth(ref) {
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    setWidth(el.offsetWidth);
-    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return width;
-}
-
 /**
  * Where the hands may go on a table `width` px across: `dealerRoom`, the width
  * of the dealer's row, and `rooms`, for each seat how far its hands may spread
@@ -183,7 +171,7 @@ function DealerHand({ view, cardW, dealAt, room }) {
 }
 
 /** The wooden holder the shoe and the tray share, cardW wide cards in it. */
-function Holder({ cardW, label, children, ...rest }) {
+export function Holder({ cardW, label, children, ...rest }) {
   return (
     <div className="flex flex-col items-center gap-1">
       <div
@@ -264,7 +252,7 @@ export default function HalfMoonTable({ view, motion = null, mySeat, onSit, layo
   const ownMotionRef = useRef({ busyUntil: 0 });
   useTableMotion(rootRef, view, motion ?? ownMotionRef);
   const [calloutFor, calloutDone] = useSeatCallouts(view);
-  const { dealerRoom, rooms } = tableRoom(geo, size, useTableWidth(rootRef), view);
+  const { dealerRoom, rooms } = tableRoom(geo, size, useElementWidth(rootRef), view);
 
   // The deal goes round twice, first base first and the dealer last.
   const dealing = view.seats.flatMap((p, i) => (p?.inRound ? [i] : []));
@@ -272,94 +260,98 @@ export default function HalfMoonTable({ view, motion = null, mySeat, onSit, layo
   const dealerDealAt = (i) => i * lap + dealing.length;
 
   return (
-    <div className="relative w-full h-full" style={{ containerType: "size", minHeight: geo.minHeight }}>
-      <div
-        ref={rootRef}
-        className="absolute left-1/2 top-1/2"
-        data-layout={layout}
-        style={{
-          width: `min(100cqw, calc(100cqh * ${geo.ratio}))`,
-          height: `min(100cqh, calc(100cqw / ${geo.ratio}))`,
-          transform: "translate(-50%, -50%)",
-        }}
-      >
-        {/* The felt: flat top edge, curved bottom, oak rim. */}
+    // The minimum height goes on an outer box: a size container whose height came only from a
+    // min-height measured 0 tall in Chromium, and the table vanished on short screens.
+    <div className="relative w-full h-full" style={{ minHeight: geo.minHeight }}>
+      <div className="absolute inset-0" style={{ containerType: "size" }}>
         <div
-          className="absolute"
+          ref={rootRef}
+          className="absolute left-1/2 top-1/2"
+          data-layout={layout}
           style={{
-            left: pct(geo.felt.left),
-            right: pct(geo.felt.right),
-            top: pct(geo.felt.top),
-            bottom: pct(geo.felt.bottom),
-            backgroundColor: "#4a1a2c",
-            border: `${compact ? 6 : 8}px solid #6b3a1f`,
-            borderTopWidth: compact ? 8 : 10,
-            borderRadius: `0 0 50% 50% / 0 0 ${CURVE * 100}% ${CURVE * 100}%`,
-            boxShadow: "0 6px 0 #0a0712, inset 0 0 0 4px #2e0f1d",
+            width: `min(100cqw, calc(100cqh * ${geo.ratio}))`,
+            height: `min(100cqh, calc(100cqw / ${geo.ratio}))`,
+            transform: "translate(-50%, -50%)",
           }}
-        />
+        >
+          {/* The felt: flat top edge, curved bottom, oak rim. */}
+          <div
+            className="absolute"
+            style={{
+              left: pct(geo.felt.left),
+              right: pct(geo.felt.right),
+              top: pct(geo.felt.top),
+              bottom: pct(geo.felt.bottom),
+              backgroundColor: "#4a1a2c",
+              border: `${compact ? 6 : 8}px solid #6b3a1f`,
+              borderTopWidth: compact ? 8 : 10,
+              borderRadius: `0 0 50% 50% / 0 0 ${CURVE * 100}% ${CURVE * 100}%`,
+              boxShadow: "0 6px 0 #0a0712, inset 0 0 0 4px #2e0f1d",
+            }}
+          />
 
-        <div className="absolute z-10" style={{ ...centred, top: 0 }}>
-          <DealerPortrait px={geo.portraitPx} line={dealerLine(view)} />
-        </div>
-        <div className="absolute" style={{ ...geo.tray }}>
-          <Tray discarded={(view.dealt ?? 0) - onTable} cardW={size.shoeCard} compact={compact} />
-        </div>
-        <div className="absolute z-30" style={{ ...geo.shoe }}>
-          <Shoe cardW={size.shoeCard} compact={compact} />
-        </div>
-        <div className="absolute z-[15]" style={{ ...centred, top: geo.dealerTop }}>
-          <DealerHand view={view} cardW={size.dealerCard} dealAt={dealerDealAt} room={dealerRoom} />
-        </div>
-        <div className="absolute" style={{ ...centred, top: geo.rulesTop }}>
-          <RulesPrint compact={compact} />
-        </div>
-        <div data-bj-shuffle className="absolute" style={{ ...geo.shuffleAt, width: 0, height: 0 }} />
+          <div className="absolute z-10" style={{ ...centred, top: 0 }}>
+            <DealerPortrait px={geo.portraitPx} line={dealerLine(view)} />
+          </div>
+          <div className="absolute" style={{ ...geo.tray }}>
+            <Tray discarded={(view.dealt ?? 0) - onTable} cardW={size.shoeCard} compact={compact} />
+          </div>
+          <div className="absolute z-30" style={{ ...geo.shoe }}>
+            <Shoe cardW={size.shoeCard} compact={compact} />
+          </div>
+          <div className="absolute z-[15]" style={{ ...centred, top: geo.dealerTop }}>
+            <DealerHand view={view} cardW={size.dealerCard} dealAt={dealerDealAt} room={dealerRoom} />
+          </div>
+          <div className="absolute" style={{ ...centred, top: geo.rulesTop }}>
+            <RulesPrint compact={compact} />
+          </div>
+          <div data-bj-shuffle className="absolute" style={{ ...geo.shuffleAt, width: 0, height: 0 }} />
 
-        {geo.seats.map(({ circle: [x, y] }, seat) => {
-          const player = view.seats[seat] ?? null;
-          const k = dealing.indexOf(seat);
-          return (
-            <div key={seat} data-seat={seat} className="absolute" style={{ left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)", zIndex: 20 }}>
-              <BlackjackSeat
-                seat={seat}
-                player={player}
-                isMe={seat === mySeat}
-                turnHand={view.phase === PHASES.TURNS && view.turn?.seat === seat ? view.turn.hand : null}
-                phase={view.phase}
-                dealer={view.dealer}
-                dealAt={k < 0 ? null : (i) => i * lap + k}
-                layout={layout}
-                room={rooms[seat]}
-              />
-            </div>
-          );
-        })}
-        {geo.seats.map(({ plate: [x, y], pull: [px, py] }, seat) => {
-          const player = view.seats[seat] ?? null;
-          const shift = (k) => `calc(-50% + ${(k * 50).toFixed(1)}%)`;
-          return (
-            <div key={seat} data-plate={seat} className="absolute" style={{ left: `${x}%`, top: `${y}%`, transform: `translate(${shift(px)}, ${shift(py)})`, zIndex: 25 }}>
-              <SeatPlate
-                seat={seat}
-                player={player}
-                face={player ? faceFor(seat) : null}
-                isMe={seat === mySeat}
-                onTurn={view.phase === PHASES.TURNS && view.turn?.seat === seat}
-                phase={view.phase}
-                layout={layout}
-                edge={seat === 0 ? "right" : seat === 4 ? "left" : null}
-                xpLevel={view.levels?.[seat] ?? null}
-                canSit={canSit}
-                onSit={onSit}
-                callout={player ? calloutFor(seat) : null}
-                onCalloutDone={(id) => calloutDone(seat, id)}
-                reward={seat === mySeat ? reward : null}
-                onRewardDone={onRewardDone}
-              />
-            </div>
-          );
-        })}
+          {geo.seats.map(({ circle: [x, y] }, seat) => {
+            const player = view.seats[seat] ?? null;
+            const k = dealing.indexOf(seat);
+            return (
+              <div key={seat} data-seat={seat} className="absolute" style={{ left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)", zIndex: 20 }}>
+                <BlackjackSeat
+                  seat={seat}
+                  player={player}
+                  isMe={seat === mySeat}
+                  turnHand={view.phase === PHASES.TURNS && view.turn?.seat === seat ? view.turn.hand : null}
+                  phase={view.phase}
+                  dealer={view.dealer}
+                  dealAt={k < 0 ? null : (i) => i * lap + k}
+                  layout={layout}
+                  room={rooms[seat]}
+                />
+              </div>
+            );
+          })}
+          {geo.seats.map(({ plate: [x, y], pull: [px, py] }, seat) => {
+            const player = view.seats[seat] ?? null;
+            const shift = (k) => `calc(-50% + ${(k * 50).toFixed(1)}%)`;
+            return (
+              <div key={seat} data-plate={seat} className="absolute" style={{ left: `${x}%`, top: `${y}%`, transform: `translate(${shift(px)}, ${shift(py)})`, zIndex: 25 }}>
+                <SeatPlate
+                  seat={seat}
+                  player={player}
+                  face={player ? faceFor(seat) : null}
+                  isMe={seat === mySeat}
+                  onTurn={view.phase === PHASES.TURNS && view.turn?.seat === seat}
+                  phase={view.phase}
+                  layout={layout}
+                  edge={seat === 0 ? "right" : seat === 4 ? "left" : null}
+                  xpLevel={view.levels?.[seat] ?? null}
+                  canSit={canSit}
+                  onSit={onSit}
+                  callout={player ? calloutFor(seat) : null}
+                  onCalloutDone={(id) => calloutDone(seat, id)}
+                  reward={seat === mySeat ? reward : null}
+                  onRewardDone={onRewardDone}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

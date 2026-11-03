@@ -1,5 +1,5 @@
-// TABLE PILES — the house's deck and the muck, lying on the felt either side
-// of the board. Before each hand the deck slides to the middle, riffles
+// TABLE PILES — the house's deck and the muck, each in a wooden holder either
+// side of the dealer. Before each hand the deck slides to the middle, riffles
 // (its layers, data-deck-layer), deals and slides back; the flop, turn and
 // river come out of it (data-deck). Every folded hand lands on the muck
 // (data-muck), darker, which grows with what's been folded this hand and is
@@ -33,7 +33,7 @@ export function Muck({ count = 0, cardWidth }) {
   return (
     <div className="relative" style={{ width: cardWidth, height: Math.round(cardWidth * CARD_RATIO) }} data-muck title={`Muck: ${count}`}>
       {layers === 0 ? (
-        <div className="absolute inset-0" style={{ border: "2px dashed rgba(155,209,79,0.18)" }} />
+        <div className="absolute inset-0" style={{ border: "2px dashed rgba(234,216,177,0.3)" }} />
       ) : (
         Array.from({ length: layers }, (_, i) => (
           <div key={i} className="absolute inset-0" style={{ transform: `translate(${-i * 2}px, ${-i * 2}px) rotate(${(i - 1) * 6}deg)`, filter: "brightness(0.55) saturate(0.6)" }}>

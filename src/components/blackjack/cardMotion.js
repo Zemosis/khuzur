@@ -64,7 +64,7 @@ const middle = (el) => {
 const snap4 = (n) => Math.max(8, Math.round(n / 4) * 4);
 
 /** A card back laid over a face-up card while it flies (class bj-flip-back), removed as it turns. */
-function backOver(mover) {
+export function backOver(mover) {
   const card = mover.querySelector(".pixel-card");
   if (!card || card.classList.contains("pixel-card-back")) return null;
   const back = document.createElement("div");
@@ -76,7 +76,7 @@ function backOver(mover) {
 }
 
 /** On `tl` at `t`: `mover` turns over, its back coming off at the halfway point. */
-function turnOver(tl, mover, back, t, turn) {
+export function turnOver(tl, mover, back, t, turn) {
   tl.to(mover, { scaleX: 0, duration: turn / 2, ease: "power1.in" }, t)
     .call(() => back.remove(), null, t + turn / 2)
     .to(mover, { scaleX: 1, duration: turn / 2, ease: "power1.out" }, t + turn / 2);

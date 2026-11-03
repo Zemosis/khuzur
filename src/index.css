@@ -757,3 +757,43 @@ html[data-motion="reduced"] .reward-float { animation: none; }
 }
 .pixel-range::-moz-range-track { background: transparent; border: 0; }
 .pixel-range:focus-visible { outline: 3px solid #5fd4d6; outline-offset: 3px; }
+
+/* Poker's raise: the slider as a row of blocks, gold up to the amount, with
+   a stepped chip for a handle. */
+input[type="range"].pixel-range-blocks {
+  height: 26px;
+  background:
+    repeating-linear-gradient(to right, transparent 0 14px, #0a0712 14px 18px),
+    linear-gradient(to right, #f4c430 0 var(--fill, 0%), #2a234d var(--fill, 0%) 100%);
+  border: 4px solid #0a0712;
+  box-shadow: 3px 3px 0 #0a0712;
+}
+.pixel-range-blocks::-webkit-slider-runnable-track {
+  height: 18px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.pixel-range-blocks::-moz-range-track {
+  height: 18px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.pixel-range-blocks::-webkit-slider-thumb {
+  width: 24px;
+  height: 38px;
+  margin-top: -10px;
+  background: #ead8b1;
+  border: 0;
+  clip-path: polygon(25% 0, 75% 0, 75% 8%, 100% 8%, 100% 92%, 75% 92%, 75% 100%, 25% 100%, 25% 92%, 0 92%, 0 8%, 25% 8%);
+  box-shadow: inset 0 -6px 0 #c89820, inset 0 6px 0 #fff4d0;
+}
+.pixel-range-blocks::-moz-range-thumb {
+  width: 24px;
+  height: 38px;
+  background: #ead8b1;
+  border: 0;
+  clip-path: polygon(25% 0, 75% 0, 75% 8%, 100% 8%, 100% 92%, 75% 92%, 75% 100%, 25% 100%, 25% 92%, 0 92%, 0 8%, 25% 8%);
+  box-shadow: inset 0 -6px 0 #c89820, inset 0 6px 0 #fff4d0;
+}
