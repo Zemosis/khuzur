@@ -2,8 +2,9 @@
 // its betting circle (the table positions the circle's centre): the circle
 // holds the bet as a chip stack (once a round is won, the bet and its
 // winnings together), and the seat's hands sit above it (side by side after a split, the
-// hand being played outlined in gold under a bobbing arrow). Once a round is
-// settled each hand's total gives way to its result.
+// hand being played outlined in gold under a bobbing arrow). The table gives
+// the hands their room: a long hand closes up, then shrinks, to stay in it.
+// Once a round is settled each hand's total gives way to its result.
 //
 // The player's plate (SeatPlate) sits apart, on the table's rim: avatar,
 // name, bankroll, in the betting window READY / BETTING / SITTING OUT, and
@@ -21,7 +22,7 @@ import { HandReward } from "../RewardPanel";
 import PixelIcon from "../PixelIcon";
 import { PHASES } from "../../utils/blackjack/engine";
 import { MIN_BET } from "../../utils/blackjack/rules";
-import { SEAT_SIZE, fmt, resultTag, roundNet, short, totalTag } from "./tableInfo";
+import { HAND_PAD, SEAT_SIZE, fitHands, fmt, resultTag, roundNet, short, totalTag } from "./tableInfo";
 
 function Tag({ label, bg, fg = "#0a0712", ...rest }) {
   return (
@@ -49,13 +50,18 @@ export function TableCard({ card, width, deal = null, owner, style, ...rest }) {
 }
 
 /**
- * Where a seat's hands sit over its circle: centred, except split hands at
- * the table's edges, which grow inward so a phone doesn't cut them off.
+ * Where a seat's hands sit over its circle: centred, unless that takes them
+ * out of `room` (px either side of the circle's centre), when they slide
+ * along to stay in it. Too wide for it even so, they keep to the side nearer
+ * the table's edge: the shoe would hide them, the middle of the felt won't.
  */
-function handsAnchor(edge, count) {
-  if (count > 1 && edge === "right") return { right: 0 };
-  if (count > 1 && edge === "left") return { left: 0 };
-  return { left: "50%", transform: "translateX(-50%)" };
+function handsAnchor(width, circle, room) {
+  const centred = { left: "50%", transform: "translateX(-50%)" };
+  if (!room || (room.left <= -width / 2 && width / 2 <= room.right)) return centred;
+  const edgeOnRight = room.right < -room.left;
+  const overflows = width > room.right - room.left;
+  if (overflows) return { left: circle / 2 + (edgeOnRight ? room.right - width : room.left) };
+  return { left: circle / 2 + Math.max(room.left, Math.min(-width / 2, room.right - width)) };
 }
 
 /** READY / BETTING / SITTING OUT while betting; SITTING OUT (or LEFT) during a round it isn't in. */
@@ -70,11 +76,15 @@ function statusOf(player, phase) {
   return null;
 }
 
-function Hand({ hand, owner, cardW, current, settled, showBet, dealAt }) {
+const RISE = 5; // each card sits this much higher than the last, px...
+const MOST_RISE = 0.2; // ...until the hand has climbed this much of a card
+
+function Hand({ hand, owner, cardW, step, current, settled, showBet, dealAt }) {
   const tag = settled && hand.result ? resultTag(hand) : totalTag(hand);
-  const step = Math.round(cardW * 0.5);
+  const rise = Math.min(RISE, (cardW * MOST_RISE) / Math.max(1, hand.cards.length - 1));
   return (
-    <div className="relative flex flex-col items-center gap-1.5">
+    // Exactly as wide as its cards: a wider total hangs over the sides rather than pushing the next hand along.
+    <div className="relative flex flex-col items-center gap-1.5" style={{ width: cardW + (hand.cards.length - 1) * step + HAND_PAD }}>
       {current && (
         <span data-bj-wait className="absolute inset-x-0 bottom-full mb-1 pointer-events-none" style={{ height: 18 }}>
           <span data-testid="turn-arrow" className="turn-arrow absolute left-1/2 top-0" style={{ color: "#f4c430", filter: "drop-shadow(2px 2px 0 #0a0712)" }}>
@@ -85,7 +95,7 @@ function Hand({ hand, owner, cardW, current, settled, showBet, dealAt }) {
       <span data-bj-tag={owner}>
         <Tag label={tag.label} bg={tag.bg} fg={tag.fg} data-result={settled && hand.result ? hand.result : undefined} />
       </span>
-      <div className="relative flex items-end" style={{ padding: 3 }}>
+      <div className="relative flex items-end" style={{ padding: HAND_PAD / 2 }}>
         {current && <div data-bj-wait className="absolute inset-0 pointer-events-none" style={{ boxShadow: "0 0 0 3px #f4c430, 0 0 12px rgba(244,196,48,0.5)" }} />}
         {hand.cards.map((c, i) => (
           <TableCard
@@ -94,7 +104,7 @@ function Hand({ hand, owner, cardW, current, settled, showBet, dealAt }) {
             width={cardW}
             owner={owner}
             deal={dealAt && i < 2 ? dealAt(i) : null}
-            style={{ marginLeft: i ? step - cardW : 0, marginBottom: i * 5 }}
+            style={{ marginLeft: i ? step - cardW : 0, marginBottom: i * rise }}
           />
         ))}
       </div>
@@ -107,10 +117,10 @@ function Hand({ hand, owner, cardW, current, settled, showBet, dealAt }) {
  * seat: 0–4. player: the view's seat (null: empty). isMe: your seat.
  * turnHand: the hand being played here, or null. dealer: the view's dealer
  * (for what a settled round paid). dealAt(i): the place of the hand's i-th
- * card in the deal's order. edge: "left" | "right" for a seat at the
- * table's edge, else null.
+ * card in the deal's order. room: how far the hands may spread, { left,
+ * right } in px from the circle's centre (left negative); null for no limit.
  */
-export default function BlackjackSeat({ seat, player, isMe = false, turnHand = null, phase, dealer = null, dealAt = null, layout = "full", edge = null }) {
+export default function BlackjackSeat({ seat, player, isMe = false, turnHand = null, phase, dealer = null, dealAt = null, layout = "full", room = null }) {
   const size = SEAT_SIZE[layout] ?? SEAT_SIZE.full;
   const compact = layout === "compact";
   const playing = !!player?.inRound && player.hands.length > 0;
@@ -119,6 +129,7 @@ export default function BlackjackSeat({ seat, player, isMe = false, turnHand = n
   const settled = phase === PHASES.ROUND_OVER;
   const won = settled && playing && dealer ? roundNet(player, dealer) : 0;
   const split = playing && player.hands.length > 1;
+  const fit = playing ? fitHands(player.hands, room && room.right - room.left, size) : null;
 
   return (
     <div className="relative" style={{ width: size.circle, height: size.circle }}>
@@ -146,7 +157,7 @@ export default function BlackjackSeat({ seat, player, isMe = false, turnHand = n
       {playing && (
         <div
           className="absolute flex items-end gap-2 z-[5]"
-          style={{ bottom: "100%", marginBottom: compact ? 4 : 8, ...handsAnchor(edge, player.hands.length) }}
+          style={{ bottom: "100%", marginBottom: compact ? 4 : 8, ...handsAnchor(fit.width, size.circle, room) }}
           aria-label={`${isMe ? "Your" : `${short(player.name)}'s`} cards`}
         >
           {player.hands.map((hand, i) => (
@@ -154,7 +165,8 @@ export default function BlackjackSeat({ seat, player, isMe = false, turnHand = n
               key={i}
               hand={hand}
               owner={`s${seat}h${i}`}
-              cardW={split ? size.splitCard : size.card}
+              cardW={fit.cardW}
+              step={fit.step}
               current={turnHand === i}
               settled={settled}
               showBet={split}

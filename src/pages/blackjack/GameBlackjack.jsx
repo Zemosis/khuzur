@@ -4,8 +4,10 @@
 // once the cards are out), and the sidebar's chat and round log.
 //
 // Every state is drawn as it arrives (the server paces the deal and the
-// dealer), but a round's results wait for its last cards to land on the
-// table: until then the settled round shows as the dealer still playing
+// dealer), but what depends on the cards waits for them to land on the table.
+// A deal's prompts (insurance, your first move) wait for its cards, which may
+// follow a shuffle (useDealHold), and a round's results for its last cards:
+// until then the settled round shows as the dealer still playing
 // (useResultHold). A credit table is told by `view.credit`; leaving one
 // lands on the lobby's CREDITS tab.
 
@@ -25,9 +27,11 @@ import HalfMoonTable from "../../components/blackjack/HalfMoonTable";
 import BetBar from "../../components/blackjack/BetBar";
 import ActionBar from "../../components/blackjack/ActionBar";
 import BlackjackScoreBoard from "../../components/blackjack/BlackjackScoreBoard";
+import BlackjackRules from "../../components/blackjack/BlackjackRules";
 import { PHASES } from "../../utils/blackjack/engine";
+import { handTotal } from "../../utils/blackjack/rules";
 import { eventEntry, withContext } from "../../utils/blackjack/log";
-import { beforeResults } from "../../components/blackjack/tableInfo";
+import { beforeResults, whileDealing } from "../../components/blackjack/tableInfo";
 
 const AVATAR_COLOR = { 1: "#f4c430", 2: "#5fd4d6", 3: "#e85a7a", 4: "#9bd14f", 5: "#c5a8ff", custom: "#ead8b1" };
 const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -65,7 +69,8 @@ function OnlineBlackjack({ lobbyId, playerName }) {
     };
     const onState = (v) => {
       seenRef.current += 1;
-      setView({ ...v, phaseEndsAt: v.phaseMsLeft == null ? null : Date.now() + v.phaseMsLeft });
+      // A clock waits out the deal's pause before it starts to run.
+      setView({ ...v, phaseEndsAt: v.phaseMsLeft == null ? null : Date.now() + (v.pauseMsLeft ?? 0) + v.phaseMsLeft });
       creditRef.current = !!v.credit;
       if (v.phase === PHASES.BETTING) setRoundReward(null);
     };
@@ -116,7 +121,8 @@ function OnlineBlackjack({ lobbyId, playerName }) {
 
   // When the table's moves under way end (performance.now ms): written by the table.
   const motion = useRef({ busyUntil: 0 });
-  const [shown, revealed] = useResultHold(view, motion);
+  const landed = useDealHold(view, motion);
+  const [shown, revealed] = useResultHold(landed, motion);
 
   const emit = (event, extra = {}) => socket.emit(event, { lobbyId, ...extra });
   const actions = {
@@ -153,6 +159,27 @@ function OnlineBlackjack({ lobbyId, playerName }) {
         onHandRewardDone={clearHandReward}
       />
   );
+}
+
+const PROMPTS = new Set([PHASES.INSURANCE, PHASES.TURNS]);
+
+/**
+ * The view to draw: a deal that asks something of the table (insurance, the
+ * first move) shows as still dealing until its cards have landed, a new
+ * shoe's shuffle first. A table joined mid-round has nothing to wait for.
+ */
+function useDealHold(view, motion) {
+  const [landedRound, setLandedRound] = useState(null);
+  if (view && landedRound === null) setLandedRound(view.roundNumber);
+  const round = view?.roundNumber;
+  const holding = landedRound !== null && PROMPTS.has(view?.phase) && landedRound !== round;
+  useEffect(() => {
+    if (!holding) return;
+    // Runs after the table has drawn the deal and planned its moves.
+    const timer = setTimeout(() => setLandedRound(round), Math.max(0, motion.current.busyUntil - performance.now()));
+    return () => clearTimeout(timer);
+  }, [holding, round, motion]);
+  return useMemo(() => (holding ? whileDealing(view) : view), [holding, view]);
 }
 
 const RESULT_BEAT_MS = 600; // after the last card lands, before the results show
@@ -199,9 +226,10 @@ function Joining({ fatal }) {
 }
 
 /**
- * Each new event of the round becomes a line in the LOG tab. Bets are
- * logged once, as the round is dealt (not each chip as it goes down), and a
- * player who left is still named from the views before.
+ * Each new event of the round becomes an entry in the LOG tab. A deal opens
+ * with the round's header, any new shoe, the bets (logged once, as the round
+ * is dealt, not each chip as it goes down), everyone's cards and the dealer's
+ * upcard. A player who left is still named from the views before.
  */
 function useBlackjackLog(view, setMessages) {
   const seen = useRef({ events: [], round: view.roundNumber, names: [], n: 0 });
@@ -210,14 +238,29 @@ function useBlackjackLog(view, setMessages) {
     const names = view.seats.map((p, i) => p?.name ?? prev.names[i] ?? null);
     const fresh = [];
     const dealt = view.roundNumber !== prev.round;
-    if (dealt) view.seats.forEach((p, seat) => p?.inRound && fresh.push({ type: "bet", seat, amount: p.lastBet }));
+    if (dealt) {
+      fresh.push({ type: "round", roundNumber: view.roundNumber });
+      if (view.events.some((e) => e.type === "shuffle")) fresh.push({ type: "shuffle" });
+      view.seats.forEach((p, seat) => p?.inRound && fresh.push({ type: "bet", seat, amount: p.lastBet }));
+      view.seats.forEach((p, seat) => {
+        const cards = p?.inRound ? p.hands[0]?.cards.slice(0, 2) : null;
+        if (cards?.length) fresh.push({ type: "dealt", seat, cards, total: handTotal(cards).total });
+      });
+      const up = view.dealer.cards[0];
+      if (up) fresh.push({ type: "dealer_up", card: up });
+    }
     // The same list grown, or a new one (each betting window and deal starts afresh).
     const grown = !dealt && prev.events.length <= view.events.length && JSON.stringify(view.events.slice(0, prev.events.length)) === JSON.stringify(prev.events);
-    for (const e of grown ? view.events.slice(prev.events.length) : view.events) if (e.type !== "bet") fresh.push(withContext(e, view.seats));
-    const lines = fresh.map((e) => eventEntry(e, names)).filter(Boolean);
+    for (const e of grown ? view.events.slice(prev.events.length) : view.events) {
+      if (e.type !== "bet" && !(dealt && e.type === "shuffle")) fresh.push(withContext(e, view.seats));
+    }
+    const lines = fresh.flatMap((e) => {
+      const entry = eventEntry(e, names);
+      return entry ? [{ ...entry, playerIndex: e.seat }] : [];
+    });
     seen.current = { events: view.events, round: view.roundNumber, names, n: prev.n + lines.length };
     if (!lines.length) return;
-    setMessages((m) => [...m, ...lines.map((text, i) => ({ id: `log-${view.roundNumber}-${prev.n + i}`, type: "SYSTEM", text, timestamp: now() }))]);
+    setMessages((m) => [...m, ...lines.map((line, i) => ({ id: `log-${view.roundNumber}-${prev.n + i}`, type: "SYSTEM", ...line, timestamp: now() }))]);
   }, [view, setMessages]);
 }
 
@@ -228,6 +271,8 @@ function BlackjackScreen({ view, motion, lobbyId, chatLimit, actions, messages, 
   const { connected, ping } = useServerStats({ enabled: true });
   const [panelOpen, setPanelOpen] = useState(false);
   const closePanel = useCallback(() => setPanelOpen(false), []);
+  const [showRules, setShowRules] = useState(false);
+  const closeRules = useCallback(() => setShowRules(false), []);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const unread = useUnread(messages, panelOpen);
   useBlackjackLog(view, setMessages);
@@ -264,9 +309,12 @@ function BlackjackScreen({ view, motion, lobbyId, chatLimit, actions, messages, 
         titleColor="#5fd4d6"
         round={view.roundNumber || "–"}
         signal={<ConnectionSignal local={false} connected={connected} ping={ping} />}
+        rulesTone={{ bg: "#5fd4d6", deep: "#2f8f92", ink: "#0a2a2c" }}
+        onRules={() => setShowRules(true)}
         onPanel={() => setPanelOpen(true)}
         unread={unread}
       />
+      {showRules && <BlackjackRules onClose={closeRules} />}
 
       <div className="relative flex-1 grid min-h-0" style={{ gridTemplateColumns: compact ? "minmax(0, 1fr)" : "minmax(0, 1fr) 300px" }}>
         <div className="relative flex flex-col min-h-0">

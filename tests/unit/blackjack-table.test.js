@@ -232,6 +232,24 @@ describe("blackjack table", () => {
     expect(table.phaseMsLeft()).toBe(DELAYS.betting);
   });
 
+  it("says how long the deal pause has left, so a clock can count from its real end", () => {
+    make("10♠ 9♥ 7♣ 8♦");
+    table.sit(player("A"));
+    table.bet(0, 100);
+    expect(table.pauseMsLeft()).toBe(0); // betting has no pause
+    table.ready(0);
+    expect(table.phaseMsLeft()).toBe(DELAYS.turn);
+    expect(table.pauseMsLeft()).toBe(DELAYS.deal);
+    vi.advanceTimersByTime(DELAYS.deal - 3);
+    expect(table.pauseMsLeft()).toBe(3);
+    vi.advanceTimersByTime(3);
+    expect(table.pauseMsLeft()).toBe(0);
+    expect(table.phaseMsLeft()).toBe(DELAYS.turn);
+    vi.advanceTimersByTime(10);
+    expect(table.pauseMsLeft()).toBe(0);
+    expect(table.phaseMsLeft()).toBe(DELAYS.turn - 10);
+  });
+
   it("an insurance window closes on its clock, or early once everyone answered", async () => {
     make("10♠ 10♥ A♥ 7♣ 8♣ 9♦ 10♣ 10♦ A♠ 7♥ 8♥ 9♠");
     table.sit(player("A"));

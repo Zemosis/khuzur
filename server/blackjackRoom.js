@@ -27,10 +27,11 @@ export const BLACKJACK_DELAYS = {
   insurance: envMs("BLACKJACK_TURN_MS", DEFAULT_BLACKJACK_DELAYS.insurance),
 };
 
-/** A blackjack table as one seat sees it: the running clock, and a credit table's save / close state. */
+/** A blackjack table as one seat sees it: the running clock and the deal's pause before it, and a credit table's save / close state. */
 export const blackjackView = (state, seat, table) => ({
   ...viewFor(state, seat),
   phaseMsLeft: table?.phaseMsLeft() ?? null,
+  pauseMsLeft: table?.pauseMsLeft() ?? 0,
   saving: !!table?.saving,
   closingAfterRound: !!table?.closing,
   credit: !!table?.credit,

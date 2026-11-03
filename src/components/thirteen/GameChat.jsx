@@ -94,7 +94,7 @@ const GameChat = ({ messages = [], onSendMessage, avatarFor, colorFor, notice = 
         </div>
         <span className="self-center font-pixel-display text-[10px] text-bone/50">
           {tab === "log"
-            ? `${logMessages.filter((m) => MOVE_KINDS.has(m.kind) && !BLINDS.has(m.action)).length} MOVES`
+            ? `${logMessages.filter(isMove).length} MOVES`
             : `${visible.length} MSGS`}
         </span>
       </div>
@@ -183,7 +183,9 @@ function Divider({ children, color = "#8a7fb0" }) {
 // What counts as a move for the LOG tab's count (a poker blind doesn't).
 const MOVE_KINDS = new Set(["play", "pass", "action"]);
 const BLINDS = new Set(["sb", "bb"]);
-// Poker's moves, each a coloured chip: [label, background, text].
+// `move: false` is blackjack's: bets, deals, results and busts aren't decisions.
+const isMove = (m) => MOVE_KINDS.has(m.kind) && !BLINDS.has(m.action) && m.move !== false;
+// Poker's and blackjack's moves, each a coloured chip: [label, background, text].
 const ACTION_CHIP = {
   sb: ["SMALL BLIND", "#1f3a4d", "#5fd4d6"],
   bb: ["BIG BLIND", "#1f3a4d", "#5fd4d6"],
@@ -193,15 +195,24 @@ const ACTION_CHIP = {
   bet: ["BET", "#f4c430", "#1a1024"],
   raise: ["RAISE TO", "#f4c430", "#1a1024"],
   allin: ["ALL-IN", "#e85a7a", "#3a0e1a"],
+  hit: ["HIT", "#5fd4d6", "#0a3a3a"],
+  stand: ["STAND", "#463a78", "#ead8b1"],
+  double: ["DOUBLE", "#f4c430", "#1a1024"],
+  split: ["SPLIT", "#c5a8ff", "#2a1a4d"],
+  insure: ["INSURANCE", "#1f3a4d", "#5fd4d6"],
+  bust: ["BUST", "#e85a7a", "#3a0e1a"],
+  blackjack: ["BLACKJACK", "#f4c430", "#1a1024"],
+  lose: ["LOSES", "#e85a7a", "#3a0e1a"],
+  push: ["PUSH", "#463a78", "#ead8b1"],
 };
 
 // The entry's line as words, for screen readers: what's drawn is hidden from them.
 const Said = ({ text }) => (text ? <span className="sr-only">{text}</span> : null);
 
 // One log entry: plays as name + combo + card chips, passes dimmed, and
-// dividers where a trick or round ends; for poker, moves as a name and a
-// coloured chip, each street's cards, and the pot's winner in gold. Old
-// plain-text entries still render.
+// dividers where a trick or round ends; for poker and blackjack, moves as a
+// name and a coloured chip (with any card and total), the board's or dealer's
+// cards, and the winner in gold. Old plain-text entries still render.
 function LogLine({ msg, color = "#ead8b1" }) {
   const name = (
     <span className="font-pixel-display text-[10px] shrink-0" style={{ color }}>
@@ -224,7 +235,7 @@ function LogLine({ msg, color = "#ead8b1" }) {
     const [label, bg, fg] = ACTION_CHIP[msg.action] ?? [String(msg.action).toUpperCase(), "#463a78", "#ead8b1"];
     const folded = msg.action === "fold";
     return (
-      <div className={`flex items-center gap-2 px-2 py-1 ${folded ? "opacity-60" : ""}`} title={msg.timestamp}>
+      <div className={`flex flex-wrap items-center gap-2 px-2 py-1 ${folded ? "opacity-60" : ""}`} title={msg.timestamp}>
         <Said text={msg.text} />
         <span aria-hidden className="contents">
           {name}
@@ -232,7 +243,11 @@ function LogLine({ msg, color = "#ead8b1" }) {
             <span className="font-pixel-display text-[8px] leading-none px-1.5 py-1 whitespace-nowrap" style={{ backgroundColor: bg, color: fg, boxShadow: "1px 1px 0 #0a0712" }}>
               {label}
             </span>
+            {msg.cards?.map((c) => (
+              <CardChip key={c.id || c.rank + c.suit} card={c} />
+            ))}
             {msg.amount != null && <span className="font-pixel-body text-[20px] leading-none text-glow-gold tabular-nums">{msg.amount}</span>}
+            {msg.total != null && <span className="font-pixel-body text-[20px] leading-none text-parchment tabular-nums">{msg.total}</span>}
           </span>
         </span>
       </div>

@@ -11,13 +11,69 @@ export const fmt = (n) => Number(n).toLocaleString("en-US");
 /** m:ss for whole seconds. */
 export const clock = (n) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
 
-// Sizes by layout: circle, card width (split hands draw smaller), the
-// dealer's card width, the shoe's and tray's card width, plate width,
-// avatar, chip width.
+// Sizes by layout: circle, card width (split hands draw smaller, and the
+// longest hands smaller still, down to minCard), the dealer's card width, the
+// shoe's and tray's card width, plate width, avatar, chip width.
 export const SEAT_SIZE = {
-  full: { circle: 70, card: 76, splitCard: 54, dealerCard: 80, shoeCard: 60, plate: 172, face: 46, chip: 18 },
-  compact: { circle: 40, card: 34, splitCard: 26, dealerCard: 38, shoeCard: 30, plate: 66, face: 17, chip: 10 },
+  full: { circle: 70, card: 76, splitCard: 54, minCard: 36, dealerCard: 80, shoeCard: 60, plate: 172, face: 46, chip: 18 },
+  compact: { circle: 40, card: 34, splitCard: 26, minCard: 26, dealerCard: 38, shoeCard: 30, plate: 66, face: 17, chip: 10 },
 };
+
+export const HAND_PAD = 6; // a hand's padding, both sides together
+const HAND_GAP = 8; // between split hands
+const LANE_GAP = 8; // between two seats' lanes
+const READABLE = 0.25; // of a card: the least of it that still shows its rank
+
+/**
+ * How `hands` lie in `room` px across (null: as much as they like): a card
+ * width, each card's step along from the one before, and the width that comes
+ * to. A hand fans half a card at a time while it fits; then its cards close
+ * up, then shrink. Whatever the room, they stay in it.
+ */
+export function fitHands(hands, room, size) {
+  const count = hands.length;
+  const steps = hands.reduce((n, h) => n + h.cards.length - 1, 0);
+  const frame = (count - 1) * HAND_GAP + count * HAND_PAD;
+  const widthAt = (cardW, step) => frame + count * cardW + steps * step;
+  const first = count > 1 ? size.splitCard : size.card;
+  const widths = [...new Set([first, size.splitCard, size.minCard])].filter((w) => w <= first);
+  const fits = (cardW, step) => ({ cardW, step, width: widthAt(cardW, step) });
+  let squeezed = 0;
+  for (const cardW of widths) {
+    const step = Math.round(cardW * 0.5);
+    if (room == null || widthAt(cardW, step) <= room) return fits(cardW, step);
+    squeezed = steps ? (room - frame - count * cardW) / steps : 0;
+    if (squeezed >= cardW * READABLE) return fits(cardW, squeezed);
+  }
+  return fits(widths[widths.length - 1], Math.max(0, squeezed));
+}
+
+/** Each card's step along a row of `count` cards `cardW` wide, `step` apart, kept to `room` px (null: no limit). */
+export function fanStep(count, cardW, step, room) {
+  if (room == null || count < 2) return step;
+  return Math.min(step, Math.max(0, (room - cardW) / (count - 1)));
+}
+
+/**
+ * The stretch of the table each seat's hands may use, { left, right } in px:
+ * from `bounds` ([left, right]: the tray to the shoe), up to halfway to the
+ * nearest seat playing in the same row (`rows`, a row number per seat: seats
+ * on different rows pass over each other), and within the seat's own `limits`
+ * ([left, right] per seat).
+ */
+export function handLanes(centres, playing, bounds, rows = centres.map(() => 0), limits = []) {
+  const others = (seat) => centres.flatMap((x, i) => (i !== seat && playing[i] && rows[i] === rows[seat] ? [x] : []));
+  return centres.map((x, seat) => {
+    const near = others(seat);
+    const [low, high] = limits[seat] ?? [-Infinity, Infinity];
+    const toLeft = Math.max(...near.filter((o) => o < x), -Infinity);
+    const toRight = Math.min(...near.filter((o) => o > x), Infinity);
+    return {
+      left: Math.max(bounds[0], low, toLeft === -Infinity ? -Infinity : (x + toLeft + LANE_GAP) / 2),
+      right: Math.min(bounds[1], high, toRight === Infinity ? Infinity : (x + toRight - LANE_GAP) / 2),
+    };
+  });
+}
 
 const INK = "#0a0712";
 const PLAIN = { bg: INK, fg: "#ead8b1" };
@@ -82,8 +138,6 @@ export function actionCallout(e) {
   switch (e.type) {
     case "bet":
       return e.amount > 0 ? { label: `BET ${fmt(e.amount)}`, bg: "#f4c430" } : { label: "BET CLEARED", bg: "#463a78", fg: "#ead8b1" };
-    case "ready":
-      return { label: "READY", bg: "#9bd14f", fg: "#142a08" };
     case "insure":
       return { label: "INSURED", bg: "#5fd4d6" };
     case "hit":
@@ -109,6 +163,11 @@ export function roundNet(seat, dealer) {
   const natural = dealer.revealed && isBlackjack({ cards: dealer.cards.filter(Boolean), fromSplit: false });
   const returned = seat.hands.reduce((sum, h) => sum + h.payout, 0) + (seat.insurance && natural ? seat.insurance * 3 : 0);
   return returned - staked;
+}
+
+/** A dealt view as it stands while its cards are still landing: nobody's turn, nothing to answer, no clock. */
+export function whileDealing(view) {
+  return { ...view, phase: PHASES.DEALING, turn: null, phaseEndsAt: null };
 }
 
 /**

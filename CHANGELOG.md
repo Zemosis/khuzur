@@ -8,6 +8,17 @@ The hall is in early access, so versions are 0.x: the middle number moves
 for a new game or a big new system, the last for everything else. 1.0.0 is
 the first stable release.
 
+## 0.6.3 — 2 November 2026
+
+- **The Blackjack table has its rulebook.** A **RULES** button now sits in the table's header, like the other games, so you can check a payout or a split without leaving your seat.
+- **Blackjack cards stay where you can see them.** Split hands and long runs of low cards no longer slide under the shoe, run into the next player or off the table. A hand now closes up its cards as it grows, and shrinks them if it has to, so every hand keeps to its own space.
+- **The shoe and discard tray moved** to the far ends of the table's flat edge, out of the way of the players' cards.
+- **The dealer's cards close up too** when the dealer draws a long hand, instead of running into the shoe and tray.
+- **Blackjack winnings no longer flicker.** When a win was paid, your new total and your old bet showed on top of each other on the circle. Now your bet stays until the winnings land, then the circle shows the new total.
+- **The Blackjack log shows the whole round.** Each round has its own header, and you can see everyone's cards as they're dealt, every hit and double with the card drawn and the new total, the dealer's cards, and wins in gold. Moves and results get coloured tags like Poker's, and the move count now counts your decisions.
+- **Blackjack prompts wait for the cards.** The insurance question and HIT and STAND no longer appear while the shoe is being shuffled or the cards are still flying. They show once the cards have landed, and the countdown is now exact.
+- **One bet, one announcement.** Your bet used to be called out when you picked your chips, again when you pressed DEAL, and then READY. Now **BET** pops up once, when you press DEAL.
+
 ## 0.6.2 — 28 October 2026
 
 - **The leaderboard counts every game.** Thirteen and Muushig lost their SOON tags: their columns now show what each player has won or lost at their credit tables, like Poker and Blackjack. On a phone, all four games show under the player's name.

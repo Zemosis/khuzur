@@ -1,11 +1,13 @@
-// SEAT CALLOUTS — what each player just did, popped over their plate: a
-// bet, READY, insurance, HIT, STAND, DOUBLE, SPLIT, and what came of it
-// (BUST, BLACKJACK!). A seat's callouts show one after another. A move shows
-// at once; what came of it waits for the cards it's about to land.
+// SEAT CALLOUTS — what each player just did, popped over their plate: their
+// bet, insurance, HIT, STAND, DOUBLE, SPLIT, and what came of it (BUST,
+// BLACKJACK!). A seat's callouts show one after another. A move shows at once;
+// what came of it waits for the cards it's about to land.
+//
+// A bet is announced once, as the player commits to it with DEAL: the chips
+// they pick on the way there go down in silence.
 
 import { useState } from "react";
 import { actionCallout } from "./tableInfo";
-import { PHASES } from "../../utils/blackjack/engine";
 import { CARD_MS, dealMs } from "./cardMotion";
 
 const OUTCOMES = new Set(["bust", "blackjack"]);
@@ -17,13 +19,17 @@ export function calloutsBetween(prev, view) {
   const dealt = view.roundNumber !== prev.roundNumber;
   // The same list grown, or a new one (each betting window and deal starts afresh).
   const grown = !dealt && before.length <= events.length && JSON.stringify(events.slice(0, before.length)) === JSON.stringify(before);
-  const fresh = (grown ? events.slice(before.length) : events).map((e, i) => ({ ...e, n: (grown ? before.length : 0) + i }));
-  // READY has no event: a seat that turned ready while betting.
-  if (view.phase === PHASES.BETTING) view.seats.forEach((p, seat) => p?.ready && !prev.seats[seat]?.ready && fresh.push({ type: "ready", seat, n: `r${seat}` }));
+  const fresh = (grown ? events.slice(before.length) : events)
+    .map((e, i) => ({ ...e, n: (grown ? before.length : 0) + i }))
+    // The one bet event that's news: an announced bet taken back.
+    .filter((e) => e.type !== "bet" || (e.amount === 0 && prev.seats[e.seat]?.ready));
+  // DEAL has no event: a seat that's turned ready. Not only while betting: the last DEAL
+  // closes betting at once, and the views can land together, the deal the one drawn.
+  const committed = view.seats.flatMap((p, seat) => (p?.ready && !prev.seats[seat]?.ready ? [{ type: "bet", seat, amount: p.bet, n: `r${seat}-${p.bet}` }] : []));
 
   const cards = view.seats.reduce((n, p) => n + (p?.inRound ? 2 : 0), 2);
   const landing = dealt ? dealMs(cards, events.some((e) => e.type === "shuffle")) : CARD_MS;
-  return fresh.flatMap((e) => {
+  return [...committed, ...fresh].flatMap((e) => {
     const c = e.seat != null && actionCallout(e);
     if (!c) return [];
     return [{ ...c, id: `${view.roundNumber}-${view.phase}-${e.n}`, seat: e.seat, type: e.type, delay: OUTCOMES.has(e.type) ? landing : 0 }];

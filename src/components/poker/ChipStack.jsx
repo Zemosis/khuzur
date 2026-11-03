@@ -36,7 +36,7 @@ export default function ChipStack({ amount, label = null, big = false, chipSize 
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-1 font-pixel-display text-[10px] leading-none text-parchment whitespace-nowrap">
+      <div data-chip-amount className="flex items-center gap-1 font-pixel-display text-[10px] leading-none text-parchment whitespace-nowrap">
         {label && (
           <span className="px-1 py-0.5 text-[8px]" style={{ backgroundColor: "#5fd4d6", color: "#0a3a3a", boxShadow: "0 0 0 2px #0a0712" }}>
             {label}

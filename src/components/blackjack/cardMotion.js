@@ -114,11 +114,15 @@ function payOnto(bet, win, look, house, reduce, running) {
       running.delete(layer);
     },
   });
-  tl.fromTo(win, { x: house.x - w.x, y: house.y - w.y, scale: 0.6, autoAlpha: 0 }, { x: 0, y: 0, scale: 1, autoAlpha: 1, duration: reduce ? 0.12 : CHIPS, ease: "power2.out" })
-    .call(() => safeSound("playCoin"))
-    .set(win, { autoAlpha: 0 })
-    .call(() => look?.remove())
-    .fromTo(bet, { scale: 1.2, autoAlpha: 1 }, { scale: 1, duration: reduce ? 0.05 : 0.2, ease: "back.out(2)", clearProps: MOVED });
+  const flight = reduce ? 0.12 : CHIPS;
+  tl.fromTo(win, { x: house.x - w.x, y: house.y - w.y, scale: 0.6, autoAlpha: 0 }, { x: 0, y: 0, scale: 1, autoAlpha: 1, duration: flight, ease: "power2.out" })
+    // Its number goes before it arrives, so it never lands on the bet's: the circle shows one amount.
+    .to(win.querySelector("[data-chip-amount]"), { autoAlpha: 0, duration: flight * 0.2 }, flight * 0.35)
+    .call(() => safeSound("playCoin"), null, flight)
+    .set(win, { autoAlpha: 0 }, flight)
+    .call(() => look?.remove(), null, flight)
+    // immediateRender: a fromTo shows its start at once otherwise, wherever it sits in the timeline.
+    .fromTo(bet, { scale: 1.2, autoAlpha: 1 }, { scale: 1, duration: reduce ? 0.05 : 0.2, ease: "back.out(2)", immediateRender: false, clearProps: MOVED }, flight);
   finishOnTime(tl);
 }
 

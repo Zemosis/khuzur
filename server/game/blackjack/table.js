@@ -213,6 +213,12 @@ export class BlackjackTable {
     return Math.min(this.clockMs, Math.max(0, this.phaseEndsAt - Date.now()));
   }
 
+  /** Milliseconds until that clock starts: it waits for the cards to go round. */
+  pauseMsLeft() {
+    if (this.phaseEndsAt == null) return 0;
+    return Math.max(0, this.phaseEndsAt - Date.now() - this.clockMs);
+  }
+
   /** For the server's shared broadcast. */
   dealMsLeft() {
     return 0;

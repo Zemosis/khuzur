@@ -19,7 +19,7 @@ import {
   sit,
   viewFor,
 } from "../../src/utils/blackjack/engine.js";
-import { eventEntry, withContext } from "../../src/utils/blackjack/log.js";
+import { eventLine, withContext } from "../../src/utils/blackjack/log.js";
 import { cards, riggedShoe } from "../helpers/blackjack.js";
 
 const { handlers, fakeSocket } = vi.hoisted(() => {
@@ -199,6 +199,55 @@ describe("blackjack table online", () => {
     expect(screen.getByText(/Waiting for ANN/)).toBeInTheDocument();
   });
 
+  it("insurance waits for the cards: no prompt, no dealer's call, until they've landed", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await open();
+    const betting = openBetting(table([2000], { shoe: "10♠ A♣ 9♥ 7♦" }));
+    serverSends("blackjack_state", view(betting));
+    serverSends("blackjack_state", view(dealtWith(table([2000], { shoe: "10♠ A♣ 9♥ 7♦" }), { 0: 750 })));
+    expect(screen.queryByText("INSURANCE FOR 375?")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "YES" })).not.toBeInTheDocument();
+    expect(screen.getByRole("note", { name: "Dealer says" })).not.toHaveTextContent("INSURANCE?");
+    expect(screen.getByText("Dealing…")).toBeInTheDocument();
+    await resultsLand();
+    expect(screen.getByText("INSURANCE FOR 375?")).toBeInTheDocument();
+    expect(screen.getByRole("note", { name: "Dealer says" })).toHaveTextContent("INSURANCE?");
+  });
+
+  it("BET pops up once when the last player's DEAL brings the deal with it", async () => {
+    await open();
+    const shoe = { shoe: "8♠ 10♣ 8♦ 7♥" };
+    const bet = placeBet(openBetting(table([1000], shoe)), 0, 100);
+    const ready = setReady(bet, 0);
+    serverSends("blackjack_state", view(bet));
+    expect(document.querySelector('[data-plate="0"]')).not.toHaveTextContent("BET 100");
+    // The server's views for one DEAL, landing in one render.
+    act(() => {
+      for (const s of [ready, closeBetting(ready), deal(closeBetting(ready))]) handlers.blackjack_state.forEach((fn) => fn(view(s)));
+    });
+    expect(document.querySelector('[data-plate="0"]')).toHaveTextContent("BET 100");
+    expect(document.querySelector('[data-plate="0"]')).not.toHaveTextContent("READY");
+  });
+
+  it("your first move waits for the cards too", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await open();
+    serverSends("blackjack_state", view(openBetting(table([1000], { shoe: "8♠ 10♣ 8♦ 7♥" }))));
+    serverSends("blackjack_state", view(dealtWith(table([1000], { shoe: "8♠ 10♣ 8♦ 7♥" }), { 0: 100 })));
+    expect(screen.queryByRole("button", { name: "HIT" })).not.toBeInTheDocument();
+    await resultsLand();
+    expect(button("HIT")).toBeEnabled();
+  });
+
+  it("a clock counts from when it really ends, after the deal's pause", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await open();
+    serverSends("blackjack_state", view(openBetting(table([2000], { shoe: "10♠ A♣ 9♥ 7♦" }))));
+    serverSends("blackjack_state", view(dealtWith(table([2000], { shoe: "10♠ A♣ 9♥ 7♦" }), { 0: 750 }), { phaseMsLeft: 8000, pauseMsLeft: 4500 }));
+    await resultsLand(); // 10s on: 12.5s were left
+    expect(screen.getByText("0:03")).toBeInTheDocument();
+  });
+
   it("insurance shows YES/NO with the cost and emits bj_insurance", async () => {
     await open();
     const s = dealtWith(table([2000], { shoe: "10♠ A♣ 9♥ 7♦" }), { 0: 750 });
@@ -260,7 +309,7 @@ describe("blackjack table online", () => {
     expect(document.querySelector('[data-plate="1"]')).not.toHaveTextContent("XP");
   });
 
-  it("logs dealer and player events as plain lines", async () => {
+  it("logs a round as header, chips, cards and banners", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await open();
     // You stand on 19; ANN doubles on 11 for 21; the dealer's 16 draws a 9 and busts.
@@ -287,19 +336,47 @@ describe("blackjack table online", () => {
     await userEvent.click(screen.getByRole("button", { name: /^Scoreboard and chat/ }));
     await userEvent.click(screen.getByRole("tab", { name: "LOG" }));
     const log = screen.getByRole("log");
-    const lines = [...log.children].map((el) => el.textContent);
-    expect(lines).toEqual(["ME bets 100", "ANN bets 200", "ME stands on 19", "ANN doubles on 11", "Dealer busts with 25", "ME wins 100", "ANN wins 400"]);
+    // Each row carries its sentence for screen readers.
+    const said = [...log.querySelectorAll(".sr-only")].map((el) => el.textContent);
+    expect(said).toEqual([
+      "ME bets 100",
+      "ANN bets 200",
+      "ME is dealt 10♠ 9♥",
+      "ANN is dealt 6♦ 5♣",
+      "Dealer shows 10♣",
+      "ME stands on 19",
+      "ANN doubles on 11 and draws 10♦",
+      "Dealer turns over 6♥ for 16",
+      "Dealer draws 9♠ for 25",
+      "Dealer busts with 25",
+      "ME wins 100",
+      "ANN wins 400",
+    ]);
+    // The header leads the round, and only the two real decisions count as moves.
+    expect(log.firstElementChild).toHaveTextContent("ROUND 1");
+    expect(screen.getByText("2 MOVES")).toBeInTheDocument();
+    // What's drawn: the card chips, a coloured move, the winner's banner.
+    expect(within(log).getAllByText("DOUBLE")).toHaveLength(1);
+    expect(within(log).getAllByText("WINS")).toHaveLength(2);
 
-    // The rest of the spec's lines, straight from the log function.
-    const names = ["NOVSH", "BOB", "CAT"];
-    expect(eventEntry({ type: "dealer_blackjack", total: 21 }, names)).toBe("Dealer has blackjack");
-    // A leave is already in the log from the server ("NOVSH left the table."): no second line.
-    expect(eventEntry({ type: "leave", seat: 0 }, names)).toBeNull();
-    expect(eventEntry({ type: "shuffle" }, names)).toBe("New shoe");
-    expect(eventEntry({ type: "result", seat: 2, hand: 0, amount: 800, bet: 400 }, names)).toBe("CAT wins 400");
-    expect(eventEntry({ type: "dealer_reveal", card: cards("9♦")[0], total: 19 }, names)).toBeNull();
+    // A split reads its pair off the seats.
     const split = { seats: [null, { hands: [{ cards: cards("8♠ 3♣"), bet: 100 }, { cards: cards("8♦"), bet: 100 }] }] };
-    expect(eventEntry(withContext({ type: "split", seat: 1, hand: 0, amount: 100 }, split.seats), names)).toBe("BOB splits 8s");
+    expect(eventLine(withContext({ type: "split", seat: 1, hand: 0, amount: 100 }, split.seats), ["A", "BOB"])).toBe("BOB splits 8s");
+  });
+
+  it("a new shoe is logged before the round's bets, under the round's header", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await open();
+    const s = openBetting(table([1000]));
+    serverSends("blackjack_state", view(placeBet(s, 0, 100)));
+    serverSends("blackjack_state", view(deal(closeBetting(setReady(placeBet(s, 0, 100), 0)))));
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    await userEvent.click(screen.getByRole("button", { name: /^Scoreboard and chat/ }));
+    await userEvent.click(screen.getByRole("tab", { name: "LOG" }));
+    const log = screen.getByRole("log");
+    expect(log.children[0]).toHaveTextContent("ROUND 1");
+    expect(log.children[1]).toHaveTextContent("NEW SHOE");
+    expect(log.children[2]).toHaveTextContent("ME bets 100");
   });
 
   it("REBUY appears at a free table below 10 chips and emits bj_rebuy", async () => {
@@ -328,6 +405,17 @@ describe("blackjack table online", () => {
     expect(s.phase).toBe("ROUND_OVER");
     serverSends("blackjack_state", view(s, { phaseMsLeft: null }));
     expect(document.body.textContent).not.toMatch(glyphs);
+  });
+
+  it("the header's RULES button opens the rulebook over the table, and it closes again", async () => {
+    const user = userEvent.setup();
+    await open();
+    serverSends("blackjack_state", view(openBetting(table([1000]))));
+    await user.click(button("Rules"));
+    expect(screen.getByRole("dialog", { name: "HOW TO PLAY BLACKJACK" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "HOW TO PLAY BLACKJACK" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Rules" })).toBeInTheDocument();
   });
 
   it("a rejected move shows why; leaving a credit table returns to the CREDITS tab", async () => {
