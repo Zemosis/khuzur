@@ -116,9 +116,8 @@ export function createMatch({ players, rng = secureRandom, matchNumber = 1, star
       foldStreak: 0, // rounds folded in a row; carries from round to round
     })),
     dealDeck: shuffle(createDeck(), rng), // the pile drawn from for the deal, top first
-    dealDraws: [], // { seat, card, depth, pass }; pass 2+ settles a tie
-    drawPass: 1,
-    drawers: Array.from({ length: PLAYER_COUNT }, (_, i) => (starter + i) % PLAYER_COUNT), // still to draw this pass, in order
+    dealDraws: [], // { seat, card, depth }
+    drawers: Array.from({ length: PLAYER_COUNT }, (_, i) => (starter + i) % PLAYER_COUNT), // still to draw, in order
     trumpCard: null,
     trumpSuit: null,
     trumpTakenBy: null,
@@ -141,11 +140,14 @@ export function createMatch({ players, rng = secureRandom, matchNumber = 1, star
 
 export const maxDrawDepth = (state) => Math.min(MAX_DRAW_DEPTH, state.dealDeck.length);
 
+// The draw for the deal is settled by rank, then suit: ♠ beats ♥ beats ♦
+// beats ♣. Every card in the deck differs, so two draws never tie.
+const DRAW_SUIT_ORDER = ["♣", "♦", "♥", "♠"];
+const drawValue = (card) => card.rankValue * SUITS.length + DRAW_SUIT_ORDER.indexOf(card.suit);
+
 /**
  * `seat` takes the depth-th card from the top of the pile; the cards above it
- * stay. Once everyone this pass has drawn, the highest card deals; tied
- * players draw again, in the same order (at random if the pile can't cover
- * them).
+ * stay. Once everyone has drawn, the highest card deals (see drawValue).
  */
 export function drawForDeal(prev, seat, depth, rng = secureRandom) {
   expect(prev, PHASES.DRAW, seat);
@@ -153,7 +155,7 @@ export function drawForDeal(prev, seat, depth, rng = secureRandom) {
   if (!Number.isInteger(depth) || depth < 1 || depth > max) throw new Error(`Draw a card between 1 and ${max} deep`);
   const state = { ...prev, dealDeck: [...prev.dealDeck], dealDraws: [...prev.dealDraws], events: [...prev.events] };
   const [card] = state.dealDeck.splice(depth - 1, 1);
-  state.dealDraws.push({ seat, card, depth, pass: state.drawPass });
+  state.dealDraws.push({ seat, card, depth });
   state.events.push({ type: "dealDraw", seat, card, depth });
 
   state.drawers = prev.drawers.slice(1);
@@ -162,17 +164,7 @@ export function drawForDeal(prev, seat, depth, rng = secureRandom) {
     return state;
   }
 
-  const draws = state.dealDraws.filter((d) => d.pass === state.drawPass);
-  const top = Math.max(...draws.map((d) => d.card.rankValue));
-  const best = draws.filter((d) => d.card.rankValue === top);
-  if (best.length > 1 && state.dealDeck.length >= best.length) {
-    state.drawPass += 1;
-    state.drawers = best.map((d) => d.seat);
-    state.turn = state.drawers[0];
-    state.events.push({ type: "drawTie", seats: state.drawers });
-    return state;
-  }
-  const win = best[Math.floor(rng() * best.length)];
+  const win = state.dealDraws.reduce((a, b) => (drawValue(b.card) > drawValue(a.card) ? b : a));
   state.events.push({ type: "firstDealer", seat: win.seat, card: win.card });
   return dealRound(state, win.seat, rng);
 }

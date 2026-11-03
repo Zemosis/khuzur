@@ -135,8 +135,8 @@ export default function MuushigRules({ onClose }) {
         <Callout tone="rule" title="DRAWING FOR THE DEAL">
           A shuffled pile sits in the middle. A <Key>random player</Key> draws first, then clockwise: pick how deep to go,
           from 1 to {MAX_DRAW_DEPTH} cards down, and take <Key>only that card</Key>; the cards above it stay on the pile.
-          Every card is turned face up. The <Key>highest rank deals</Key>; tied players draw again. Every match starts with
-          a new draw.
+          Every card is turned face up. The <Key>highest rank deals</Key>; on the same rank, the suit decides:{" "}
+          <Key>♠ ♥ ♦ ♣</Key>, highest first, so it never ties. Every match starts with a new draw.
         </Callout>
         <p>
           The table also has a <Key>dead pile</Key>: every discarded card and every folded hand goes there face down, and

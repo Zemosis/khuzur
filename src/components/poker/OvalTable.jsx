@@ -127,7 +127,7 @@ function plateAt(geo, t, tableW) {
 }
 
 /** The dealer button: a white pixel disc marked D, carried clockwise round the felt to its seat. */
-function DealerButton({ geo, t, seat, size }) {
+export function DealerButton({ geo, t, seat, size }) {
   const ref = useRef(null);
   const at = useRef(t);
   useLayoutEffect(() => {

@@ -8,6 +8,25 @@ The hall is in early access, so versions are 0.x: the middle number moves
 for a new game or a big new system, the last for everything else. 1.0.0 is
 the first stable release.
 
+## 0.6.5 — 3 November 2026
+
+### Muushig has a new table
+- **A bigger table.** Muushig now plays on a long green card room table, like Poker's, so it fills the screen instead of sitting small in the middle.
+- **Everything has room on the felt.** The draw pile, the trick and the dead pile lie in a row across the middle with the trump above, all at a size you can read. The draw and dead piles no longer squeeze into the corner beside your hand.
+- **Everyone sits round the rim.** Each opponent's plate sits just off the table's edge, their cards face down on the felt in front of them. You sit at the foot of the table: your hand is your seat.
+- **Bigger cards on the table, a trimmer hand.** The trick, the trump and the piles are drawn larger so ranks read at a glance, and your hand is a little smaller to give the table the room.
+- **Nothing covers the deck in the draw for the deal.** The count of cards left sits beside the pile, so the card you draw no longer lands on it.
+
+### The draw for the deal never ties
+- **Suits settle the draw.** When two players draw the same rank, the suit decides: ♠ beats ♥ beats ♦ beats ♣. Every card is different, so nobody has to draw again.
+- **No spoilers.** The table now waits for the last drawn card to land and turn over before it lights up who deals, or whose draw is next.
+
+### Fixes
+- **Faces are drawn true everywhere.** Player faces on the scoreboards could be drawn split down the middle, one half a pixel higher than the other, so eyes and mouths looked crooked. Faces now land exactly on your screen's pixels in every game, and stay there when the table moves around them.
+- **The dealer button travels round the table.** The D chip slides round the felt to each round's dealer, like Poker's.
+- **The turn glow stays on the table.** The glow that shows whose turn it is now lights the felt by that player's seat instead of spilling off the table's edge.
+- **Phones get a standing table.** On a phone held upright the table stands up, with the plates on its rim. On a short screen the table and your hand scroll together, so your cards never cover the table.
+
 ## 0.6.4 — 3 November 2026
 
 ### Poker has a new table

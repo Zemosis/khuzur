@@ -26,7 +26,6 @@ import { muushigHighlights } from "./highlights.js";
 // never moves while the table is still animating (see GameMuushig).
 export const DEFAULT_MUUSHIG_DELAYS = {
   draw: 1300, // a CPU drawing for the deal
-  tie: 2000, // a tie in the draw, before the redraw
   decide: 1100, // a CPU going in or folding
   swap: 600, // a CPU swapping
   trump: 900, // a CPU dealer taking (or leaving) the trump
@@ -202,7 +201,7 @@ export class MuushigGame {
   pause(fresh) {
     const d = this.delays;
     const has = (type) => fresh.some((e) => e.type === type);
-    let wait = has("drawTie") ? d.tie : d[THINK[this.state.phase]] ?? 0;
+    let wait = d[THINK[this.state.phase]] ?? 0;
     wait += this.opening(fresh);
     if (has("eat")) wait += d.eat;
     if (fresh.some((e) => (e.type === "swap" && e.count > 0) || e.type === "fold" || e.type === "takeTrump")) wait += d.flight;

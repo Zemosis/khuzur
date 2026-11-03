@@ -102,8 +102,7 @@ describe("deck and deal", () => {
   it("picks the first dealer by the highest drawn card", () => {
     const s = newMatch(7);
     const first = s.events.find((e) => e.type === "firstDealer");
-    const last = s.dealDraws.filter((d) => d.pass === s.drawPass);
-    const top = Math.max(...last.map((d) => d.card.rankValue));
+    const top = Math.max(...s.dealDraws.map((d) => d.card.rankValue));
     expect(first.seat).toBe(s.dealer);
     expect(first.card.rankValue).toBe(top);
   });
@@ -130,7 +129,7 @@ describe("draw for the deal", () => {
     const seat = s.turn;
     s = drawForDeal(s, seat, 3);
     expect(idsOf(s.dealDeck)).toEqual(["7♠", "8♠", "10♠", "J♠", "Q♠", "K♠"]);
-    expect(s.dealDraws).toEqual([{ seat, card: c("9♠"), depth: 3, pass: 1 }]);
+    expect(s.dealDraws).toEqual([{ seat, card: c("9♠"), depth: 3 }]);
     expect(s.events.at(-1)).toEqual({ type: "dealDraw", seat, card: c("9♠"), depth: 3 });
     expect(s.turn).toBe((seat + 1) % 5);
   });
@@ -157,27 +156,21 @@ describe("draw for the deal", () => {
     expect(() => drawForDeal(s, (s.turn + 1) % 5, 1)).toThrow(/Not your turn/);
   });
 
-  it("tied players draw again, in the same order; the others wait", () => {
-    let s = drawState("K♠ 7♠ K♥ 8♠ 9♠ 7♥ Q♦ J♦");
-    const order = around(s.turn);
-    for (const seat of order) s = drawForDeal(s, seat, 1);
-    expect(s.phase).toBe(PHASES.DRAW);
-    expect(s.events.at(-1)).toEqual({ type: "drawTie", seats: [order[0], order[2]] });
-    expect(s.turn).toBe(order[0]);
-    expect(() => drawForDeal(s, order[1], 1)).toThrow(/Not your turn/);
-    s = drawForDeal(s, order[0], 1); // 7♥
-    expect(s.turn).toBe(order[2]);
-    s = drawForDeal(s, order[2], 1); // Q♦
-    expect(s.dealer).toBe(order[2]);
-    expect(s.dealDraws.filter((d) => d.pass === 2)).toHaveLength(2);
-  });
-
-  it("a tie with too few cards left to draw again is settled at random", () => {
-    let s = drawState("K♠ K♥ 7♠ 8♠ 9♠ 7♥");
-    const order = around(s.turn);
-    for (const seat of order) s = drawForDeal(s, seat, 1);
+  it("the same rank is settled by suit: spades, then hearts, diamonds, clubs", () => {
+    const dealerOf = (pile) => {
+      let s = drawState(pile);
+      const order = around(s.turn);
+      for (const seat of order) s = drawForDeal(s, seat, 1);
+      return { s, order };
+    };
+    let { s, order } = dealerOf("K♣ 7♠ K♥ 8♠ K♦ 9♠");
     expect(s.phase).toBe(PHASES.DECIDE);
-    expect([order[0], order[1]]).toContain(s.dealer);
+    expect(s.dealer).toBe(order[2]); // K♥ over K♦ and K♣
+    expect(s.events.find((e) => e.type === "firstDealer").card).toEqual(c("K♥"));
+    ({ s, order } = dealerOf("A♣ A♦ A♥ A♠ 7♠ 8♠"));
+    expect(s.dealer).toBe(order[3]); // A♠
+    ({ s, order } = dealerOf("A♣ K♠ Q♠ J♠ 10♠ 9♠"));
+    expect(s.dealer).toBe(order[0]); // rank first: A♣ over K♠
   });
 
   it("a rematch opens with a new draw", () => {

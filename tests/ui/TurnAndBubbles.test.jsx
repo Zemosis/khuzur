@@ -6,7 +6,7 @@ import OpponentSection from "../../src/components/thirteen/OpponentSection";
 import ChatBubble from "../../src/components/ChatBubble";
 import TurnBanner from "../../src/components/TurnBanner";
 import PlayArea from "../../src/components/thirteen/PlayArea";
-import RoundTable from "../../src/components/muushig/RoundTable";
+import StadiumTable from "../../src/components/muushig/StadiumTable";
 import { useTurnTitle } from "../../src/hooks/useTurnTitle";
 import { renderHook } from "@testing-library/react";
 
@@ -92,7 +92,7 @@ describe("whose turn it is", () => {
   });
 
   it("the Muushig table glows toward the seat on turn", () => {
-    const { container } = render(<RoundTable seats={{}} turnSeat="topLeft" stack={[]} />);
+    const { container } = render(<StadiumTable turnSeat="topLeft" />);
     expect(container.querySelector('[data-turn-side="topLeft"]')).not.toBeNull();
   });
 

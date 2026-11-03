@@ -2,12 +2,13 @@
 // moves go out as muushig_move, and the waiting table comes first. States here
 // are real engine states put through the server's own redaction.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, onTestFinished } from "vitest";
 import { render, screen, act, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import GameMuushig from "../../src/pages/muushig/GameMuushig";
-import { PHASES, collectTrick, createMatch, drawForDeal, startNextRound } from "../../src/utils/muushig/engine.js";
+import { setReducedMotion } from "../../src/utils/motion";
+import { PHASES, SUITS, collectTrick, createMatch, drawForDeal, startNextRound } from "../../src/utils/muushig/engine.js";
 import { aiAction, applyAction } from "../../src/utils/muushig/ai.js";
 import { muushigView } from "../../server/game/muushigGame.js";
 import { seededRandom } from "../helpers/cards.js";
@@ -123,7 +124,9 @@ describe("GameMuushig online", () => {
     expect(await screen.findByText(/Bot Saturn is drawing/, {}, { timeout: 10_000 })).toBeInTheDocument();
   }, 20_000);
 
-  it("a tie in the draw for the deal hands you the TAKE button again", async () => {
+  it("two cards of the same rank are settled by suit, shown once the last card has landed", async () => {
+    setReducedMotion(false); // the cards fly, so the result waits for them
+    onTestFinished(() => setReducedMotion(true));
     // Two aces on top of the pile: you and the next drawer both take one.
     let s = newMatch(ME);
     const aces = s.dealDeck.filter((c) => c.rank === "A");
@@ -136,13 +139,15 @@ describe("GameMuushig online", () => {
     for (const seat of [ME, 3, 4, 0, 1]) {
       s = drawForDeal(s, seat, 1);
       serverSends("muushig_state", view(s));
+      await act(async () => {}); // shown one at a time, not skipped as a backlog
     }
-    expect(s.drawers).toEqual([ME, 3]); // the tie: you draw again first
-    expect(await screen.findByText(/Tie! Draw again/, {}, { timeout: 10_000 })).toBeInTheDocument();
-    const again = await button("TAKE");
-    expect(again).toBeEnabled();
-    await user.click(again);
-    expect(emitted("muushig_move")).toHaveLength(2);
+    // No redraw: the ace of the higher suit (♠ ♥ ♦ ♣) deals.
+    const better = SUITS.indexOf(aces[0].suit) < SUITS.indexOf(aces[1].suit) ? ME : 3;
+    expect(s.dealer).toBe(better);
+    // The last card is still in the air: nothing says who deals yet.
+    expect(status()).toHaveTextContent(/draws the 1st card/);
+    expect(status()).not.toHaveTextContent(/highest card/);
+    expect(await screen.findByText(/drew the highest card/, {}, { timeout: 10_000 })).toBeInTheDocument();
   }, 20_000);
 
   it("drawing last for the deal is just sent: the deal pile is hidden, so the server settles it", async () => {

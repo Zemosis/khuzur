@@ -15,9 +15,9 @@
 //   draw   the draw pile (drawRef)
 //   trump  the face-up trump card on the felt (trumpRef)
 //   trick  the trick's cards where they lie on the felt (fromRects)
-//   plate  an opponent's name plate (found by data-plate), where their
-//          eaten piles are counted
-//   mine   your side of the table (mineRef), for piles you eat
+//   plate  a player's name plate (found by data-plate), where their eaten
+//          piles are counted
+//   mine   your side of the table (mineRef)
 // A card shown face up (`faces`) turns face down as it lands.
 
 import React, { useLayoutEffect, useRef } from "react";
@@ -26,7 +26,7 @@ import { PixelCard } from "../PixelCard";
 import { CARD_RATIO } from "../../hooks/useTableMetrics";
 import { FLY, STAGGER, legTime } from "./flightTiming";
 
-const FAN_CARD_W = 44; // PixelCard "small", used by opponent fans
+const FAN_CARD_W = 44; // PixelCard "small", the default for a seat's cards
 
 const center = (r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
 
@@ -53,11 +53,13 @@ const CardFlight = ({ legs, fromRects, seat, rotation = 0, cardWidth, deadRef, d
   useLayoutEffect(() => {
     const fire = (name, ...args) => () => cb.current[name]?.(...args);
     const box = (ref) => ref?.current?.getBoundingClientRect();
-    const fan = document.querySelector(`[data-deal-seat="${seat}"]`)?.getBoundingClientRect();
+    const fanEl = document.querySelector(`[data-deal-seat="${seat}"]`);
+    const fan = fanEl?.getBoundingClientRect();
     const plate = document.querySelector(`[data-plate="${seat}"]`)?.getBoundingClientRect();
     const mine = box(mineRef);
     const trump = box(trumpRef);
-    const fanScale = FAN_CARD_W / W;
+    // The seat's cards are the size it says (data-card-w), else a small card's.
+    const fanScale = (Number(fanEl?.dataset.cardW) || FAN_CARD_W) / W;
 
     // Where a card sits at each place: centre, scale and turn.
     const place = (where, i) => {
@@ -65,8 +67,8 @@ const CardFlight = ({ legs, fromRects, seat, rotation = 0, cardWidth, deadRef, d
       if (where === "hand" || where === "trick") return fromRects?.[i] && { ...fromRects[i], scale: fromRects[i].width / W };
       if (where === "plate") return plate && { ...center(plate), scale: fanScale, rotation: gsap.utils.random(-8, 8) };
       if (where === "mine") return mine && { x: mine.left + mine.width / 2, y: mine.top + mine.height * 0.4, scale: 0.6, rotation: gsap.utils.random(-8, 8) };
-      if (where === "dead") return box(deadRef) && { ...center(box(deadRef)), scale: 1, rotation: gsap.utils.random(-6, 6) };
-      if (where === "draw") return box(drawRef) && { ...center(box(drawRef)), scale: 1, rotation: 0 };
+      if (where === "dead") return box(deadRef) && { ...center(box(deadRef)), scale: box(deadRef).width / W, rotation: gsap.utils.random(-6, 6) };
+      if (where === "draw") return box(drawRef) && { ...center(box(drawRef)), scale: box(drawRef).width / W, rotation: 0 };
       // The trump card lies sideways, so its box is a card height wide.
       if (where === "trump") return trump && { ...center(trump), scale: trump.height / W, rotation: 90 };
       return null;

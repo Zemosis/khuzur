@@ -77,7 +77,7 @@ describe("GameMuushig", () => {
     const user = userEvent.setup();
     openTable(E.createMatch({ players: PLAYERS, rng: () => 0 })); // you draw first
     const take = await button("TAKE");
-    expect(status()).toHaveTextContent(`Take any card from 1 to ${E.MAX_DRAW_DEPTH} down`);
+    expect(status()).toHaveTextContent(`take any card 1 to ${E.MAX_DRAW_DEPTH} down`);
     await user.click(take);
     expect(queryButton("TAKE")).not.toBeInTheDocument();
     expect(status()).toHaveTextContent(/Bot Saturn is drawing/);

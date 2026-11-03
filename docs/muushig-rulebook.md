@@ -36,7 +36,7 @@ In Muushig, winning a trick is called **eating** it: you eat the pile.
 ## 1. Cards
 
 - **Ranks**, lowest to highest: 7 · 8 · 9 · 10 · J · Q · K · A.
-- **Suits have no order.** A card only beats another card of the **same suit**, unless it's a trump.
+- **Suits have no order** in play (only the draw for the deal ranks them). A card only beats another card of the **same suit**, unless it's a trump.
 - **Any trump beats any non-trump card.** Between trumps, the higher rank wins.
 
 ---
@@ -48,7 +48,7 @@ In Muushig, winning a trick is called **eating** it: you eat the pile.
 1. A shuffled deck is set face down in the middle. A **random player** draws first, then play goes clockwise.
 2. On your draw you choose how deep to go, **1 to 10 cards down** (never deeper than the pile), and take **only that card**. The cards above it stay on the pile.
 3. Every drawn card is turned face up. The **highest rank deals**.
-4. Suits have no order, so **tied players draw again** from what's left, in the same order, until one is highest. If the pile can't cover another draw, the tie is settled at random.
+4. Two cards of the same rank are settled by **suit: ♠ beats ♥ beats ♦ beats ♣**. Every card in the deck is different, so the draw never ties. (This is the only place suits are ranked.)
 
 Every match, rematches included, starts with a new draw. **In later rounds** the deal passes **clockwise** to the next player.
 

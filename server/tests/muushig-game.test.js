@@ -82,7 +82,7 @@ describe("a table of CPUs", () => {
 
 describe("pacing", () => {
   it("a CPU waits its thinking time, and longer once a new round is dealt", () => {
-    const delays = { ...FAST, draw: 100, tie: 100, decide: 50, roundStart: 1000, drawReveal: 500 };
+    const delays = { ...FAST, draw: 100, decide: 50, roundStart: 1000, drawReveal: 500 };
     newGame({ delays });
     const before = game.state.dealDraws.length;
     vi.advanceTimersByTime(99);

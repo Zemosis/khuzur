@@ -22,20 +22,20 @@ import YourTurnMark from "../../components/YourTurnMark";
 import { socket, connectSocket } from "../../utils/socket";
 import { seatAvatar } from "../../utils/avatarConstants";
 import WaitingTable from "../../components/thirteen/WaitingTable";
-import { useTableMetrics, useViewport } from "../../hooks/useTableMetrics";
+import { SHORT_H, useTableMetrics, useViewport } from "../../hooks/useTableMetrics";
 import { reducedMotion } from "../../utils/motion";
 import PlayerHand from "../../components/thirteen/PlayerHand";
-import OpponentSection from "../../components/thirteen/OpponentSection";
 import GameChat from "../../components/thirteen/GameChat";
-import RoundTable from "../../components/muushig/RoundTable";
-import SidePiles from "../../components/muushig/SidePiles";
+import StadiumTable from "../../components/muushig/StadiumTable";
+import { seatTurns } from "../../components/muushig/stadiumGeometry";
+import MuushigSeat from "../../components/muushig/MuushigSeat";
+import Callout from "../../components/Callout";
 import RoundResults from "../../components/muushig/RoundResults";
 import DealAnimation from "../../components/thirteen/DealAnimation";
 import DealerIntro from "../../components/muushig/DealerIntro";
 import DealDraw from "../../components/muushig/DealDraw";
 import CardFlight from "../../components/muushig/CardFlight";
-import { STAGGER, legTime } from "../../components/muushig/flightTiming";
-import Callout from "../../components/Callout";
+import { DRAW_LAND_MS, STAGGER, legTime } from "../../components/muushig/flightTiming";
 import Suit from "../../components/muushig/Suit";
 import MuushigScoreBoard from "../../components/muushig/MuushigScoreBoard";
 import MuushigControls from "../../components/muushig/MuushigControls";
@@ -79,29 +79,36 @@ const CPUS = [
 ];
 // Seats clockwise from yours: bottom, bottom-left, top-left, top-right, bottom-right.
 const SEAT_POSITIONS = ["bottom", "bottomLeft", "topLeft", "topRight", "bottomRight"];
-// Two full seats stacked in a column need a window at least this tall; below
-// it the top seats ran under the header, so the slim "row" seats take over.
-const FULL_SEATS_MIN_H = 640;
-// Chat bubbles beside the seat columns: the top seats' face the felt (only its
-// rim is under them), the bottom seats' open below, toward your hand. On a
-// phone they all sit under the strip (OpponentSection's default).
+// Chat bubbles beside the plates, into space nothing else uses: the top seats'
+// along the table's head, toward the middle; the end seats' above, over the rim.
+// On a phone, where the plates sit on the rim, they open toward the middle.
 const BUBBLE_AT = {
-  topLeft: { side: "right", align: "start" },
-  topRight: { side: "left", align: "start" },
-  bottomLeft: { side: "below", align: "center" },
-  bottomRight: { side: "below", align: "center" },
+  full: {
+    topLeft: { side: "right", align: "start" },
+    topRight: { side: "left", align: "start" },
+    bottomLeft: { side: "above", align: "start" },
+    bottomRight: { side: "above", align: "end" },
+  },
+  compact: {
+    topLeft: { side: "below", align: "start" },
+    topRight: { side: "below", align: "end" },
+    bottomLeft: { side: "above", align: "start" },
+    bottomRight: { side: "above", align: "end" },
+  },
 };
-// The deal animation: each seat's fan faces the felt, and all 5 seats get cards.
-const DEAL_ROTATION = { bottomLeft: 90, topLeft: 90, topRight: 270, bottomRight: 270 };
+// Your hand's cards, against the size every table's hand gets (useTableMetrics):
+// a little smaller here, so the table gets the room.
+const HAND_SCALE = 0.8;
+// Below this window height the controls under your hand go slimmer.
+const DENSE_H = 640;
+// The deal: all 5 seats get cards.
 const ALL_SEATS_IN = [true, true, true, true, true];
 const NO_CARDS = [0, 0, 0, 0, 0];
 // How long a CPU "thinks" in each phase, and how long a full trick stays up.
 // DECIDE is slower so each seat's IN/FOLD callout plays out on its own; SWAP
 // is quicker since its cards' flight (see CardFlight) plays before it. DRAW
-// leaves time for the last drawn card to land and turn (see DealDraw), and a
-// tie holds a little longer so everyone sees who draws again.
+// leaves time for the last drawn card to land and turn (see DealDraw).
 const AI_DELAY = { DRAW: 1300, DECIDE: 1100, SWAP: 600, TRUMP: 900, PLAY: 950 };
-const TIE_PAUSE = 2000;
 const TRICK_PAUSE = 1500;
 const ACTION_PHASES = new Set([PHASES.DECIDE, PHASES.SWAP, PHASES.TRUMP, PHASES.PLAY]);
 // Online, a longer backlog than this (a hidden tab, a slow phone) is skipped
@@ -133,8 +140,6 @@ function logEntry(e, game) {
       return { text: `${name(e.seat)} draws first for the deal.` };
     case "dealDraw":
       return at({ kind: "pass", verb: `drew the ${nth(e.depth)} card: ${cardText(e.card)}` });
-    case "drawTie":
-      return { text: `Tie! ${e.seats.map(name).join(" and ")} draw again.` };
     case "firstDealer":
       return { text: `${name(e.seat)} drew the highest card: ${cardText(e.card)}.` };
     case "round":
@@ -412,7 +417,8 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
   const metrics = useTableMetrics();
   const { handW, deckW, compact, narrow } = metrics;
   const { vh } = useViewport();
-  const seats = metrics.seats === "full" && vh < FULL_SEATS_MIN_H ? "row" : metrics.seats;
+  const layout = narrow ? "compact" : "full";
+  const turns = useMemo(() => seatTurns(layout), [layout]);
   const { connected, ping } = useServerStats({ enabled: !!online });
   const [panelOpen, setPanelOpen] = useState(false);
   const closePanel = useCallback(() => setPanelOpen(false), []);
@@ -534,7 +540,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
     if (game.phase === PHASES.DRAW) {
       if (game.players[game.turn].type === "AI") {
         run = (s) => applyAction(s, aiAction(s));
-        delay = game.events.at(-1).type === "drawTie" ? TIE_PAUSE : AI_DELAY.DRAW;
+        delay = AI_DELAY.DRAW;
       }
     } else if (game.phase === PHASES.TRICK_END) {
       run = collectTrick;
@@ -561,7 +567,19 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
 
   // --- Your turn: a ping ---
   const myTurn = !isDealing && !flying && ACTION_PHASES.has(game.phase) && game.turn === mySeat;
-  const myDraw = game.phase === PHASES.DRAW && game.turn === mySeat;
+  // A card drawn for the deal takes a moment to slide out, fly and turn over.
+  // Until it has, the table shows nothing the draw decided: whose draw is
+  // next, or who deals. (A reload starts with every card already down.)
+  const drawCount = game.dealDraws?.length ?? 0;
+  const latestDraw = drawCount ? `${game.matchNumber}-${drawCount - 1}` : null;
+  const [landedDraw, setLandedDraw] = useState(latestDraw);
+  useEffect(() => {
+    if (!latestDraw) return;
+    const timer = setTimeout(() => setLandedDraw(latestDraw), reducedMotion() ? 0 : DRAW_LAND_MS + 100);
+    return () => clearTimeout(timer);
+  }, [latestDraw]);
+  const drawLanding = latestDraw !== null && landedDraw !== latestDraw;
+  const myDraw = game.phase === PHASES.DRAW && game.turn === mySeat && !drawLanding;
   useEffect(() => {
     if (myTurn || myDraw) safePlay("playTurnAlert");
   }, [turnKey, myTurn, myDraw]);
@@ -757,17 +775,16 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
   let warning = null;
   let buttons = [];
   if (drawing) {
-    const tie = game.phase === PHASES.DRAW && game.drawPass > 1;
-    message =
-      game.phase !== PHASES.DRAW
+    const last = game.dealDraws?.at(-1);
+    message = drawLanding
+      ? `${last.seat === mySeat ? "You draw" : `${nameOf(last.seat)} draws`} the ${nth(last.depth)} card...`
+      : game.phase !== PHASES.DRAW
         ? game.dealer === mySeat
           ? "You drew the highest card: you deal first."
           : `${nameOf(game.dealer)} drew the highest card and deals first.`
         : myDraw
-          ? tie
-            ? "Tie! Draw again: how deep this time?"
-            : `Your draw: how deep into the pile? Take any card from 1 to ${drawMax} down.`
-          : `${tie ? "Tie! " : ""}${nameOf(game.turn)} is drawing...`;
+          ? `Your draw: take any card 1 to ${drawMax} down. Highest deals; on the same rank ♠ > ♥ > ♦ > ♣.`
+          : `${nameOf(game.turn)} is drawing...`;
     if (myDraw) buttons = [{ label: "TAKE", tone: "gold", primary: true, onClick: onDraw }];
   } else if (isDealing) {
     message = game.dealer === mySeat ? "You're the dealer this round. Dealing..." : `${nameOf(game.dealer)} is the dealer this round. Dealing...`;
@@ -855,63 +872,63 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
   };
 
   // The seat whose move the table is waiting on (its side of the felt glows).
-  const turnSeat = (drawing ? phase === PHASES.DRAW : !isDealing && ACTION_PHASES.has(phase)) ? posOf(game.turn) : null;
+  const turnSeat = (drawing ? phase === PHASES.DRAW && !drawLanding : !isDealing && ACTION_PHASES.has(phase)) ? posOf(game.turn) : null;
 
-  const seat = (index, position) => {
+  // An opponent's seat at the table: its plate, and how many cards lie in front of it.
+  const seat = (index) => {
     const p = players[index];
     const folded = p.status === "fold";
     // During the round's opening banner the dealer's seat lights up instead.
     const introducing = stage === "intro" && index === game.dealer;
     const active = drawing
-      ? phase === PHASES.DRAW && index === game.turn
+      ? phase === PHASES.DRAW && !drawLanding && index === game.turn
       : introducing || (!isDealing && index === game.turn && ACTION_PHASES.has(phase));
-    return (
-      <OpponentSection
-        player={{ ...p, isEliminated: folded }}
-        isActive={active}
-        // While it's someone's turn, everyone else's seat dims a little.
-        dimmed={turnSeat !== null && !active}
-        bubble={bubbles.bubbleFor(p.name)}
-        bubbleAt={seats === "strip" ? undefined : BUBBLE_AT[posOf(index)]}
-        position={position}
-        face={faceFor(index)}
-        xpLevel={online ? game.levels?.[index] : null}
-        dealSeat={posOf(index)}
-        chip={
-          drawing
-            ? active && { label: "DRAW", bg: "#f4c430", blink: true }
-            : introducing
-            ? { label: "DEALER", bg: "#5fd4d6", fg: "#0a3a3a", blink: true }
-            : folded
-            ? { label: "FOLD", bg: "#463a78", fg: "#ead8b1" }
-            : active
-              ? { label: "TURN", bg: "#f4c430", blink: true }
-              : p.status === "play" && phase === PHASES.DECIDE
-                ? { label: "IN", bg: "#9bd14f", fg: "#1a3a0e" }
-                : null
-        }
-        tag={index === game.dealer && !introducing && !drawing ? { label: "DEAL", bg: "#5fd4d6", fg: "#0a3a3a" } : null}
-        detail={<SeatDetail eaten={p.eaten} folded={folded} layout={seats} />}
-        layout={seats}
-        callout={p.status && { id: `${roundKey}-${p.status}`, ...DECISION[p.status] }}
-      />
-    );
+    return {
+      cards: p.hand.length,
+      out: folded,
+      plate: (
+        <MuushigSeat
+          layout={layout}
+          seat={posOf(index)}
+          player={p}
+          isActive={active}
+          // While it's someone's turn, everyone else's seat dims a little.
+          dimmed={turnSeat !== null && !active}
+          bubble={bubbles.bubbleFor(p.name)}
+          bubbleAt={BUBBLE_AT[layout][posOf(index)]}
+          face={faceFor(index)}
+          xpLevel={online ? game.levels?.[index] : null}
+          chip={
+            drawing
+              ? active && { label: "DRAW", bg: "#f4c430", blink: true }
+              : introducing
+                ? { label: "DEALER", bg: "#5fd4d6", fg: "#0a3a3a", blink: true }
+                : folded
+                  ? { label: "FOLD", bg: "#463a78", fg: "#ead8b1" }
+                  : active
+                    ? { label: "TURN", bg: "#f4c430", blink: true }
+                    : p.status === "play" && phase === PHASES.DECIDE
+                      ? { label: "IN", bg: "#9bd14f", fg: "#1a3a0e" }
+                      : null
+          }
+          callout={!isDealing && p.status ? { id: `${roundKey}-${p.status}`, ...DECISION[p.status] } : null}
+        />
+      ),
+    };
   };
 
-  // The draw for the deal: each seat's latest card, and who's still in it.
+  // The draw for the deal: each seat's card, and once the last has landed, who deals.
   const draws = game.dealDraws ?? [];
   const latestBySeat = new Map();
   draws.forEach((d, i) =>
     latestBySeat.set(d.seat, { key: `${game.matchNumber}-${i}`, seat: posOf(d.seat), card: d.card, depth: d.depth }),
   );
-  const tieSeats = phase === PHASES.DRAW && game.drawPass > 1 ? game.events.findLast((e) => e.type === "drawTie")?.seats : null;
   const dealDraw = {
     count: game.dealDeck?.length ?? 0,
     draws: [...latestBySeat.values()],
     latest: draws.length ? `${game.matchNumber}-${draws.length - 1}` : null,
-    label: phase !== PHASES.DRAW ? "HIGHEST CARD DEALS" : tieSeats ? "TIE · DRAW AGAIN" : "DRAW FOR THE DEAL",
-    contenders: tieSeats ? tieSeats.map((s) => posOf(s)) : null,
-    winner: phase !== PHASES.DRAW ? posOf(game.dealer) : null,
+    label: phase !== PHASES.DRAW && !drawLanding ? "HIGHEST CARD DEALS" : "DRAW FOR THE DEAL",
+    winner: phase !== PHASES.DRAW && !drawLanding ? posOf(game.dealer) : null,
   };
 
   // Your own decision is announced above your hand.
@@ -1018,122 +1035,100 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
       {/* GAME REGION */}
       <div className="relative flex-1 grid min-h-0" style={{ gridTemplateColumns: compact ? "minmax(0, 1fr)" : "minmax(0, 1fr) 300px" }}>
         {/* TABLE */}
-        <div className={`relative flex flex-col min-h-0 ${narrow ? "px-2 pt-4 pb-2" : seats === "row" ? "px-3 py-1" : "px-4 py-2"}`}>
-          <RoundTable
-            layout={seats}
-            seats={{
-              bottomLeft: seat((mySeat + 1) % 5, "left"),
-              topLeft: seat((mySeat + 2) % 5, "left"),
-              topRight: seat((mySeat + 3) % 5, "right"),
-              bottomRight: seat((mySeat + 4) % 5, "right"),
-            }}
-            stack={stack}
-            trump={game.trumpCard}
-            trumpTakenBy={game.trumpTakenBy !== null && !trumpOnFelt ? nameOf(game.trumpTakenBy) : null}
-            trumpRef={trumpRef}
-            trickNumber={Math.max(1, game.trickNumber)}
-            tricksPerRound={TRICKS_PER_ROUND}
-            phaseLabel={drawing || stage === "intro" ? false : isDealing ? `ROUND ${game.roundNumber}` : phaseLabel}
-            maxCardWidth={deckW}
-            dealing={isDealing}
-            centerRef={feltRef}
-            dealerSeat={drawing || stage === "intro" ? null : posOf(game.dealer)}
-            // Your hand carries its own mark on your move.
-            turnSeat={myMove ? null : turnSeat}
-            banner={<TurnBanner active={myMove} />}
-            overlay={(cardWidth, diameter) =>
-              drawing ? (
-                <DealDraw
-                  key={game.matchNumber}
-                  D={diameter}
-                  cw={cardWidth}
-                  {...dealDraw}
-                  preview={myDraw ? pickDepth : 0}
-                  onDone={handleDrawDone}
-                />
-              ) : stage === "intro" ? (
-                <DealerIntro
-                  key={roundKey}
-                  round={game.roundNumber}
-                  dealerName={nameOf(game.dealer)}
-                  face={faceFor(game.dealer)}
-                  isMe={game.dealer === mySeat}
-                  drawnCard={game.roundNumber === 1 ? game.events.find((e) => e.type === "firstDealer")?.card : null}
-                  onDone={handleIntroDone}
-                />
-              ) : (
-                stage === "deal" && (
-                  <DealAnimation
-                  key={roundKey}
-                  dealerIndex={game.dealer}
-                  viewIndex={mySeat}
-                  deckWidth={cardWidth}
-                  seats={SEAT_POSITIONS}
-                  seatRotation={DEAL_ROTATION}
-                  seatsIn={ALL_SEATS_IN}
-                  cardsPerSeat={5}
-                  endsAt={game.dealEndsAt ?? null}
-                  onDealProgress={handleDealProgress}
-                  onComplete={handleDealComplete}
-                />
-                )
-              )
-            }
-          />
+        <div className={`relative flex flex-col min-h-0 ${narrow ? "px-2 pt-2 pb-2" : "px-4 pt-3 pb-2"}`}>
+          {/* Table and hand scroll together when the window is too short for both. */}
+          <div className="relative flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden">
+            {/* Never under the table's minimum height: past that, this column scrolls. */}
+            <div className="relative flex-1">
+              <StadiumTable
+                layout={layout}
+                seats={Object.fromEntries([1, 2, 3, 4].map((k) => [SEAT_POSITIONS[k], seat((mySeat + k) % 5)]))}
+                stack={stack}
+                trump={game.trumpCard}
+                trumpTakenBy={game.trumpTakenBy !== null && !trumpOnFelt ? nameOf(game.trumpTakenBy) : null}
+                trumpRef={trumpRef}
+                drawCount={game.drawPile.length + drawPending}
+                deadCount={game.deadPile.length - deadPending}
+                drawRef={drawPileRef}
+                deadRef={deadPileRef}
+                trickNumber={Math.max(1, game.trickNumber)}
+                tricksPerRound={TRICKS_PER_ROUND}
+                phaseLabel={drawing || stage === "intro" ? false : isDealing ? `ROUND ${game.roundNumber}` : phaseLabel}
+                dealing={isDealing}
+                centerRef={feltRef}
+                dealerSeat={drawing || stage === "intro" ? null : posOf(game.dealer)}
+                // Your hand carries its own mark on your move.
+                turnSeat={myMove ? null : turnSeat}
+                banner={<TurnBanner active={myMove} />}
+                overlay={({ cardWidth, ...draw }) =>
+                  drawing ? (
+                    <DealDraw key={game.matchNumber} cw={cardWidth} {...draw} {...dealDraw} preview={myDraw ? pickDepth : 0} onDone={handleDrawDone} />
+                  ) : stage === "intro" ? (
+                    <DealerIntro
+                      key={roundKey}
+                      round={game.roundNumber}
+                      dealerName={nameOf(game.dealer)}
+                      face={faceFor(game.dealer)}
+                      isMe={game.dealer === mySeat}
+                      drawnCard={game.roundNumber === 1 ? game.events.find((e) => e.type === "firstDealer")?.card : null}
+                      onDone={handleIntroDone}
+                    />
+                  ) : (
+                    stage === "deal" && (
+                      <DealAnimation
+                        key={roundKey}
+                        dealerIndex={game.dealer}
+                        viewIndex={mySeat}
+                        deckWidth={cardWidth}
+                        seats={SEAT_POSITIONS}
+                        seatRotation={turns}
+                        seatsIn={ALL_SEATS_IN}
+                        cardsPerSeat={5}
+                        endsAt={game.dealEndsAt ?? null}
+                        onDealProgress={handleDealProgress}
+                        onComplete={handleDealComplete}
+                      />
+                    )
+                  )
+                }
+              />
+            </div>
 
-          {/* My hand, with the draw and dead piles in the corner beside it.
-              On a phone the hand fans out in the space right of the piles. */}
-          <div
-            ref={handAreaRef}
-            className="relative"
-            data-your-turn={myMove ? "true" : undefined}
-            style={narrow ? { paddingLeft: pileW * 2 + 24 } : undefined}
-          >
-            {myMove && <YourTurnMark />}
-            {!isDealing && (
-              <div className="absolute left-2 bottom-2 z-10">
-                <SidePiles
-                  drawCount={game.drawPile.length + drawPending}
-                  deadCount={game.deadPile.length - deadPending}
-                  cardWidth={pileW}
-                  drawRef={drawPileRef}
-                  deadRef={deadPileRef}
-                />
-              </div>
-            )}
-            {myCallout && (
-              <Callout key={myCallout.id} {...myCallout} onDone={() => setMyCalloutDone(myCallout.id)} />
-            )}
-            <PlayerHand
-              hand={me.hand}
-              selectedCards={selected}
-              onSelectionChange={onSelectionChange}
-              isActive={canSelect}
-              isDealing={isDealing}
-              dealOriginRef={feltRef}
-              handSize={5}
-              cardWidth={handW}
-              deckWidth={deckW}
-              sortMode={handOrder.mode}
-              order={handOrder.order}
-              onReorder={handOrder.reorder}
-              isPlayable={allowed ? (c) => allowed.has(c.id) : undefined}
-              // An empty hand never means a win here: you folded, or the round's cards are all out.
-              emptyMessage={me.status === "fold" ? "YOU FOLDED — SITTING OUT THIS ROUND" : "ALL CARDS PLAYED"}
-              bubble={bubbles.mine}
-              arrival={
-                flight?.seat === mySeat && incomingLeg >= 0
-                  ? {
-                      ids: flight.incomingIds,
-                      originRef: trumpLeg >= 0 ? trumpRef : drawPileRef,
-                      sideways: trumpLeg >= 0,
-                      faceUp: trumpLeg >= 0,
-                      delay: flight.legs.slice(0, incomingLeg).reduce((t, l) => t + legTime(l.count, l.stagger), 0),
-                      stagger: STAGGER,
-                    }
-                  : undefined
-              }
-            />
+            {/* My hand, under the table. */}
+            <div ref={handAreaRef} className="relative shrink-0 mt-3" data-your-turn={myMove ? "true" : undefined}>
+              {myMove && <YourTurnMark />}
+              {myCallout && <Callout key={myCallout.id} {...myCallout} onDone={() => setMyCalloutDone(myCallout.id)} />}
+              <PlayerHand
+                hand={me.hand}
+                selectedCards={selected}
+                onSelectionChange={onSelectionChange}
+                isActive={canSelect}
+                isDealing={isDealing}
+                dealOriginRef={feltRef}
+                handSize={5}
+                cardWidth={Math.round(handW * HAND_SCALE)}
+                deckWidth={deckW}
+                sortMode={handOrder.mode}
+                order={handOrder.order}
+                onReorder={handOrder.reorder}
+                isPlayable={allowed ? (c) => allowed.has(c.id) : undefined}
+                // An empty hand never means a win here: you folded, or the round's cards are all out.
+                emptyMessage={me.status === "fold" ? "YOU FOLDED — SITTING OUT THIS ROUND" : "ALL CARDS PLAYED"}
+                bubble={bubbles.mine}
+                arrival={
+                  flight?.seat === mySeat && incomingLeg >= 0
+                    ? {
+                        ids: flight.incomingIds,
+                        originRef: trumpLeg >= 0 ? trumpRef : drawPileRef,
+                        sideways: trumpLeg >= 0,
+                        faceUp: trumpLeg >= 0,
+                        delay: flight.legs.slice(0, incomingLeg).reduce((t, l) => t + legTime(l.count, l.stagger), 0),
+                        stagger: STAGGER,
+                      }
+                    : undefined
+                }
+              />
+            </div>
           </div>
           <MuushigControls
             highlight={myMove}
@@ -1142,7 +1137,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
             buttons={buttons}
             sortMode={handOrder.mode}
             onSortModeChange={changeSortMode}
-            dense={seats === "row"}
+            dense={vh < DENSE_H}
           >
             {myDraw && <DepthPicker depth={pickDepth} max={drawMax} onChange={setDepth} />}
           </MuushigControls>
@@ -1152,7 +1147,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
         <TableSidebar compact={compact} open={panelOpen} onClose={closePanel}>
           <MuushigScoreBoard
             players={players.map((p) => ({ ...p, folded: p.status === "fold" }))}
-            currentPlayerIndex={phase === PHASES.DRAW || (!isDealing && ACTION_PHASES.has(phase)) ? game.turn : -1}
+            currentPlayerIndex={(phase === PHASES.DRAW && !drawLanding) || (!isDealing && ACTION_PHASES.has(phase)) ? game.turn : -1}
             dealerIndex={drawing ? -1 : game.dealer}
             startScore={START_SCORE}
             myIndex={mySeat}
@@ -1169,7 +1164,7 @@ function MuushigTable({ initial, aiDifficulty = "MEDIUM", online = null, message
           legs={flight.legs}
           fromRects={flight.fromRects}
           seat={posOf(flight.seat)}
-          rotation={DEAL_ROTATION[posOf(flight.seat)] ?? 0}
+          rotation={turns[posOf(flight.seat)] ?? 0}
           cardWidth={pileW}
           deadRef={deadPileRef}
           drawRef={drawPileRef}
@@ -1251,46 +1246,6 @@ function DepthPicker({ depth, max, onChange }) {
       >
         +
       </button>
-    </div>
-  );
-}
-
-// Piles eaten this round: one box per trick (5 a round); all 5 wins the
-// round. Scores live on the scoreboard. On small plates (`layout` strip or
-// row, see OpponentSection) the EATEN label goes and the boxes shrink.
-function SeatDetail({ eaten, folded, layout = "full" }) {
-  const compact = layout !== "full";
-  const sweep = eaten >= 5;
-  const label = folded ? "FOLDED" : sweep ? (compact ? "WON" : "ROUND WON") : compact ? null : "EATEN";
-  const pip = compact ? 9 : 12;
-  return (
-    <div className={`flex flex-col gap-1.5 ${compact ? "mt-1.5" : "mt-2"} ${layout === "row" ? "items-start" : "items-center"}`}>
-      {label && (
-        <div
-          className={`font-pixel-display text-[10px] leading-none ${sweep ? "text-glow-gold" : ""}`}
-          style={{ color: folded ? "#8a7fb0" : sweep ? undefined : "rgba(234,216,177,0.7)" }}
-        >
-          {label}
-        </div>
-      )}
-      {!folded && (
-        <div className="flex gap-1" title={`${eaten} eaten this round`} aria-label={`${eaten} of 5 piles eaten`}>
-          {Array.from({ length: 5 }, (_, i) => (
-            <span
-              key={i}
-              style={{
-                width: pip,
-                height: pip,
-                backgroundColor: i < eaten ? "#f4c430" : "#0a0712",
-                boxShadow:
-                  i < eaten
-                    ? `inset 0 -2px 0 #c89820, 0 0 0 1px #0a0712${sweep ? ", 0 0 6px rgba(244,196,48,0.8)" : ""}`
-                    : "inset 0 0 0 2px #463a78",
-              }}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

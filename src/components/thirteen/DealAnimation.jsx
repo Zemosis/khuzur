@@ -166,6 +166,8 @@ const DealAnimation = ({
       return {
         x: r.left + r.width / 2 - (c.left + c.width / 2),
         y: r.top + r.height / 2 - (c.top + c.height / 2),
+        // The seat's cards are the size it says (data-card-w), else a small card's.
+        cardW: Number(el.dataset.cardW) || FAN_CARD_W,
       };
     };
 
@@ -209,7 +211,7 @@ const DealAnimation = ({
               x: t.x,
               y: t.y,
               rotation: (rotations[pos] || 0) + gsap.utils.random(-6, 6),
-              scale: FAN_CARD_W / deckWidth,
+              scale: t.cardW / deckWidth,
               duration: fly / speed,
               ease: "power2.out",
               overwrite: true,
