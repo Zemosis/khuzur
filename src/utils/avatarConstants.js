@@ -82,15 +82,6 @@ export function snapAvatarSize(size, dpr = 1) {
   return { device, css: device / dpr };
 }
 
-/**
- * How far to move something that starts at CSS position `at` so it starts on
- * a whole device pixel: an avatar between two would be redrawn by the browser
- * with some of its pixels shifted. In CSS px; 0 when it's already there.
- */
-export function gridNudge(at, dpr = 1) {
-  return Math.round(at * dpr) / dpr - at || 0;
-}
-
 export function createEmptyGrid() {
   return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
 }
@@ -129,19 +120,24 @@ export function deserializeAvatar(data) {
  * Draws a 17x17 avatar onto a canvas whose side is a multiple of 17, so every
  * avatar pixel is a whole number of canvas pixels — no seams, no uneven cells.
  */
-export function renderAvatarToCanvas(ctx, avatarData, canvasSize) {
-  const pixels = avatarData.pixels;
-  const cell = Math.max(1, Math.floor(canvasSize / GRID_SIZE));
-  ctx.clearRect(0, 0, canvasSize, canvasSize);
+/**
+ * The avatar as SVG paths, one per colour: [{ color, d }] in grid units (a
+ * 17-wide viewBox). Each row's run of same-coloured cells is one rectangle.
+ */
+export function avatarPaths(avatarData) {
+  const byColor = new Map();
+  const pixels = avatarData?.pixels ?? [];
   for (let r = 0; r < GRID_SIZE; r++) {
-    for (let c = 0; c < GRID_SIZE; c++) {
+    let c = 0;
+    while (c < GRID_SIZE) {
       const color = pixels[r]?.[c];
-      if (color) {
-        ctx.fillStyle = color;
-        ctx.fillRect(c * cell, r * cell, cell, cell);
-      }
+      let end = c + 1;
+      while (end < GRID_SIZE && pixels[r]?.[end] === color) end++;
+      if (color) byColor.set(color, `${byColor.get(color) ?? ""}M${c} ${r}h${end - c}v1h${c - end}z`);
+      c = end;
     }
   }
+  return [...byColor].map(([color, d]) => ({ color, d }));
 }
 
 // HSB <-> hex conversion utilities

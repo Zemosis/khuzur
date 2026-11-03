@@ -51,6 +51,6 @@ vi.mock("../../src/utils/SoundManager", () => {
   return { soundManager, default: soundManager };
 });
 
-// Avatars paint on a canvas; jsdom returns null for getContext.
+// The avatar painter and colour picker draw on canvases; jsdom returns null for getContext.
 const noopContext = new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => {}), set: (t, k, v) => ((t[k] = v), true) });
 HTMLCanvasElement.prototype.getContext = () => noopContext;

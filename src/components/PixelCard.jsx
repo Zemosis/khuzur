@@ -126,7 +126,9 @@ export function PixelAvatar({
     <div
       style={{
         opacity: eliminated ? 0.35 : 1,
-        filter: active ? "drop-shadow(0 0 8px rgba(244,196,48,0.7))" : "none",
+        // A glow round the square, not a drop-shadow filter: a filter paints
+        // the face into a bitmap first, which comes out blurred between pixels.
+        boxShadow: active ? "0 0 10px 2px rgba(244,196,48,0.6)" : "none",
         flexShrink: 0,
       }}
     >

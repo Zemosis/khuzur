@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import WaitingTable from "../../src/components/thirteen/WaitingTable";
 
-// Avatars paint on a canvas; stand one in that shows which avatar it is.
+// Avatars are drawn square by square; stand one in that just names which avatar it is.
 vi.mock("../../src/components/PixelCard", async (importOriginal) => ({
   ...(await importOriginal()),
   PixelAvatar: ({ variant }) => <span data-testid="avatar">{String(variant)}</span>,

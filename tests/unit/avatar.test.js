@@ -9,7 +9,7 @@ import {
   presetAvatar,
   serializeAvatar,
   snapAvatarSize,
-  gridNudge,
+  avatarPaths,
 } from "../../src/utils/avatarConstants.js";
 
 const grid = (n, fill) => Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => fill(r, c)));
@@ -67,21 +67,19 @@ describe("avatar grid", () => {
   });
 });
 
-describe("gridNudge", () => {
-  it("moves an avatar that lands between device pixels onto the nearest one", () => {
-    // At 1 CSS px = 1 device px, 100.4 rounds down to 100: move back 0.4.
-    expect(gridNudge(100.4, 1)).toBeCloseTo(-0.4);
-    expect(gridNudge(100.6, 1)).toBeCloseTo(0.4);
+describe("avatarPaths", () => {
+  it("draws each colour as one path, a row's run of it as one rectangle", () => {
+    const pixels = grid(17, (r, c) => (r === 0 && c < 3 ? "#111111" : r === 2 && c === 5 ? "#222222" : null));
+    expect(avatarPaths({ pixels })).toEqual([
+      { color: "#111111", d: "M0 0h3v1h-3z" },
+      { color: "#222222", d: "M5 2h1v1h-1z" },
+    ]);
   });
 
-  it("works in device pixels, so a scaled screen lands on its own grid", () => {
-    // At 125%, 10 CSS px is 12.5 device px: half a device pixel is 0.4 CSS px.
-    expect(gridNudge(10, 1.25)).toBeCloseTo(0.4);
-    expect(gridNudge(10.4, 1.25)).toBeCloseTo(0);
-  });
-
-  it("leaves an avatar already on the grid alone", () => {
-    expect(gridNudge(37, 1)).toBe(0);
-    expect(gridNudge(0, 0.75)).toBe(0);
+  it("covers every cell of a full avatar exactly once", () => {
+    const cells = avatarPaths(presetAvatar(2))
+      .flatMap(({ d }) => [...d.matchAll(/M(\d+) (\d+)h(\d+)/g)])
+      .reduce((n, m) => n + Number(m[3]), 0);
+    expect(cells).toBe(17 * 17);
   });
 });

@@ -8,6 +8,12 @@ The hall is in early access, so versions are 0.x: the middle number moves
 for a new game or a big new system, the last for everything else. 1.0.0 is
 the first stable release.
 
+## 0.6.6 — 3 November 2026
+
+### Fixes
+- **Faces at the tables are drawn true.** Some players' faces round the Poker, Blackjack and Muushig tables could still come out split, one half of the eyes and mouth a pixel higher than the other. Faces are now drawn square by square wherever they sit, so they always stay in one piece, at any screen scaling.
+- **The glow on whoever's turn it is no longer blurs their face.**
+
 ## 0.6.5 — 3 November 2026
 
 ### Muushig has a new table
