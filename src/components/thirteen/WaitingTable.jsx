@@ -20,7 +20,7 @@ import PixelIcon from "../PixelIcon";
 import LevelTag from "../LevelTag";
 import GameChat from "./GameChat";
 import { seatAvatar } from "../../utils/avatarConstants";
-import { positionOf } from "../../utils/seatPosition";
+import { positionOf, seatPositions } from "../../utils/seatPosition";
 import { useTableMetrics } from "../../hooks/useTableMetrics";
 import { useUnread } from "../../hooks/useUnread";
 import { useChatBubbles } from "../../hooks/useChatBubbles";
@@ -62,18 +62,31 @@ function bubbleAt(pos, small) {
   return small ? { side: "below", align: STRIP_ALIGN[pos] ?? "center" } : BUBBLE_AT[pos];
 }
 
-function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, face, small = false, bubble = null, bubblePlace, credit = null }) {
+function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, face, small = false, bubble = null, bubblePlace, credit = null, team = null, onTakeSeat = null }) {
   const base = `relative flex flex-col items-center justify-center gap-2 py-3 text-center ${small ? "flex-1 min-w-0 px-1.5" : "px-3"}`;
   const size = small ? { maxWidth: 132, minHeight: 112 } : { width: 184, minHeight: 124 };
+  // Khuzur: the seat's team colour along its foot, and a button to move into an empty seat.
+  const teamBar = team ? { boxShadow: `inset 0 -5px 0 ${team.color}` } : null;
+  const sitHere = onTakeSeat && (
+    <button
+      onClick={() => onTakeSeat(index)}
+      aria-label={`Sit in seat ${index + 1}`}
+      className="pixel-btn font-pixel-display text-[8px] px-2 py-1.5 whitespace-nowrap"
+      style={{ backgroundColor: team?.color ?? "#9bd14f", borderColor: "#0a0712", color: "#1a1024" }}
+    >
+      SIT HERE
+    </button>
+  );
 
   if (!seat && credit?.botsFill) {
     return (
-      <div className={base} style={{ ...size, border: "4px dashed #2a234d", backgroundColor: "rgba(20,16,42,0.45)" }}>
+      <div className={base} style={{ ...size, border: "4px dashed #2a234d", backgroundColor: "rgba(20,16,42,0.45)", ...teamBar }}>
         <PixelIcon name="user" size={24} color="#2a234d" />
         <div className="font-pixel-display text-[10px]" style={{ color: LEVEL_COLOR.HARD }}>
           HARD BOT
         </div>
         <div className="font-pixel-body text-[16px] text-bone/50 leading-none">unless a player sits</div>
+        {sitHere}
       </div>
     );
   }
@@ -82,10 +95,11 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
     return (
       <div
         className={base}
-        style={{ ...size, border: "4px dashed #2a234d", backgroundColor: "rgba(20,16,42,0.45)" }}
+        style={{ ...size, border: "4px dashed #2a234d", backgroundColor: "rgba(20,16,42,0.45)", ...teamBar }}
       >
         <PixelIcon name="user" size={24} color="#2a234d" />
         <div className="font-pixel-display text-[10px] text-bone/40">EMPTY SEAT</div>
+        {sitHere}
         {isHost && !credit && (
           <div className="flex flex-wrap justify-center gap-1">
             {LEVELS.map((level) => (
@@ -116,10 +130,19 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
         ...size,
         backgroundColor: "#14102a",
         border: "4px solid #0a0712",
-        boxShadow: "0 0 0 4px #0a0712, inset 0 4px 0 rgba(255,255,255,0.04)",
+        boxShadow: `0 0 0 4px #0a0712, inset 0 4px 0 rgba(255,255,255,0.04)${team ? `, inset 0 -5px 0 ${team.color}` : ""}`,
         opacity: !isCpu && !seat.connected ? 0.55 : 1,
       }}
     >
+      {team && (
+        <span
+          data-testid="seat-team"
+          className="absolute -bottom-3 font-pixel-display text-[8px] px-1.5 py-1"
+          style={{ backgroundColor: team.color, color: "#1a1024", boxShadow: "0 0 0 2px #0a0712" }}
+        >
+          {team.label}
+        </span>
+      )}
       {bubble && <ChatBubble name={shortName(seat.name)} lines={bubble} {...bubblePlace} />}
       {seat.isHost && (
         <span
@@ -312,18 +335,27 @@ export default function WaitingTable({
   title = "THIRTEEN",
   titleClass = "text-glow-gold",
   titleColor,
+  seatTeam, // Khuzur: (seat) => { color, label } for each seat's team
+  onTakeSeat, // Khuzur: move yourself to an empty seat
+  shape, // Khuzur: the table's shape, shown beside its name
 }) {
   const { compact, narrow } = useTableMetrics();
   const [panelOpen, setPanelOpen] = useState(false);
   const closePanel = useCallback(() => setPanelOpen(false), []);
   const unread = useUnread(messages, panelOpen);
   const bubbles = useChatBubbles(messages);
-  const five = table.seats.length === 5;
+  const count = table.seats.length;
   const at = {};
   table.seats.forEach((seat, i) => {
-    at[positionOf(i, table.mySeat, table.seats.length)] = { seat, index: i };
+    at[positionOf(i, table.mySeat ?? 0, count)] = { seat, index: i };
   });
-  const slot = (pos, small = false) => (
+  // Where the other seats go: across the top, then one each side.
+  const topRow = ["topLeft", "top", "topRight"].filter((pos) => at[pos]);
+  const leftSide = at.bottomLeft ? "bottomLeft" : at.left ? "left" : null;
+  const rightSide = at.bottomRight ? "bottomRight" : at.right ? "right" : null;
+  const others = seatPositions(count).slice(1);
+  const slot = (pos, small = false) =>
+    at[pos] && (
     <SeatSlot
       seat={at[pos].seat}
       index={at[pos].index}
@@ -342,6 +374,8 @@ export default function WaitingTable({
             : null
       }
       bubblePlace={bubbleAt(pos, small)}
+      team={seatTeam?.(at[pos].index) ?? null}
+      onTakeSeat={onTakeSeat && !at[pos].seat && table.mySeat != null && at[pos].index !== table.mySeat ? onTakeSeat : null}
     />
   );
   const seatedCount = table.seats.filter(Boolean).length;
@@ -383,6 +417,7 @@ export default function WaitingTable({
         badge={
           <div className="font-pixel-display text-[10px] text-bone/60 whitespace-nowrap">
             {table.name.toUpperCase()} <span className="text-glow-cyan">#{table.code}</span>
+            {shape && <span className="text-bone/80"> · {shape}</span>}
           </div>
         }
         title={title}
@@ -398,7 +433,7 @@ export default function WaitingTable({
           <div className="relative flex flex-col items-center gap-6 min-h-0 overflow-y-auto px-2 pt-5 pb-4">
             {/* The other seats, clockwise from your left. */}
             <div className="flex justify-center gap-2 w-full">
-              {(five ? ["bottomLeft", "topLeft", "topRight", "bottomRight"] : ["left", "top", "right"]).map((pos) => (
+              {others.map((pos) => (
                 <React.Fragment key={pos}>{slot(pos, true)}</React.Fragment>
               ))}
             </div>
@@ -407,21 +442,14 @@ export default function WaitingTable({
           </div>
         ) : (
           <div className="relative flex flex-col items-center justify-between min-h-0 overflow-y-auto px-4 py-4">
-            {five ? (
-              <div className="flex justify-center gap-10">
-                {slot("topLeft")}
-                {slot("topRight")}
-              </div>
-            ) : (
-              slot("top")
-            )}
+            {topRow.length > 0 ? <div className="flex justify-center gap-10">{topRow.map((pos) => <React.Fragment key={pos}>{slot(pos)}</React.Fragment>)}</div> : <div />}
             <div
               className="grid items-center gap-4 w-full mx-auto"
               style={{ gridTemplateColumns: `${SIDE_SEAT_W}px minmax(0,1fr) ${SIDE_SEAT_W}px`, maxWidth: SIDE_SEAT_W * 2 + 820 + 32 }}
             >
-              <div className="flex justify-center">{slot(five ? "bottomLeft" : "left")}</div>
+              <div className="flex justify-center">{leftSide && slot(leftSide)}</div>
               {invite}
-              <div className="flex justify-center">{slot(five ? "bottomRight" : "right")}</div>
+              <div className="flex justify-center">{rightSide && slot(rightSide)}</div>
             </div>
             {slot("bottom")}
           </div>

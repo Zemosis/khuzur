@@ -96,6 +96,14 @@ describe("people", () => {
     expect(game.state.turn).toBe(0);
   });
 
+  it("every state a person's turn is broadcast in already carries their clock", () => {
+    const clocks = [];
+    newGame({ seats: [human(0), human(1)], onState: (g) => clocks.push(g.turnMsLeft()) });
+    game.load(dealtState(T1v1, [human(0), human(1)], 0));
+    game.move(0, { type: "lead", cardIds: [game.state.players[0].hand[0].id] });
+    expect(clocks.slice(-2)).toEqual([50, 50]);
+  });
+
   it("a clock armed for a turn that already moved never fires", () => {
     humanGame(T1v1, [human(0), human(1)]);
     vi.advanceTimersByTime(49);

@@ -27,7 +27,7 @@ export const DEFAULT_KHUZUR_DELAYS = {
   draw: 1300, // a CPU drawing for the deal
   lead: 1000, // a CPU leading
   beat: 900, // a CPU beating or picking up
-  drawReveal: 2000, // the winning draw card shows before the first lead
+  drawReveal: 1500, // the winning draw card shows before the first lead (the browser shows it at least 1.6 s)
   turn: 45000, // a person's turn
 };
 
@@ -89,8 +89,9 @@ export class KhuzurGame {
       table,
       rng: this.rng,
     });
-    this.broadcast();
+    // Timers first, so each state goes out with its turn clock running.
     this.schedule();
+    this.broadcast();
   }
 
   /** Puts the table in `state` (a restored or prepared match) and plays on from there. */
@@ -98,8 +99,8 @@ export class KhuzurGame {
     this.clearTimers();
     this.votes = {};
     this.state = state;
-    this.broadcast();
     this.schedule();
+    this.broadcast();
   }
 
   /** A person's move from `seat`: { type, ...payload }. */
@@ -176,8 +177,8 @@ export class KhuzurGame {
     };
     const team = this.state.players[seat].team;
     if (this.settleVote(team)) return;
-    this.broadcast();
     if (seat === this.state.turn) this.schedule();
+    this.broadcast();
   }
 
   rematch() {
@@ -187,8 +188,8 @@ export class KhuzurGame {
     this.startedAt = new Date();
     this.finishedAt = null;
     this.state = startNextMatch(this.state, this.rng);
-    this.broadcast();
     this.schedule();
+    this.broadcast();
     return { ok: true };
   }
 
@@ -198,14 +199,13 @@ export class KhuzurGame {
     const fresh = next.events.slice(next.events.length >= prev.events.length ? prev.events.length : 0);
     if (fresh.some((e) => e.type === "firstDealer")) this.dealEndsAt = Date.now() + this.delays.drawReveal;
     this.clearTimers();
+    if (next.phase !== PHASES.MATCH_OVER) this.schedule();
     this.broadcast();
     if (next.phase === PHASES.MATCH_OVER) {
       this.finishedAt = new Date();
       this.onRoundEnd?.(khuzurSummary(next));
       this.onGameOver?.(this);
-      return;
     }
-    this.schedule();
   }
 
   /** Arms the next CPU move, or the person on turn's clock. */

@@ -1,13 +1,14 @@
 // STANDINGS — the end of a Khuzur match: every place, best first, with its
-// players in their team colour. PLAY AGAIN deals the next match at the same
-// table; LEAVE goes back to the builder.
+// players in their team colour, then what it paid (children: the credit
+// result and the XP and gold). PLAY AGAIN deals the next match (or stakes for
+// it at a credit table); LEAVE goes back to the lobby.
 
 import React from "react";
 import { INK } from "../pixelTokens";
 
 import { ordinal } from "./teams";
 
-export default function Standings({ rows, onPlayAgain, onLeave }) {
+export default function Standings({ rows, playAgain, onLeave, children }) {
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(10,7,18,0.7)" }}>
       <div
@@ -29,9 +30,16 @@ export default function Standings({ rows, onPlayAgain, onLeave }) {
             </li>
           ))}
         </ol>
+        {children}
         <div className="flex gap-2 justify-center pt-1">
-          <button type="button" onClick={onPlayAgain} className="pixel-btn font-pixel-display text-[11px] px-4 py-2.5" style={{ backgroundColor: "#9bd14f", borderColor: "#6a9a30", color: INK }}>
-            PLAY AGAIN
+          <button
+            type="button"
+            onClick={playAgain.onClick}
+            disabled={playAgain.disabled}
+            className="pixel-btn font-pixel-display text-[11px] px-4 py-2.5 disabled:opacity-50"
+            style={{ backgroundColor: "#9bd14f", borderColor: "#6a9a30", color: INK }}
+          >
+            {playAgain.label}
           </button>
           <button type="button" onClick={onLeave} className="pixel-btn font-pixel-display text-[11px] px-4 py-2.5" style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}>
             LEAVE

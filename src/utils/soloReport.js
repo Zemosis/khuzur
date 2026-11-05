@@ -78,3 +78,32 @@ export function muushigSoloReport(game, { matchId, startedAt, finishedAt, me = 0
     stats,
   };
 }
+
+/**
+ * Khuzur: the match is one round. Your place is your team's; leads, beats and
+ * pick-ups come from the event log, counted as server/game/khuzurStats.js does.
+ */
+export function khuzurSoloReport(game, { matchId, startedAt, finishedAt, me = 0 }) {
+  const stats = { leads: 0, beats: 0, pickups: 0, picked_up: 0, rounds_played: 1, rounds_won: 0 };
+  for (const e of game.events || []) {
+    if (e.seat !== me) continue;
+    if (e.type === "lead") stats.leads += 1;
+    else if (e.type === "beat") stats.beats += 1;
+    else if (e.type === "pickUp") {
+      stats.pickups += 1;
+      stats.picked_up += e.count;
+    }
+  }
+  if (game.places[game.players[me].team] === 1) stats.rounds_won = 1;
+  return {
+    matchId,
+    gameType: "khuzur",
+    startedAt,
+    finishedAt,
+    me,
+    rounds: 1,
+    table: game.table,
+    players: game.players.map((p) => ({ place: game.places[p.team] })),
+    stats,
+  };
+}

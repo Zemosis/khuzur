@@ -10,7 +10,8 @@ import { seededRandom } from "../helpers/cards.js";
 import { c, cs } from "../helpers/khuzur.js";
 
 // The page opens on whatever state `start.state` holds (or a real new match).
-const { start } = vi.hoisted(() => ({ start: { state: null, failLead: null } }));
+const { start, reportSoloMatch } = vi.hoisted(() => ({ start: { state: null, failLead: null }, reportSoloMatch: vi.fn() }));
+vi.mock("../../src/lib/soloMatches", () => ({ reportSoloMatch }));
 vi.mock("../../src/utils/khuzur/engine", async (importOriginal) => {
   const real = await importOriginal();
   return {
@@ -194,6 +195,15 @@ describe("the end of the match", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("a finished practice match is reported for your stats, as a Khuzur match", () => {
+    reportSoloMatch.mockClear();
+    open(playing({ mine: "", theirs: "J♠", phase: E.PHASES.MATCH_OVER, places: [1, 2] }));
+    expect(reportSoloMatch).toHaveBeenCalledWith(
+      expect.objectContaining({ gameType: "khuzur", me: 0, rounds: 1, table: TABLE, players: [{ place: 1 }, { place: 2 }], stats: expect.objectContaining({ rounds_won: 1 }) }),
+    );
+    expect(reportSoloMatch.mock.calls[0][0].matchId).toMatch(/^KZ-/);
   });
 
   it("LEAVE goes back to the builder", async () => {
