@@ -2,7 +2,7 @@
 // (docs/superpowers/specs/2026-11-05-khuzur-design.md, "The CPU").
 
 import { describe, it, expect } from "vitest";
-import { aiAction, cheapestCover, cheapestLead } from "../../src/utils/khuzur/ai.js";
+import { aiAction, applyAction, cheapestCover, cheapestLead } from "../../src/utils/khuzur/ai.js";
 import { createMatch, deal, lead, PHASES } from "../../src/utils/khuzur/engine.js";
 import { seededRandom } from "../helpers/cards.js";
 import { c, cs, idsOf } from "../helpers/khuzur.js";
@@ -111,5 +111,39 @@ describe("aiAction", () => {
     expect(action.type).toBe("drawForDeal");
     expect(action.depth).toBeGreaterThanOrEqual(1);
     expect(action.depth).toBeLessThanOrEqual(10);
+  });
+});
+
+describe("levels", () => {
+  const withLevel = (s, level) => ({ ...s, players: s.players.map((p) => ({ ...p, level })) });
+
+  it("createMatch keeps each player's level", () => {
+    const s = createMatch({ players: [{ name: "A", type: "AI", level: "EASY" }, { name: "B", type: "AI", level: "HARD" }], table: { perTeam: 1, teams: 2, handSize: 5 } });
+    expect(s.players.map((p) => p.level)).toEqual(["EASY", "HARD"]);
+  });
+
+  it("EASY sometimes picks up a stack it could beat", () => {
+    const s = withLevel(lead(playState({ hands: ["9♣ 8♦ 7♦ 10♠ J♠", "K♠ 7♣ 8♣ 7♠ 8♠"] }), 0, ["9♣"]), "EASY");
+    const types = new Set(Array.from({ length: 40 }, (_, i) => aiAction(s, seededRandom(i + 1)).type));
+    expect(types).toEqual(new Set(["beat", "pickUp"]));
+  });
+
+  it("HARD answers with a legal move", () => {
+    const s = withLevel(playState({ hands: ["9♣ 9♦ K♠ K♦ 8♥", "8♠ 9♠ 10♦ 7♠ Q♠"], pile: "J♥ 10♥ 9♥ Q♦ Q♣" }), "HARD");
+    const action = aiAction(s, seededRandom(4));
+    expect(action.type).toBe("lead");
+    expect(() => applyAction(s, action)).not.toThrow();
+  });
+
+  it("HARD never reads other hands: moving the unseen cards around gives the same answer", () => {
+    const a = withLevel(playState({ hands: ["9♣ 9♦ K♠ K♦ 8♥", "8♠ 9♠ 10♦ 7♠ Q♠", "A♠ A♦ J♣ J♦ 10♣"], pile: "J♥ 10♥ 9♥ Q♦ Q♣", table: { perTeam: 1, teams: 3, handSize: 5 } }), "HARD");
+    // Same unseen cards, dealt differently between the other hands and the pile.
+    const unseen = [...a.players[1].hand, ...a.players[2].hand, ...a.drawPile].reverse();
+    const b = {
+      ...a,
+      players: a.players.map((p, i) => (i === 0 ? p : { ...p, hand: unseen.slice((i - 1) * 5, i * 5) })),
+      drawPile: unseen.slice(10),
+    };
+    expect(aiAction(b, seededRandom(7))).toEqual(aiAction(a, seededRandom(7)));
   });
 });

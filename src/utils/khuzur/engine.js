@@ -81,6 +81,7 @@ export function createMatch({ players, table, rng = secureRandom, matchNumber = 
       id: seat,
       name: p.name,
       type: p.type || "AI",
+      level: p.level ?? null, // a CPU's level: EASY, MEDIUM (default) or HARD
       avatar: p.avatar ?? null,
       team: seat % table.teams,
       hand: [],

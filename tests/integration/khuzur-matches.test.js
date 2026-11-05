@@ -21,7 +21,7 @@ const TABLES = [
   [3, 2],
 ].flatMap(([perTeam, teams]) => [5, 7].map((handSize) => ({ perTeam, teams, handSize })));
 
-const players = (n) => Array.from({ length: n }, (_, i) => ({ name: `Bot ${i}`, type: "AI" }));
+const players = (n, level = "MEDIUM") => Array.from({ length: n }, (_, i) => ({ name: `Bot ${i}`, type: "AI", level }));
 
 /** Every card the match is using, wherever it is now. */
 function cardsInPlay(s) {
@@ -40,9 +40,10 @@ function checkInvariants(s, deckSize, label) {
 }
 
 /** Plays a match to the end; `chooser(seat)` picks who decides for each seat. */
-function playMatch(table, seed, chooser = () => aiAction) {
+function playMatch(table, seed, chooser = () => aiAction, levels = null) {
   const rng = seededRandom(seed);
-  let s = createMatch({ players: players(seatCount(table)), table, rng });
+  const seated = players(seatCount(table)).map((p, i) => (levels ? { ...p, level: levels[i] } : p));
+  let s = createMatch({ players: seated, table, rng });
   const deckSize = createDeck(table.handSize).length;
   let moves = 0;
   while (s.phase !== PHASES.MATCH_OVER) {
@@ -90,4 +91,35 @@ describe("strength", () => {
     }
     expect(wins / N).toBeGreaterThanOrEqual(0.7);
   });
+});
+
+describe("CPU levels", () => {
+  it("EASY finishes 10 seeded matches at every table shape", () => {
+    for (const table of TABLES) for (let seed = 1; seed <= 10; seed++) playMatch(table, seed, () => aiAction, Array(seatCount(table)).fill("EASY"));
+  });
+
+  it("HARD finishes seeded matches at three table shapes", () => {
+    const shapes = [{ perTeam: 1, teams: 2, handSize: 5 }, { perTeam: 2, teams: 2, handSize: 7 }, { perTeam: 1, teams: 4, handSize: 5 }];
+    for (const table of shapes) for (let seed = 1; seed <= 3; seed++) playMatch(table, seed, () => aiAction, Array(seatCount(table)).fill("HARD"));
+  }, 120000);
+
+  /** How often `a` places 1st against `b` in 1v1, seats alternating. */
+  function winRate(a, b, n) {
+    const table = { perTeam: 1, teams: 2, handSize: 5 };
+    let wins = 0;
+    for (let seed = 1; seed <= n; seed++) {
+      const seat = seed % 2;
+      const levels = seat === 0 ? [a, b] : [b, a];
+      if (playMatch(table, seed + 1000, () => aiAction, levels).places[seat] === 1) wins++;
+    }
+    return wins / n;
+  }
+
+  it("MEDIUM beats EASY in at least 60% of 1v1 matches", () => {
+    expect(winRate("MEDIUM", "EASY", 200)).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it("HARD beats MEDIUM in at least 52% of 1v1 matches", () => {
+    expect(winRate("HARD", "MEDIUM", 60)).toBeGreaterThanOrEqual(0.52);
+  }, 300000);
 });
