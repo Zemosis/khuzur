@@ -240,8 +240,35 @@ function drawUp(state, seat) {
   if (count) state.events.push({ type: "draw", seat, count, tookTrump });
 }
 
-// A player with no cards left is out (completed in settleOut below).
-function settleOut() {}
+const placesGiven = (state) => state.places.filter((p) => p !== null).length;
+const seatsOfTeam = (state, team) => state.players.filter((p) => p.team === team).map((p) => p.id);
+
+/**
+ * A player with no cards left is out (rulebook §9). Their team takes the next
+ * place, and in a team game every teammate stops playing too. Once a single
+ * team is left still playing, it takes the last place and the match is over.
+ */
+function settleOut(state, seat) {
+  if (state.players[seat].hand.length) return;
+  const team = state.players[seat].team;
+  for (const s of seatsOfTeam(state, team)) state.players[s].out = true;
+  const place = placesGiven(state) + 1;
+  state.places[team] = place;
+  state.events.push({ type: "out", seat, team, place });
+  if (state.stack) state.stack.pending = state.stack.pending.filter((s) => !state.players[s].out);
+
+  const playing = [...new Set(state.players.filter((p) => !p.out).map((p) => p.team))];
+  if (playing.length === 1) {
+    state.places[playing[0]] = placesGiven(state) + 1;
+    endMatch(state);
+  }
+}
+
+function endMatch(state) {
+  state.phase = PHASES.MATCH_OVER;
+  state.turn = null;
+  state.events.push({ type: "matchOver", places: [...state.places] });
+}
 
 // ---- PLAY ------------------------------------------------------------------
 
@@ -325,4 +352,65 @@ export function swapTrumpSeven(prev, seat) {
   state.events.push({ type: "swapSeven", seat, card: state.trumpCard });
   state.trumpCard = seven;
   return state;
+}
+
+// ---- Endings ---------------------------------------------------------------
+
+/**
+ * Give up: you, or your whole team, take the last place and the match ends.
+ * Everyone else still playing is placed by the cards they hold, fewest first
+ * (a team by its smallest hand), ties to the lower seat.
+ */
+export function surrender(prev, seat) {
+  if (prev.phase !== PHASES.PLAY) throw new Error("You can only surrender during play");
+  const state = clone(prev);
+  const quitter = state.players[seat].team;
+  const smallest = (team) => Math.min(...seatsOfTeam(state, team).map((s) => state.players[s].hand.length));
+  const rest = state.places
+    .map((place, team) => ({ place, team }))
+    .filter((t) => t.place === null && t.team !== quitter)
+    .sort((a, b) => smallest(a.team) - smallest(b.team) || a.team - b.team);
+  for (const { team } of rest) state.places[team] = placesGiven(state) + 1;
+  state.places[quitter] = state.places.length;
+  state.stack = null;
+  state.events.push({ type: "surrender", seat, team: quitter });
+  endMatch(state);
+  return state;
+}
+
+/** The final places, best first: [{ team, place, seats }]. */
+export function standings(state) {
+  return state.places
+    .map((place, team) => ({ team, place, seats: seatsOfTeam(state, team) }))
+    .filter((t) => t.place !== null)
+    .sort((a, b) => a.place - b.place);
+}
+
+/**
+ * Deal the next match at the same table, with no draw. A free for all passes
+ * the deal clockwise. In a team game the last-place team deals: the seat after
+ * its last dealer, or a random member the first time it deals.
+ */
+export function startNextMatch(prev, rng = secureRandom) {
+  if (prev.phase !== PHASES.MATCH_OVER) throw new Error("The match isn't over");
+  const n = prev.players.length;
+  let dealer;
+  let teamDealers = prev.teamDealers;
+  if (isFreeForAll(prev)) {
+    dealer = (prev.dealer + 1) % n;
+  } else {
+    const last = prev.places.indexOf(Math.max(...prev.places));
+    const before = prev.teamDealers[last];
+    const members = seatsOfTeam(prev, last);
+    dealer = before != null ? (before + prev.table.teams) % n : members[Math.floor(rng() * members.length)];
+    teamDealers = { ...prev.teamDealers, [last]: dealer };
+  }
+  const state = {
+    ...prev,
+    matchNumber: prev.matchNumber + 1,
+    teamDealers,
+    players: prev.players.map((p) => ({ ...p, hand: [], out: false })),
+    events: [{ type: "newMatch", matchNumber: prev.matchNumber + 1 }],
+  };
+  return deal(state, dealer, rng);
 }

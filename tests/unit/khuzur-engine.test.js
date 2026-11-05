@@ -14,6 +14,9 @@ import {
   leadLimit,
   pickUp,
   seatCount,
+  standings,
+  startNextMatch,
+  surrender,
   swapTrumpSeven,
   topLayer,
 } from "../../src/utils/khuzur/engine.js";
@@ -402,5 +405,153 @@ describe("the trump 7", () => {
     const h = ["7♥:2 J♦ 9♣ 7♦ 8♦", ...FOUR.slice(1)];
     const s = playState({ table, hands: h, pile: PILE, trumpCard: "7♥" });
     expect(canSwapSeven(s, 0)).toBe(false);
+  });
+});
+
+describe("going out", () => {
+  const dry = { pile: "", trumpCard: null };
+
+  it("a player who beats with their last card is out at once, and the stack carries on", () => {
+    let s = playState({ ...dry, hands: ["8♦ 7♣", "9♦", "10♦ 7♠", "J♦ 8♠"] });
+    s = lead(s, 0, ["8♦"]);
+    s = beat(s, 1, ["9♦"]);
+    expect(s.players[1].out).toBe(true);
+    expect(s.places).toEqual([null, 1, null, null]);
+    expect(s.stack.pending).toEqual([2, 3]);
+    expect(s.turn).toBe(2);
+    expect(s.events.find((e) => e.type === "out")).toMatchObject({ seat: 1, team: 1, place: 1 });
+  });
+
+  it("a leader who leads their last cards is out, and everyone else must still beat", () => {
+    const s = lead(playState({ ...dry, hands: ["8♦", "9♦ 7♣", "10♦ 7♠", "J♦ 8♠"] }), 0, ["8♦"]);
+    expect(s.players[0].out).toBe(true);
+    expect(s.stack.pending).toEqual([1, 2, 3]);
+    expect(s.turn).toBe(1);
+  });
+
+  it("free for all: places go in the order players go out, and the last one left is last", () => {
+    let s = playState({ ...dry, hands: ["8♦", "9♦", "10♦ 7♣", "J♦ 7♠"] });
+    s = lead(s, 0, ["8♦"]);
+    s = beat(s, 1, ["9♦"]);
+    s = beat(s, 2, ["10♦"]);
+    s = beat(s, 3, ["J♦"]);
+    expect(s.stack).toBeNull();
+    expect(s.turn).toBe(3);
+    s = lead(s, 3, ["7♠"]);
+    expect(s.places).toEqual([1, 2, 4, 3]);
+    expect(s.phase).toBe(PHASES.MATCH_OVER);
+    expect(s.events.at(-1)).toMatchObject({ type: "matchOver", places: [1, 2, 4, 3] });
+  });
+
+  it.each([
+    [{ perTeam: 2, teams: 2, handSize: 5 }, ["8♦", "9♦ 7♣", "10♦ 7♠", "J♦ 8♠"]],
+    [{ perTeam: 3, teams: 2, handSize: 5 }, ["8♦", "9♦ 7♣", "10♦ 7♠", "J♦ 8♠", "Q♦ 8♣", "K♦ 9♠"]],
+  ])("%o: the first player out wins for the team and ends the match", (table, hands) => {
+    const s = lead(playState({ ...dry, table, hands }), 0, ["8♦"]);
+    expect(s.places).toEqual([1, 2]);
+    expect(s.phase).toBe(PHASES.MATCH_OVER);
+    expect(s.players.filter((p) => p.team === 0).every((p) => p.out)).toBe(true);
+  });
+
+  it("2v2v2: a team that goes out leaves the stack, and the other two play on for 2nd", () => {
+    const table = { perTeam: 2, teams: 3, handSize: 5 };
+    let s = playState({ ...dry, table, hands: ["8♦", "9♦ 7♣", "10♦", "J♦ 8♠", "Q♦ 8♣", "K♦ 9♠"] });
+    s = lead(s, 0, ["8♦"]);
+    expect(s.players[3].out).toBe(true);
+    expect(s.stack.pending).toEqual([1, 2, 4, 5]);
+    expect(s.places).toEqual([1, null, null]);
+    expect(s.turn).toBe(1);
+    s = beat(s, 1, ["9♦"]);
+    s = beat(s, 2, ["10♦"]);
+    expect(s.places).toEqual([1, 3, 2]);
+    expect(s.phase).toBe(PHASES.MATCH_OVER);
+  });
+
+  it("2v2v2: when the beater's team goes out with only its own seats left to beat, the stack dies", () => {
+    const table = { perTeam: 2, teams: 3, handSize: 5 };
+    const s0 = playState({ ...dry, table, hands: ["8♣ 7♣", "8♠ 7♠", "9♦", "J♦ 8♥", "Q♦ 7♥", "K♦ 9♠"], turn: 2 });
+    const s = beat({ ...s0, stack: { leader: 1, layers: [cs("8♦")], owners: [1], pending: [2, 5] } }, 2, ["9♦"]);
+    expect(s.stack).toBeNull();
+    expect(idsOf(s.deadPile)).toEqual(["8♦", "9♦"]);
+    expect(s.places).toEqual([null, null, 1]);
+    expect(s.turn).toBe(3);
+  });
+
+  it("when the last beater went out, the next player still in leads", () => {
+    const table = { perTeam: 1, teams: 3, handSize: 5 };
+    let s = playState({ ...dry, table, hands: ["8♦ 7♣", "9♦ 7♠", "10♦"] });
+    s = lead(s, 0, ["8♦"]);
+    s = beat(s, 1, ["9♦"]);
+    s = beat(s, 2, ["10♦"]);
+    expect(s.stack).toBeNull();
+    expect(s.turn).toBe(0);
+  });
+
+  it("the lead limit ignores players who are out", () => {
+    let s = playState({ ...dry, hands: ["8♦ 8♣ 7♣ 9♠", "9♦", "10♦ 10♣ 10♠", "J♦ J♣ 8♠"] });
+    s = lead(s, 0, ["7♣"]);
+    s = beat(s, 1, ["9♦"]);
+    expect(leadLimit(s)).toBe(3);
+  });
+});
+
+describe("surrender", () => {
+  it("free for all: you're last, and the rest are placed by cards held, fewest first", () => {
+    let s = playState({ hands: ["8♦ 7♣ 9♠", "9♦ 7♠", "10♦ 7♥", "J♦"], pile: "", trumpCard: null, out: [3] });
+    s = { ...s, places: [null, null, null, 1] };
+    s = surrender(s, 0);
+    expect(s.places).toEqual([4, 2, 3, 1]);
+    expect(s.phase).toBe(PHASES.MATCH_OVER);
+  });
+
+  it("teams: the whole team is last, the others placed by their smallest hand", () => {
+    const table = { perTeam: 2, teams: 3, handSize: 5 };
+    const s = surrender(playState({ table, hands: ["8♦", "9♦ 7♣ 8♣", "10♦ 7♠", "J♦ 8♠", "Q♦", "K♦ 9♠"], pile: PILE }), 3);
+    expect(s.places).toEqual([3, 1, 2]);
+    expect(standings(s)).toEqual([
+      { team: 1, place: 1, seats: [1, 4] },
+      { team: 2, place: 2, seats: [2, 5] },
+      { team: 0, place: 3, seats: [0, 3] },
+    ]);
+  });
+
+  it("is only possible during play", () => {
+    const s = newMatch(T2v2);
+    expect(() => surrender(s, 0)).toThrow();
+  });
+});
+
+describe("the next match", () => {
+  const over = (table, places, extra = {}) => ({ ...playState({ table, hands: Array(seatCount(table)).fill("8♦"), pile: PILE }), phase: PHASES.MATCH_OVER, places, ...extra });
+
+  it("free for all: the deal passes clockwise", () => {
+    const s = startNextMatch(over({ perTeam: 1, teams: 4, handSize: 5 }, [1, 2, 3, 4], { dealer: 2, matchNumber: 1 }), seededRandom(3));
+    expect(s.dealer).toBe(3);
+    expect(s.matchNumber).toBe(2);
+    expect(s.phase).toBe(PHASES.PLAY);
+    expect(s.turn).toBe(0);
+    expect(s.places).toEqual([null, null, null, null]);
+    expect(s.players.every((p) => !p.out && p.hand.length === 5)).toBe(true);
+  });
+
+  it("teams: the last-place team deals, moving clockwise within the team", () => {
+    const s = startNextMatch(over(T2v2, [2, 1], { dealer: 1, teamDealers: { 0: 2 } }), seededRandom(3));
+    expect(s.dealer).toBe(0);
+    expect(s.teamDealers).toEqual({ 0: 0 });
+  });
+
+  it("teams: a team dealing for the first time deals from a random member", () => {
+    const table = { perTeam: 2, teams: 3, handSize: 5 };
+    const dealers = new Set();
+    for (let seed = 1; seed <= 20; seed++) {
+      const s = startNextMatch(over(table, [1, 3, 2], { dealer: 0, teamDealers: { 0: 0 } }), seededRandom(seed));
+      dealers.add(s.dealer);
+      expect(s.teamDealers[1]).toBe(s.dealer);
+    }
+    expect([...dealers].sort()).toEqual([1, 4]);
+  });
+
+  it("only once the match is over", () => {
+    expect(() => startNextMatch(playState({ hands: FOUR, pile: PILE }))).toThrow();
   });
 });
