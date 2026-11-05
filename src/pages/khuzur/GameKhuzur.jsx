@@ -140,12 +140,13 @@ export default function GameKhuzur() {
   const asked = location.state?.table;
   const table = asked && isValidTable(asked) && [5, 7].includes(asked.handSize) ? asked : DEFAULT_TABLE;
   const myName = short(location.state?.playerName ?? identity?.name ?? "YOU");
+  const level = ["EASY", "MEDIUM", "HARD"].includes(location.state?.aiDifficulty) ? location.state.aiDifficulty : "MEDIUM";
   const players = useMemo(
     () =>
       Array.from({ length: seatCount(table) }, (_, seat) =>
-        seat === ME ? { name: myName, type: "HUMAN" } : { name: BOT_NAMES[seat - 1], type: "AI" },
+        seat === ME ? { name: myName, type: "HUMAN" } : { name: BOT_NAMES[seat - 1], type: "AI", level },
       ),
-    [table, myName],
+    [table, myName, level],
   );
 
   const [game, setGame] = useState(() => createMatch({ players, table }));

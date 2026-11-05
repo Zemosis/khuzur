@@ -354,6 +354,11 @@ function TablesPanel({ game, lobbies, onJoin, onRefresh }) {
                     >
                       {lobby.inProgress ? "PLAYING" : "WAITING"}
                     </span>
+                    {lobby.table && (
+                      <span className="font-pixel-display text-[8px] px-1.5 py-1 shrink-0" style={{ backgroundColor: "#a8552a", color: INK }}>
+                        {lobby.table.perTeam === 1 ? `FFA ${lobby.table.teams}` : Array(lobby.table.teams).fill(lobby.table.perTeam).join(" V ")} · {lobby.table.handSize} CARDS
+                      </span>
+                    )}
                     {lobby.tier && (
                       <span className="font-pixel-display text-[8px] px-1.5 py-1 shrink-0" style={{ backgroundColor: "#c89820", color: INK }}>
                         {lobby.tier === "HOUSE" ? "CREDITS" : lobby.stake != null ? `${lobby.tier} · ${fmt(lobby.stake)}` : `${lobby.tier} ${TIERS[lobby.tier].smallBlind}/${TIERS[lobby.tier].bigBlind}`}
@@ -452,13 +457,16 @@ export default function GameLobby({ game }) {
     };
   }, [ev, game.id, game.route, navigate, playerName]);
 
+  // A game with a setup panel (Khuzur's table builder) sends its values with every table it hosts.
+  const setup = game.setup?.values ?? {};
+
   function createTable(name, isPrivate) {
-    socket.emit(ev.create, { lobbyName: name.trim() || `${identity.name}'s table`, playerName, isPrivate, gameType: game.id });
+    socket.emit(ev.create, { lobbyName: name.trim() || `${identity.name}'s table`, playerName, isPrivate, gameType: game.id, ...setup });
   }
 
   function createCreditTable(name, tier, isPrivate) {
     if (house) {
-      return socket.emit(ev.create, { lobbyName: name.trim() || `${identity.name}'s table`, playerName, isPrivate, gameType: game.id, tier: "HOUSE" });
+      return socket.emit(ev.create, { lobbyName: name.trim() || `${identity.name}'s table`, playerName, isPrivate, gameType: game.id, tier: "HOUSE", ...setup });
     }
     setBuyIn({ tier, stake: stakes ? STAKES[tier] : null, tableName: name.trim() || `${identity.name}'s table`, create: { isPrivate }, busy: false, error: "" });
   }
@@ -472,14 +480,14 @@ export default function GameLobby({ game }) {
   function confirmBuyIn(amount) {
     setBuyIn((b) => ({ ...b, busy: true, error: "" }));
     if (buyIn.create) {
-      socket.emit(ev.create, { lobbyName: buyIn.tableName, playerName, isPrivate: buyIn.create.isPrivate, gameType: game.id, tier: buyIn.tier, buyIn: amount });
+      socket.emit(ev.create, { lobbyName: buyIn.tableName, playerName, isPrivate: buyIn.create.isPrivate, gameType: game.id, tier: buyIn.tier, buyIn: amount, ...setup });
     } else socket.emit(ev.join, { lobbyId: buyIn.lobbyId, playerName, buyIn: amount });
   }
 
   // A private table for one: free, or on credits when the CREDITS tab is open.
   function playAlone(name) {
     const lobbyName = (name || "").trim() || game.defaultTableName;
-    socket.emit(ev.create, { lobbyName, playerName, isPrivate: true, gameType: game.id, ...(credit ? { tier: "HOUSE" } : {}) });
+    socket.emit(ev.create, { lobbyName, playerName, isPrivate: true, gameType: game.id, ...(credit ? { tier: "HOUSE" } : {}), ...setup });
   }
 
   function startPractice(difficulty) {
@@ -491,6 +499,7 @@ export default function GameLobby({ game }) {
         mySocketId: socket.id || `solo-${Date.now()}`,
         myPlayerIndex: 0,
         aiDifficulty: difficulty,
+        ...setup,
       },
     });
   }
@@ -566,13 +575,16 @@ export default function GameLobby({ game }) {
             </>
           )}
         </div>
-        <div className="shrink-0 h-[420px] lg:h-auto lg:min-h-0">
+        <div className={`shrink-0 lg:min-h-0 ${game.setup ? "flex flex-col lg:h-auto" : "h-[420px] lg:h-auto"}`} style={game.setup ? { gap: "var(--gap)" } : undefined}>
+          {game.setup?.panel}
+          <div className={game.setup ? "h-[420px] lg:h-auto lg:flex-1 lg:min-h-0 flex flex-col" : "contents"}>
           <TablesPanel
             game={game}
             lobbies={game.credits ? lobbies.filter((l) => !!l.tier === credit) : lobbies}
             onJoin={joinTable}
             onRefresh={() => socket.emit(ev.list)}
           />
+          </div>
         </div>
       </main>
 
