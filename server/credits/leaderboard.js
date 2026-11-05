@@ -32,7 +32,8 @@ async function ranked() {
              coalesce(sum(amount) filter (where game_type = 'poker'), 0)              as poker,
              coalesce(sum(amount) filter (where game_type = 'muushig'), 0)            as muushig,
              coalesce(sum(amount) filter (where game_type = 'thirteen'), 0)           as thirteen,
-             coalesce(sum(amount) filter (where game_type = 'blackjack'), 0)          as blackjack
+             coalesce(sum(amount) filter (where game_type = 'blackjack'), 0)          as blackjack,
+             coalesce(sum(amount) filter (where game_type = 'khuzur'), 0)             as khuzur
         from credit_ledger group by user_id
     )
     select a.user_id, p.username, p.tag, p.avatar, p.custom_avatar,
@@ -44,7 +45,8 @@ async function ranked() {
            coalesce(src.poker, 0) + case when s.game_type = 'poker' then s.stack + s.pending else 0 end     as poker,
            coalesce(src.muushig, 0) + case when s.game_type = 'muushig' then s.stack + s.pending else 0 end as muushig,
            coalesce(src.thirteen, 0) + case when s.game_type = 'thirteen' then s.stack + s.pending else 0 end as thirteen,
-           coalesce(src.blackjack, 0) + case when s.game_type = 'blackjack' then s.stack + s.pending else 0 end as blackjack
+           coalesce(src.blackjack, 0) + case when s.game_type = 'blackjack' then s.stack + s.pending else 0 end as blackjack,
+           coalesce(src.khuzur, 0) + case when s.game_type = 'khuzur' then s.stack + s.pending else 0 end as khuzur
       from credit_accounts a
       join profiles p on p.id = a.user_id
       left join credit_seats s on s.user_id = a.user_id
@@ -61,7 +63,7 @@ async function ranked() {
       avatar: { variant: r.avatar, custom: r.avatar === "custom" ? r.custom_avatar : null },
       total: Number(r.total),
       atTable: r.at_table,
-      sources: { start: Number(r.start), claimed: Number(r.claimed), poker: Number(r.poker), muushig: Number(r.muushig), thirteen: Number(r.thirteen), blackjack: Number(r.blackjack), admin: Number(r.admin) },
+      sources: { start: Number(r.start), claimed: Number(r.claimed), poker: Number(r.poker), muushig: Number(r.muushig), thirteen: Number(r.thirteen), blackjack: Number(r.blackjack), khuzur: Number(r.khuzur), admin: Number(r.admin) },
     })),
   };
   return cache.rows;

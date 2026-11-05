@@ -89,3 +89,42 @@ describe("potText", () => {
     expect(potText({ pot: 300, payouts: [], void: true }, names)).toBe("The match didn't count: every stake went back.");
   });
 });
+
+describe("Khuzur: 1st takes the pot", () => {
+  it("the winners are every seat of the 1st-place team", () => {
+    const state = { table: { perTeam: 2, teams: 2 }, places: [2, 1], players: [0, 1, 2, 3].map((id) => ({ id, team: id % 2 })) };
+    expect(matchWinners("khuzur", state)).toEqual([1, 3]);
+  });
+
+  it("with humansOnly, the team's people split the whole pot", () => {
+    const seats = [{ userId: "a" }, { userId: "b" }, { userId: null }, { userId: "d" }];
+    // 1st: seats 1 and 3 (b and d); 3 stakes of 100 in the pot.
+    expect(settlement({ stake: 100, seats, winners: [1, 3], humansOnly: true })).toEqual({
+      pot: 300,
+      payouts: [
+        { seat: 1, userId: "b", amount: 150 },
+        { seat: 3, userId: "d", amount: 150 },
+      ],
+      cpuTake: 0,
+    });
+  });
+
+  it("a person teamed with a bot takes the pot alone", () => {
+    const seats = [{ userId: "a" }, { userId: "b" }, { userId: null }, { userId: null }];
+    expect(settlement({ stake: 100, seats, winners: [0, 2], humansOnly: true }).payouts).toEqual([{ seat: 0, userId: "a", amount: 200 }]);
+  });
+
+  it("an odd split sends the extra credit to the lowest seat", () => {
+    const seats = [{ userId: "a" }, { userId: "b" }, { userId: "c" }, { userId: "d" }, { userId: "e" }, { userId: null }];
+    const r = settlement({ stake: 100, seats, winners: [0, 2, 4], humansOnly: true });
+    expect(r.payouts.map((p) => p.amount)).toEqual([167, 167, 166]);
+    expect(r.cpuTake).toBe(0);
+  });
+
+  it("1st place with no people in it: the pot is lost", () => {
+    const seats = [{ userId: "a" }, { userId: null }, { userId: "c", forfeited: true }, { userId: null }];
+    expect(settlement({ stake: 100, seats, winners: [1, 3], humansOnly: true })).toEqual({ pot: 200, payouts: [], cpuTake: 200 });
+    // A player who left and didn't come back counts as a bot.
+    expect(settlement({ stake: 100, seats, winners: [0, 2], humansOnly: true }).payouts).toEqual([{ seat: 0, userId: "a", amount: 200 }]);
+  });
+});

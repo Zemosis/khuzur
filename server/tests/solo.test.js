@@ -130,3 +130,38 @@ describe("rankSolo", () => {
     expect(rankSolo("muushig", muushig().players)).toEqual([4, 1, 2, 5, 3]);
   });
 });
+
+describe("khuzur reports", () => {
+  const khuzur = (over = {}) => ({
+    matchId: "KZ-7f3a9c-1",
+    gameType: "khuzur",
+    startedAt: iso(15 * 60_000),
+    finishedAt: iso(1000),
+    me: 0,
+    rounds: 1,
+    table: { perTeam: 2, teams: 2, handSize: 5 },
+    players: [{ place: 1 }, { place: 2 }, { place: 1 }, { place: 2 }],
+    stats: { leads: 9, beats: 12, pickups: 2, picked_up: 7, rounds_played: 1, rounds_won: 1 },
+    ...over,
+  });
+
+  it("accepts a finished match and places you with your team", () => {
+    const r = parseSoloReport(khuzur());
+    expect(r.ok).toBe(true);
+    expect(r.value.table).toEqual({ perTeam: 2, teams: 2, handSize: 5 });
+    expect(rankSolo("khuzur", r.value.players)).toEqual([1, 2, 1, 2]);
+  });
+
+  it("rejects places that don't fit the table", () => {
+    expect(parseSoloReport(khuzur({ players: [{ place: 1 }, { place: 2 }, { place: 2 }, { place: 2 }] })).ok).toBe(false);
+    expect(parseSoloReport(khuzur({ players: [{ place: 1 }, { place: 3 }, { place: 1 }, { place: 3 }] })).ok).toBe(false);
+    expect(parseSoloReport(khuzur({ table: { perTeam: 3, teams: 3, handSize: 5 } })).ok).toBe(false);
+    expect(parseSoloReport(khuzur({ players: [{ place: 1 }, { place: 2 }] })).ok).toBe(false);
+  });
+
+  it("free for all: every place once", () => {
+    const ffa = khuzur({ table: { perTeam: 1, teams: 3, handSize: 7 }, players: [{ place: 3 }, { place: 1 }, { place: 2 }], stats: { leads: 1, beats: 1, pickups: 0, picked_up: 0, rounds_played: 1, rounds_won: 0 } });
+    expect(parseSoloReport(ffa).ok).toBe(true);
+    expect(parseSoloReport({ ...ffa, players: [{ place: 1 }, { place: 1 }, { place: 2 }] }).ok).toBe(false);
+  });
+});

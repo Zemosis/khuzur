@@ -13,7 +13,20 @@ const GAMES = {
     players: 5,
     stats: ["rounds_played", "rounds_won", "eaten", "gone_in", "folded", "sweeps"],
   },
+  // Khuzur seats 2 to 6, in the shape the report names (see khuzurTable).
+  khuzur: {
+    players: null,
+    stats: ["rounds_played", "rounds_won", "leads", "beats", "pickups", "picked_up"],
+  },
 };
+
+/** A reported Khuzur table shape, checked: { perTeam, teams, handSize }, or null. */
+function khuzurTable(t) {
+  if (!isObject(t) || ![5, 7].includes(t.handSize)) return null;
+  const { perTeam, teams } = t;
+  const ok = (perTeam === 1 && isInt(teams, 2, 6)) || (perTeam === 2 && (teams === 2 || teams === 3)) || (perTeam === 3 && teams === 2);
+  return ok ? { perTeam, teams, handSize: t.handSize } : null;
+}
 
 const HAND_TYPES = new Set([
   "SINGLE",
@@ -58,14 +71,29 @@ export function parseSoloReport(body) {
   if (finished > now + CLOCK_SKEW_MS || finished < now - MAX_AGE_MS) return fail("Match finished at an unlikely time");
   if (finished - started < MIN_MATCH_MS || finished - started > MAX_MATCH_MS) return fail("Match length is out of range");
 
-  if (!Array.isArray(body.players) || body.players.length !== game.players) {
-    return fail(`${body.gameType} needs ${game.players} players`);
+  const table = body.gameType === "khuzur" ? khuzurTable(body.table) : null;
+  if (body.gameType === "khuzur" && !table) return fail("That isn't a Khuzur table");
+  const seats = table ? table.perTeam * table.teams : game.players;
+  if (!Array.isArray(body.players) || body.players.length !== seats) {
+    return fail(`${body.gameType} needs ${seats} players`);
   }
-  if (!isInt(body.me, 0, game.players - 1)) return fail("Your seat isn't at the table");
+  if (!isInt(body.me, 0, seats - 1)) return fail("Your seat isn't at the table");
   if (!isInt(body.rounds, 1, MAX_ROUNDS)) return fail("Round count is out of range");
 
   const players = [];
-  for (const p of body.players) {
+  if (table) {
+    // Each team's one place, 1 to the number of teams, every place once.
+    const byTeam = new Map();
+    for (const [seat, p] of body.players.entries()) {
+      if (!isObject(p) || !isInt(p.place, 1, table.teams)) return fail("Place out of range");
+      const team = seat % table.teams;
+      if (byTeam.has(team) && byTeam.get(team) !== p.place) return fail("Teammates share a place");
+      byTeam.set(team, p.place);
+      players.push({ place: p.place });
+    }
+    if (new Set(byTeam.values()).size !== table.teams) return fail("Every place goes to one team");
+  }
+  for (const p of table ? [] : body.players) {
     if (!isObject(p) || !isInt(p.score, -200, 500)) return fail("Score out of range");
     if (body.gameType === "thirteen") {
       if (typeof p.eliminated !== "boolean") return fail("Missing eliminated flag");
@@ -116,6 +144,7 @@ export function parseSoloReport(body) {
       rounds: body.rounds,
       players,
       stats,
+      ...(table ? { table } : {}),
     },
   };
 }
@@ -126,6 +155,7 @@ export function parseSoloReport(body) {
  * lowest score, ties to whoever ate more piles in the last round, then seat.
  */
 export function rankSolo(gameType, players) {
+  if (gameType === "khuzur") return players.map((p) => p.place);
   const order = players
     .map((p, seat) => ({ ...p, seat }))
     .sort((a, b) => {

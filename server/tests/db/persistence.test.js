@@ -173,6 +173,47 @@ describe.skipIf(!TEST_DATABASE_URL)("match recording (Postgres)", () => {
     expect(r[0].seat_results).toHaveLength(5);
   });
 
+  it("a completed Khuzur match places each seat with its team and pays by team place", async () => {
+    const carol = await makeUser(m.pool, "carol@test.dev");
+    const dave = await makeUser(m.pool, "dave@test.dev");
+    const id = await session({ gameType: "khuzur", maxPlayers: 2, playerCount: 4 });
+    const state = {
+      table: { perTeam: 2, teams: 2, handSize: 5 },
+      places: [2, 1],
+      players: [0, 1, 2, 3].map((id) => ({ id, team: id % 2, hand: id % 2 ? [] : [{}, {}] })),
+      events: [
+        { type: "lead", seat: 0, cards: [{}] },
+        { type: "beat", seat: 1, cards: [{}] },
+        { type: "pickUp", seat: 2, count: 4 },
+        { type: "out", seat: 3, team: 1, place: 1 },
+      ],
+    };
+    await m.finishSession({
+      sessionId: id,
+      gameType: "khuzur",
+      completed: true,
+      endedReason: "completed",
+      finishedAt: new Date(),
+      roster: [seat(0, { playerKey: carol.id, userId: carol.id }), seat(1, { playerKey: dave.id, userId: dave.id }), seat(2), seat(3)],
+      rounds: [
+        {
+          roundNumber: 1,
+          winnerSeat: 3,
+          seatResults: [0, 1, 2, 3].map((i) => ({ seat_index: i, place: state.places[i % 2], cards_left: i % 2 ? 0 : 2, eliminated: false })),
+          highlights: null,
+        },
+      ],
+      state,
+    });
+    const s = (await m.pool.query("select * from game_sessions where id = $1", [id])).rows[0];
+    expect(s).toMatchObject({ game_type: "khuzur", status: "finished", round_count: 1 });
+    const players = (await m.pool.query("select * from game_players where session_id = $1 order by seat_index", [id])).rows;
+    expect(players.map((p) => p.final_position)).toEqual([2, 1, 2, 1]);
+    expect(players.map((p) => p.coins_earned)).toEqual([20, 80, 20, 80]); // 1st or last of 2 places
+    expect(players[1]).toMatchObject({ player_id: dave.id, is_winner: true, rounds_won: 1 });
+    expect(players[2].stats).toEqual({ leads: 0, beats: 0, pickups: 1, picked_up: 4, rounds_played: 1, rounds_won: 0 });
+  });
+
   it("counts each player's hands played by type, for the profile's hand tally", async () => {
     const id = await session();
     const play = (playerIndex, type) => ({ type: "PLAY", playerIndex, cards: [], combination: { type } });

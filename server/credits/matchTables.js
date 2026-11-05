@@ -155,9 +155,12 @@ export class CreditMatch {
     return this.enqueue(async () => {
       try {
         if (this.released || !this.match) return this.result;
-        const seats = this.match.seats.map((s, i) => ({ userId: s.userId, forfeited: s.forfeited, score: state.players[i].score, eaten: state.players[i].eaten ?? null }));
+        // Khuzur is one round: a player still away at the end left for good, and counts as a bot.
+        const khuzur = this.gameType === "khuzur";
+        if (khuzur) for (const s of this.match.seats) if (s.away) s.forfeited = true;
+        const seats = this.match.seats.map((s, i) => ({ userId: s.userId, forfeited: s.forfeited, score: state.players[i].score ?? null, eaten: state.players[i].eaten ?? null }));
         const winners = matchWinners(this.gameType, state);
-        const { pot, payouts, cpuTake } = settlement({ stake: this.stake, seats, winners });
+        const { pot, payouts, cpuTake } = settlement({ stake: this.stake, seats, winners, humansOnly: khuzur });
         const record = { tableId: this.id, tier: this.tier, isPrivate: this.isPrivate, sessionId, matchNumber: this.matchNumber, stake: this.stake, seats, payouts, cpuTake, rounds, gameType: this.gameType };
         const saved = await retry(async () => {
           try {

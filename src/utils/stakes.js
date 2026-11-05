@@ -26,7 +26,10 @@ function muushigWinners(state) {
 /** The seat that won a finished Thirteen match: the last one not eliminated. */
 const thirteenWinners = (state) => state.players.flatMap((p, seat) => (p.isEliminated ? [] : [seat]));
 
-const WINNERS = { muushig: muushigWinners, thirteen: thirteenWinners };
+/** The seats that won a finished Khuzur match: every seat of the 1st-place team. */
+const khuzurWinners = (state) => state.players.filter((p) => state.places[p.team] === 1).map((p) => p.id);
+
+const WINNERS = { muushig: muushigWinners, thirteen: thirteenWinners, khuzur: khuzurWinners };
 
 /** The seats that won `gameType`'s finished match, from its final state. */
 export const matchWinners = (gameType, state) => WINNERS[gameType](state);
@@ -36,11 +39,15 @@ export const matchWinners = (gameType, state) => WINNERS[gameType](state);
  * winners: seat indexes. The pot is split evenly between the winners, the
  * credits an uneven split leaves going to the lowest seats one each. A
  * winning seat that is a CPU's, or was forfeited, loses its share.
+ * humansOnly (Khuzur, "1st takes the pot"): the winners' people split the
+ * whole pot, CPU and forfeited seats taking no share; with none, it's lost.
  * → { pot, payouts: [{ seat, userId, amount }], cpuTake }
  */
-export function settlement({ stake, seats, winners }) {
+export function settlement({ stake, seats, winners, humansOnly = false }) {
   const pot = stake * seats.filter((s) => s.userId).length;
-  const order = [...winners].sort((a, b) => a - b);
+  const person = (seat) => seats[seat]?.userId && !seats[seat].forfeited;
+  const order = [...winners].filter((seat) => !humansOnly || person(seat)).sort((a, b) => a - b);
+  if (!order.length) return { pot, payouts: [], cpuTake: pot };
   const share = Math.floor(pot / order.length);
   const over = pot - share * order.length;
   const payouts = [];

@@ -46,10 +46,13 @@ afterEach(() => {
 });
 
 describe("a table of CPUs", () => {
-  it("plays a whole match on its own and reports it once", () => {
-    const { calls } = newGame({ seats: [0, 1, 2, 3].map(cpu), table: T2v2 });
+  it("plays a whole match on its own and reports it once, as one round", () => {
+    const rounds = [];
+    const { calls } = newGame({ seats: [0, 1, 2, 3].map(cpu), table: T2v2, onRoundEnd: (r) => rounds.push(r) });
     stepUntil((s) => s.phase === PHASES.MATCH_OVER);
     expect(calls.gameOver).toBe(1);
+    expect(rounds).toHaveLength(1);
+    expect(rounds[0].seatResults.map((r) => r.place).sort()).toEqual([1, 1, 2, 2]);
     expect(game.finishedAt).toBeInstanceOf(Date);
     expect(game.state.places.filter(Boolean).sort()).toEqual([1, 2]);
   });

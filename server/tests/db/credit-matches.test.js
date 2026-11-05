@@ -128,6 +128,48 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches (Postgres)", () => {
     await balanced();
   });
 
+  describe("Khuzur: 1st takes the pot", () => {
+    /** A finished 2v2: team `winner` 1st. */
+    const khuzurFinal = (winner) => ({ table: { perTeam: 2, teams: 2, handSize: 5 }, places: winner === 0 ? [1, 2] : [2, 1], players: [0, 1, 2, 3].map((id) => ({ id, team: id % 2 })) });
+    const khuzurTable = () => new CreditMatch({ name: "Ger", tier: "LOW", gameType: "khuzur", botsFill: true });
+
+    it("a person teamed with a bot takes the whole pot", async () => {
+      const [ann, bob] = [await player("ANN"), await player("BOB")];
+      const t = khuzurTable();
+      await t.sit(ann);
+      await t.sit(bob);
+      await t.begin([ann, bob, null, null]);
+      expect(await t.settle(khuzurFinal(0))).toMatchObject({ pot: 200, payouts: [{ seat: 0, userId: ann, amount: 200 }], cpuTake: 0, winners: [0, 2] });
+      expect([await balance(ann), await balance(bob)]).toEqual([1100, 900]);
+      const { rows } = await m.pool.query("select game_type from credit_hands");
+      expect(rows[0].game_type).toBe("khuzur");
+      await balanced();
+    });
+
+    it("1st place with no people in it loses the pot", async () => {
+      const [ann, bob] = [await player("ANN"), await player("BOB")];
+      const t = khuzurTable();
+      await t.sit(ann);
+      await t.sit(bob);
+      await t.begin([ann, null, bob, null]);
+      expect(await t.settle(khuzurFinal(1))).toMatchObject({ payouts: [], cpuTake: 200 });
+      expect([await balance(ann), await balance(bob)]).toEqual([900, 900]);
+      await balanced();
+    });
+
+    it("a player who left and never came back counts as a bot: their team's win pays nobody", async () => {
+      const [ann, bob] = [await player("ANN"), await player("BOB")];
+      const t = khuzurTable();
+      await t.sit(ann);
+      await t.sit(bob);
+      await t.begin([ann, bob, null, null]);
+      t.away(bob); // Khuzur has no rounds: still away at the end is a forfeit
+      expect(await t.settle(khuzurFinal(1))).toMatchObject({ payouts: [], cpuTake: 200, forfeited: [1] });
+      expect([await balance(ann), await balance(bob)]).toEqual([900, 900]);
+      await balanced();
+    });
+  });
+
   it("a forfeited seat that wins loses the pot", async () => {
     const [ann, bob] = [await player("ANN"), await player("BOB")];
     const t = table();

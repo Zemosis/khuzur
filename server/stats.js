@@ -11,7 +11,7 @@
 
 import { pool } from "./db/index.js";
 
-const VIEWS = { overall: null, thirteen: "thirteen", muushig: "muushig" };
+const VIEWS = { overall: null, thirteen: "thirteen", muushig: "muushig", khuzur: "khuzur" };
 // Which matches count: every one, free ones (practice included), or credit matches.
 export const STAKE_VIEWS = ["all", "free", "credits"];
 const RECENT = 20;

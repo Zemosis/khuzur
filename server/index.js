@@ -531,7 +531,8 @@ function beginSession(lobby) {
     hostDisplayName: host?.displayName || "?",
     // The seats actually dealt in: a Thirteen table can start with 2 or 3, and
     // profiles read "2nd of N" and "dead last" from this.
-    maxPlayers: lobby.game?.state?.players?.length ?? lobby.maxPlayers,
+    // Khuzur ranks teams, so its places run to the number of teams.
+    maxPlayers: lobby.table?.teams ?? lobby.game?.state?.players?.length ?? lobby.maxPlayers,
     playerCount: lobby.roster.size,
     startedAt: lobby.game?.startedAt,
     creditTier: lobby.tier ?? null,

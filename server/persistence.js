@@ -10,6 +10,7 @@
 import { pool, withTransaction } from "./db/index.js";
 import { rankSolo } from "./solo.js";
 import { muushigPlaces, muushigSeatStats } from "./game/muushigStats.js";
+import { khuzurPlaces, khuzurSeatStats } from "./game/khuzurStats.js";
 
 import { applyGain, matchReward } from "./game/progression.js";
 
@@ -121,13 +122,14 @@ export async function finishSession(rec) {
 
   const { state, roster, completed } = rec;
   const muushig = rec.gameType === "muushig";
+  const khuzur = rec.gameType === "khuzur";
   // A poker or blackjack table has no places: each player's result is the
   // chips they won or lost, from their tally at the table.
   const poker = rec.gameType === "poker";
   const tableGame = poker || rec.gameType === "blackjack";
   const tallyOf = (seat) => (poker ? seat.poker : seat.blackjack) ?? null;
   const finishedAt = rec.finishedAt || new Date();
-  const positionBySeat = completed && state && !tableGame ? (muushig ? muushigPlaces(state) : rankSeats(state)) : {};
+  const positionBySeat = completed && state && !tableGame ? (muushig ? muushigPlaces(state) : khuzur ? khuzurPlaces(state) : rankSeats(state)) : {};
   const rounds = rec.rounds || [];
 
   /** How many of each hand type a seat played this match (the profile's hand tally). */
@@ -142,6 +144,11 @@ export async function finishSession(rec) {
 
   /** Per-seat round aggregates, derived from the round summaries. */
   function roundStatsFor(seatIndex) {
+    if (khuzur) {
+      // Khuzur's match is one round: leads, beats and pick-ups from the event log.
+      const stats = state ? khuzurSeatStats(state, seatIndex) : null;
+      return { roundsWon: stats?.rounds_won ?? 0, stats };
+    }
     if (muushig) {
       // Muushig tallies piles and rounds sat out, read from the event log.
       const stats = muushigSeatStats(state?.events || [], seatIndex);
@@ -195,7 +202,7 @@ export async function finishSession(rec) {
         rec.sessionId,
         completed ? "finished" : "abandoned",
         rec.endedReason || (completed ? "completed" : "abandoned"),
-        state?.roundNumber ?? state?.handNumber ?? null,
+        state?.roundNumber ?? state?.handNumber ?? (khuzur && state ? 1 : null),
         roster.length,
         finishedAt,
       ],
@@ -226,7 +233,8 @@ export async function finishSession(rec) {
       for (const p of rows) profiles.set(p.id, p);
     }
 
-    const seats = state?.players?.length ?? roster.length;
+    // Places run 1 to the number of seats; in Khuzur, to the number of teams.
+    const seats = khuzur && state?.table ? state.table.teams : (state?.players?.length ?? roster.length);
     // A match pays only if at least two people (signed in or guests) played
     // it to the end. Alone against CPUs it's the same as practice, which pays
     // nothing.
@@ -347,7 +355,7 @@ export async function recordSoloMatch(userId, report) {
         userId,
         profile ? `${profile.username} #${profile.tag}` : null,
         report.matchId,
-        report.players.length,
+        report.table?.teams ?? report.players.length, // Khuzur: places run to the number of teams
         report.rounds,
         report.startedAt,
         report.finishedAt,
@@ -365,7 +373,7 @@ export async function recordSoloMatch(userId, report) {
         userId,
         userId,
         report.me,
-        me.score,
+        me.score ?? null,
         place,
         place === 1,
         report.startedAt,

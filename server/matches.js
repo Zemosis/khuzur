@@ -35,11 +35,13 @@ const result = (r) => ({
   eaten: r.eaten ?? null,
   folded: r.folded ?? null,
   eliminated: !!r.eliminated,
+  place: r.place ?? null, // Khuzur: each seat's place (its team's)
 });
 
 /** Every seat's place from the final round, the way the game ranks them ({ seat: place }). */
 function placesFromLastRound(gameType, last, seatCount) {
   const at = (seat) => last.find((r) => r.seat === seat);
+  if (gameType === "khuzur") return Object.fromEntries(last.map((r) => [r.seat, r.place]));
   if (gameType === "muushig") {
     return muushigPlaces({
       players: Array.from({ length: seatCount }, (_, seat) => ({ score: at(seat)?.scoreAfter ?? 0 })),
@@ -57,6 +59,7 @@ function placesFromLastRound(gameType, last, seatCount) {
 /** Rounds a seat won: went out first (Thirteen), or ate the most piles (Muushig). */
 function roundsWonBy(gameType, rounds, seat) {
   return rounds.filter((r) => {
+    if (gameType === "khuzur") return r.results.find((x) => x.seat === seat)?.place === 1;
     if (gameType !== "muushig") return r.winnerSeat === seat;
     const mine = r.results.find((x) => x.seat === seat);
     const most = Math.max(...r.results.map((x) => x.eaten ?? 0));

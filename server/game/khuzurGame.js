@@ -19,6 +19,7 @@ import {
   swapTrumpSeven,
 } from "./khuzur/engine.js";
 import { aiAction, applyAction, cheapestLead } from "./khuzur/ai.js";
+import { khuzurSummary } from "./khuzurStats.js";
 
 // Milliseconds. CPU pauses follow what the browser shows; `turn` is a
 // person's turn clock (rulebook §10).
@@ -58,15 +59,17 @@ export class KhuzurGame {
    * @param {Object} opts.table - { perTeam, teams, handSize }
    * @param {String} opts.level - CPU level for seats that don't name one
    * @param {Function} opts.onState - after every state change, with this game
-   * @param {Function} opts.onGameOver - once per finished match
+   * @param {Function} opts.onRoundEnd - once per finished match, with it as one round summary
+   * @param {Function} opts.onGameOver - once per finished match, after onRoundEnd
    * @param {Object} opts.delays - overrides for DEFAULT_KHUZUR_DELAYS (tests)
    * @param {Function} opts.rng - every shuffle and CPU whim; secure by default
    */
-  constructor({ seats, table, level = "MEDIUM", onState, onGameOver, delays, rng }) {
+  constructor({ seats, table, level = "MEDIUM", onState, onRoundEnd, onGameOver, delays, rng }) {
     this.delays = { ...DEFAULT_KHUZUR_DELAYS, ...delays };
     this.level = level;
     this.rng = rng;
     this.onState = onState;
+    this.onRoundEnd = onRoundEnd;
     this.onGameOver = onGameOver;
     this.aiTimer = null;
     this.turnTimer = null;
@@ -198,6 +201,7 @@ export class KhuzurGame {
     this.broadcast();
     if (next.phase === PHASES.MATCH_OVER) {
       this.finishedAt = new Date();
+      this.onRoundEnd?.(khuzurSummary(next));
       this.onGameOver?.(this);
       return;
     }
