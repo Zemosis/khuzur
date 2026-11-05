@@ -363,6 +363,7 @@ export function swapTrumpSeven(prev, seat) {
  */
 export function surrender(prev, seat) {
   if (prev.phase !== PHASES.PLAY) throw new Error("You can only surrender during play");
+  if (prev.players[seat].out) throw new Error("You're already out");
   const state = clone(prev);
   const quitter = state.players[seat].team;
   const smallest = (team) => Math.min(...seatsOfTeam(state, team).map((s) => state.players[s].hand.length));

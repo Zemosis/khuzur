@@ -515,6 +515,11 @@ describe("surrender", () => {
     ]);
   });
 
+  it("isn't open to a player who is already out", () => {
+    const s = { ...playState({ hands: ["", "9♦ 7♠", "10♦ 7♥"], table: { perTeam: 1, teams: 3, handSize: 5 }, out: [0], turn: 1 }), places: [1, null, null] };
+    expect(() => surrender(s, 0)).toThrow("You're already out");
+  });
+
   it("is only possible during play", () => {
     const s = newMatch(T2v2);
     expect(() => surrender(s, 0)).toThrow();

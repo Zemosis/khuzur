@@ -2,7 +2,7 @@
 // prepared engine state and the hand, the buttons and the stack are used.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import GameKhuzur from "../../src/pages/khuzur/GameKhuzur";
@@ -159,6 +159,41 @@ describe("the end of the match", () => {
     const standings = screen.getByRole("dialog", { name: "STANDINGS" });
     expect(standings).toHaveTextContent("1ST");
     expect(standings).toHaveTextContent("Bot Saturn");
+  });
+
+  it("a player who is out can't surrender, and the CPUs play on faster", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const table = { perTeam: 1, teams: 3, handSize: 5 };
+      const players = [{ name: "TESTER", type: "HUMAN" }, { name: "Bot Saturn", type: "AI" }, { name: "Bot Venus", type: "AI" }];
+      const s = E.deal(E.createMatch({ players, table, rng: seededRandom(1) }), 0, seededRandom(1));
+      const state = {
+        ...s,
+        players: s.players.map((p, i) => ({ ...p, hand: cs(["", "9♦ 7♠", "10♦ 7♥"][i]), out: i === 0 })),
+        places: [1, null, null],
+        trumpSuit: "♥",
+        trumpCard: null,
+        drawPile: [],
+        stack: null,
+        turn: 1,
+        events: [],
+      };
+      start.state = state;
+      render(
+        <MemoryRouter initialEntries={[{ pathname: "/game-khuzur", state: { table, playerName: "TESTER #0001" } }]}>
+          <Routes>
+            <Route path="/game-khuzur" element={<GameKhuzur />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      expect(screen.queryByRole("button", { name: "SURRENDER" })).not.toBeInTheDocument();
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(screen.getAllByTestId("stack-card").length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("LEAVE goes back to the builder", async () => {

@@ -70,7 +70,8 @@ const cardsLeftToDraw = (state) => state.drawPile.length + (state.trumpCard ? 1 
 // Players holding extra cards lead without drawing, so pick-ups by choice can
 // pass the same cards round the table forever while the pile never shrinks.
 // Two pick-ups with no draw or dead stack between them is a stall: from then
-// on the CPU beats whenever it can. It reads only the public table history.
+// on the CPU beats whenever it can, and leads single cards, since big leads
+// nobody can cover can loop too. It reads only the public table history.
 const STALL_PICKUPS = 2;
 function stalling(state) {
   let pickUps = 0;
@@ -88,6 +89,8 @@ function chooseLead(state, seat) {
   const limit = leadLimit(state);
   const dry = cardsLeftToDraw(state) === 0;
   if (dry && hand.length <= limit && isValidLead(hand)) return hand; // goes out
+  // A stall where nobody can beat the big leads: a single gets the stack round.
+  if (stalling(state)) return cheapestLead(hand, 1, trump);
   const sizes = LEAD_SIZES.filter((n) => n <= limit).sort((a, b) => b - a);
   if (!dry) {
     const plain = hand.filter((card) => !isJoker(card) && !isTrump(card, trump));

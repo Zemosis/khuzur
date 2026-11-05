@@ -55,6 +55,7 @@ const DEFAULT_TABLE = { perTeam: 2, teams: 2, handSize: 5 };
 const CPU_VARIANTS = [2, 3, 4, 5, 6];
 const CPU_DELAY = 900;
 const CPU_DELAY_REDUCED = 300;
+const CPU_DELAY_OUT = 250; // once you're out, the CPUs play the rest out quickly
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const short = (name = "") => name.split(" #")[0];
 
@@ -196,7 +197,7 @@ export default function GameKhuzur() {
             return g;
           }
         }),
-      reducedMotion() ? CPU_DELAY_REDUCED : CPU_DELAY,
+      game.players[ME].out ? CPU_DELAY_OUT : reducedMotion() ? CPU_DELAY_REDUCED : CPU_DELAY,
     );
     return () => clearTimeout(timer);
   }, [game, stage, over]);
@@ -365,7 +366,7 @@ export default function GameKhuzur() {
               canBeat={mode === "beat" && reason === null}
               reason={reason}
               canSwap={canSwapSeven(game, ME) && stage === "play"}
-              playing={game.phase === PHASES.PLAY && stage === "play"}
+              playing={game.phase === PHASES.PLAY && stage === "play" && !me.out}
               onLead={() => apply((g) => lead(g, ME, picked.map((c) => c.id)))}
               onBeat={() => apply((g) => beat(g, ME, picked.map((c) => c.id)))}
               onPickUp={() => apply((g) => pickUp(g, ME))}
