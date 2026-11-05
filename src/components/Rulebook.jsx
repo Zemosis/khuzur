@@ -11,8 +11,10 @@ import { PixelCard } from "./PixelCard";
 import PixelIcon from "./PixelIcon";
 import { POKER_REWARD_SPACING_MS, levelUpGold, matchReward, pokerHandReward, xpToNext } from "../utils/progression";
 
-// "10♥ J♥" → card objects for PixelCard.
-const parse = (spec) => spec.split(" ").map((c) => ({ rank: c.slice(0, -1), suit: c.slice(-1), id: c }));
+// "10♥ J♥" → card objects for PixelCard. "GJ" and "CJ" are Khuzur's gray and
+// colored jokers.
+const JOKERS = { GJ: "gray", CJ: "color" };
+const parse = (spec) => spec.split(" ").map((c) => (JOKERS[c] ? { joker: JOKERS[c], id: c } : { rank: c.slice(0, -1), suit: c.slice(-1), id: c }));
 
 export function Cards({ spec, width = 44, overlap = 0.42, dim = false }) {
   const cards = parse(spec);
@@ -20,7 +22,7 @@ export function Cards({ spec, width = 44, overlap = 0.42, dim = false }) {
     <div className="flex items-end shrink-0" style={{ opacity: dim ? 0.45 : 1 }}>
       {cards.map((c, i) => (
         <div key={c.id + i} style={{ marginLeft: i ? -width * overlap : 0 }}>
-          <PixelCard rank={c.rank} suit={c.suit} width={width} />
+          <PixelCard rank={c.rank} suit={c.suit} joker={c.joker} width={width} />
         </div>
       ))}
     </div>

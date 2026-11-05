@@ -131,6 +131,14 @@ describe("the trump 7", () => {
   });
 });
 
+describe("the rules", () => {
+  it("RULES in the header opens the rulebook", async () => {
+    open(playing({ mine: "J♠ J♦ 9♣ Q♦ 7♦" }));
+    await userEvent.click(screen.getByRole("button", { name: "Rules" }));
+    expect(screen.getByRole("dialog", { name: "HOW TO PLAY KHUZUR" })).toBeInTheDocument();
+  });
+});
+
 describe("the end of the match", () => {
   it("shows the standings, and PLAY AGAIN deals the next match", async () => {
     open(playing({ mine: "", theirs: "J♠", phase: E.PHASES.MATCH_OVER, places: [1, 2] }));

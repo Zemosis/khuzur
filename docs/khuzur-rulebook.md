@@ -204,4 +204,4 @@ It leads its weakest cards and saves its trumps and jokers. It beats with the ch
 
 ---
 
-<sub>**For contributors:** the engine in `src/utils/khuzur/engine.js` implements exactly these rules, and the CPU is `src/utils/khuzur/ai.js`. The in-game rulebook is `src/components/khuzur/KhuzurRules.jsx`. Change them together.</sub>
+<sub>**For contributors:** `src/utils/khuzur/cards.js` (card order, leads, covering) and `src/utils/khuzur/engine.js` (the match) implement exactly these rules, and the CPU is `src/utils/khuzur/ai.js`. The in-game rulebook is `src/components/khuzur/KhuzurRules.jsx`. Change them together.</sub>

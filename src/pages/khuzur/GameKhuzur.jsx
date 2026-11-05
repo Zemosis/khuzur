@@ -21,6 +21,7 @@ import DealDraw from "../../components/muushig/DealDraw";
 import KhuzurTable from "../../components/khuzur/KhuzurTable";
 import KhuzurControls from "../../components/khuzur/KhuzurControls";
 import Standings from "../../components/khuzur/Standings";
+import KhuzurRules from "../../components/khuzur/KhuzurRules";
 import { toPixelCardProps } from "../../components/khuzur/cardProps";
 import { FFA_COLOR, TEAM_COLORS, ordinal, seatColor, teammates } from "../../components/khuzur/teams";
 import { INK } from "../../components/pixelTokens";
@@ -153,6 +154,7 @@ export default function GameKhuzur() {
   const [depth, setDepth] = useState(1);
   const [confirming, setConfirming] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   const stage = game.phase === PHASES.DRAW || drawnKey !== game.matchNumber ? "draw" : "play";
   const me = game.players[ME];
@@ -314,6 +316,8 @@ export default function GameKhuzur() {
         titleColor="#f08a4b"
         match={game.matchNumber}
         signal={<ConnectionSignal local />}
+        rulesTone={{ bg: "#f08a4b", deep: "#a8552a", ink: INK }}
+        onRules={() => setShowRules(true)}
         onSettings={() => setShowSettings(true)}
       />
 
@@ -399,6 +403,7 @@ export default function GameKhuzur() {
       )}
 
       {over && <Standings rows={rows} onPlayAgain={playAgain} onLeave={() => navigate("/lobby-khuzur")} />}
+      {showRules && <KhuzurRules onClose={() => setShowRules(false)} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
