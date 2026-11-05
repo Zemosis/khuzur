@@ -28,6 +28,7 @@ import { connectSocket } from "../utils/socket";
 const GAME = {
   thirteen: { name: "Thirteen", deep: "#c89820" },
   muushig: { name: "Muushig", deep: "#b8405e" },
+  khuzur: { name: "Khuzur", deep: "#a8552a" },
 };
 
 function formatDuration(seconds) {
@@ -85,6 +86,8 @@ export default function MatchDetail() {
   const poker = match?.gameType === "poker";
   const blackjack = match?.gameType === "blackjack";
   const table = poker || blackjack;
+  // A Khuzur match is one round: no timeline or round list to show.
+  const oneRound = match?.gameType === "khuzur";
   const seats = match && !table ? seatsOf(match.standings) : [];
   const pickedSeat = seats.find((s) => s.seat === picked);
   const pickedRow = match?.standings?.find((s) => s.seat === picked && !s.leftEarly) ?? pickedSeat;
@@ -158,6 +161,7 @@ export default function MatchDetail() {
                     )}
                   </Panel>
                 </div>
+                {!oneRound && (
                 <div className="flex flex-col gap-4 min-w-0">
                   <Panel title="Timeline" icon="star" deep="#463a78">
                     <ScoreTimeline gameType={match.gameType} rounds={match.rounds} seats={seats} picked={picked} />
@@ -166,6 +170,7 @@ export default function MatchDetail() {
                     <RoundList gameType={match.gameType} rounds={match.rounds} seats={seats} picked={picked} />
                   </Panel>
                 </div>
+                )}
               </div>
             </>
           )}

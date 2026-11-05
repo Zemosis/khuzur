@@ -265,3 +265,28 @@ describe("match page", () => {
     });
   });
 });
+
+describe("a Khuzur match", () => {
+  const kres = (seat, place, cardsLeft) => ({ seat, place, cardsLeft, points: null, scoreAfter: null, eaten: null, folded: null, eliminated: false });
+  const khuzur = {
+    ...thirteen,
+    gameType: "khuzur",
+    roundCount: 1,
+    you: 0,
+    standings: [
+      { seat: 0, name: "ANN #0001", kind: "human", level: null, place: 1, score: null, roundsWon: 1, leftEarly: false, cpuTookOver: false, stats: { leads: 9, beats: 7, pickups: 1, picked_up: 4, rounds_played: 1, rounds_won: 1 } },
+      { seat: 1, name: "Bot Saturn", kind: "cpu", level: "HARD", place: 2, score: null, roundsWon: 0, leftEarly: false, cpuTookOver: false, stats: null },
+      { seat: 2, name: "Bot Venus", kind: "cpu", level: "MEDIUM", place: 1, score: null, roundsWon: 1, leftEarly: false, cpuTookOver: false, stats: null },
+      { seat: 3, name: "Bot Mars", kind: "cpu", level: "MEDIUM", place: 2, score: null, roundsWon: 0, leftEarly: false, cpuTookOver: false, stats: null },
+    ],
+    rounds: [{ number: 1, winnerSeat: 0, results: [kres(0, 1, 0), kres(1, 2, 4), kres(2, 1, 2), kres(3, 2, 3)], highlights: null }],
+  };
+
+  it("shows the standings and your summary, with no timeline or rounds", async () => {
+    open(khuzur);
+    expect(await screen.findByRole("heading", { name: "Standings" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Timeline" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Rounds" })).not.toBeInTheDocument();
+    expect(within(panel("Summary")).getByText("Cards left at the end")).toBeInTheDocument();
+  });
+});

@@ -146,6 +146,12 @@ describe("leaderboard", () => {
     expect(screen.getByText("No one has played for credits yet.")).toBeInTheDocument();
   });
 
+  it("the leaderboard has a Khuzur column", async () => {
+    const kz = rowOf(1, "EVE", 1300, { sources: { ...sources(0), khuzur: 300 } });
+    await open({ top: [kz], me: null });
+    expect(within(items("Top 100")[0]).getByLabelText("Khuzur +300")).toBeInTheDocument();
+  });
+
   it("the leaderboard has a Blackjack column and the source breakdown lists Blackjack", async () => {
     const bj = rowOf(1, "EVE", 1500, { sources: { ...sources(0), blackjack: 500 } });
     await open({ top: [bj], me: null });

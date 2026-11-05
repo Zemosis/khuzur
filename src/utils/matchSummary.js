@@ -50,7 +50,16 @@ function muushigFigures(rounds, seat) {
   return { "Piles eaten": eaten, "Rounds gone in": goneIn, "Rounds folded": folded, Sweeps: sweeps, "Rounds won": won };
 }
 
+/** Khuzur's match is one round: your place, and the cards you still held when it ended. */
+function khuzurFigures(rounds, seat) {
+  const mine = rounds.at(-1)?.results.find((x) => x.seat === seat);
+  return { Place: mine?.place ?? null, "Cards left at the end": mine?.cardsLeft ?? null };
+}
+
+const FIGURES = { muushig: muushigFigures, khuzur: khuzurFigures };
+
 const BETTER = {
+  khuzur: { Place: "low", "Cards left at the end": "low" },
   thirteen: { "Rounds won": "high", "Avg cards left when caught": "low", "Points taken": "low" },
   muushig: { "Piles eaten": "high", "Rounds gone in": "high", "Rounds folded": "low", Sweeps: "high", "Rounds won": "high" },
 };
@@ -60,7 +69,7 @@ const BETTER = {
  * `avg` is over every seat that has results (null figures are left out).
  */
 export function summaryRows(gameType, rounds, seat) {
-  const figures = gameType === "muushig" ? muushigFigures : thirteenFigures;
+  const figures = FIGURES[gameType] ?? thirteenFigures;
   const seats = [...new Set(rounds.flatMap((r) => r.results.map((x) => x.seat)))];
   const all = seats.map((s) => figures(rounds, s));
   const mine = figures(rounds, seat);
@@ -68,7 +77,7 @@ export function summaryRows(gameType, rounds, seat) {
     label,
     mine: mine[label],
     avg: mean(all.map((f) => f[label]).filter((v) => v != null)),
-    better: BETTER[gameType === "muushig" ? "muushig" : "thirteen"][label],
+    better: (BETTER[gameType] ?? BETTER.thirteen)[label],
   }));
 }
 

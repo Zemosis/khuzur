@@ -65,3 +65,14 @@ describe("scoreLines", () => {
     expect(scoreLines("muushig", rounds, [0, 1])).toEqual({ 0: [15, 3, 5], 1: [15, 0, 7] });
   });
 });
+
+describe("Khuzur figures", () => {
+  it("cards left at the end and place, beside the table's average", () => {
+    const r = (seat, place, cardsLeft) => ({ seat, place, cardsLeft });
+    const rounds = [{ number: 1, winnerSeat: 0, results: [r(0, 1, 0), r(1, 2, 4), r(2, 1, 2), r(3, 2, 6)] }];
+    expect(summaryRows("khuzur", rounds, 1)).toEqual([
+      { label: "Place", mine: 2, avg: 1.5, better: "low" },
+      { label: "Cards left at the end", mine: 4, avg: 3, better: "low" },
+    ]);
+  });
+});

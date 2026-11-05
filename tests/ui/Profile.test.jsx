@@ -279,6 +279,14 @@ describe("Profile stats", () => {
     expect(within(muushig).getByText("Sweeps").nextSibling).toHaveTextContent("1");
   });
 
+  it("the profile has a Khuzur tab with its matches and places", async () => {
+    const user = userEvent.setup();
+    await renderProfile({ ...empty, khuzur: view({ games: 4, wins: 3, winRate: 75, placements: [{ place: 1, times: 3 }, { place: 2, times: 1 }] }) });
+    await user.click(within(screen.getByRole("group", { name: "Game" })).getByRole("button", { name: "Khuzur" }));
+    expect(tile("Games")).toHaveTextContent("4");
+    expect(tile("Win rate")).toHaveTextContent("75%");
+  });
+
   it("the Poker tab shows hands and chips, not places", async () => {
     const user = userEvent.setup();
     await renderProfile({

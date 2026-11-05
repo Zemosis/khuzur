@@ -35,6 +35,7 @@ const GAMES = [
   { key: "muushig", name: "Muushig" },
   { key: "poker", name: "Poker" },
   { key: "blackjack", name: "Blackjack" },
+  { key: "khuzur", name: "Khuzur" },
 ];
 const VIEWS = [
   ["top", "Top 100"],

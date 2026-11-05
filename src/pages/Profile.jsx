@@ -28,7 +28,7 @@ import { levelProgress } from "../utils/progression";
 
 const ACCENT = "#f4c430";
 const PRESETS = ["1", "2", "3", "4", "5"];
-const GAME_NAMES = { thirteen: "Thirteen", muushig: "Muushig", poker: "Poker", blackjack: "Blackjack" };
+const GAME_NAMES = { thirteen: "Thirteen", muushig: "Muushig", poker: "Poker", blackjack: "Blackjack", khuzur: "Khuzur" };
 
 const num = (v) => (v == null ? null : Number(v));
 
@@ -218,6 +218,7 @@ const FILTERS = [
   ["overall", "Overall"],
   ["thirteen", "Thirteen"],
   ["muushig", "Muushig"],
+  ["khuzur", "Khuzur"],
   ["poker", "Poker"],
   ["blackjack", "Blackjack"],
 ];
