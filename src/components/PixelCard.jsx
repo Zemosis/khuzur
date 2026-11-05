@@ -4,6 +4,7 @@ import React from "react";
 import CustomAvatarCanvas from "./CustomAvatarCanvas";
 import { presetAvatar } from "../utils/avatarConstants";
 import { cardSizeStyle } from "./pixelTokens";
+import JokerFace from "./JokerFace";
 
 const SUIT_COLOR = {
   "♠": "suit-black",
@@ -15,6 +16,7 @@ const SUIT_COLOR = {
 export function PixelCard({
   rank = "A",
   suit = "♠",
+  joker = null, // "gray" | "color": a joker face (Khuzur); rank and suit are ignored
   size = "medium",
   faceDown = false,
   selected = false,
@@ -59,9 +61,10 @@ export function PixelCard({
     );
   }
 
+  const jokerClass = joker ? `joker-${joker}` : "";
   return (
     <div
-      className={`pixel-card ${sizeClass} ${selected ? "selected" : ""} ${dim ? "dim" : ""} ${selectable ? "selectable" : ""} ${className}`}
+      className={`pixel-card ${sizeClass} ${jokerClass} ${selected ? "selected" : ""} ${dim ? "dim" : ""} ${selectable ? "selectable" : ""} ${className}`}
       onClick={selectable ? onClick : undefined}
       style={{
         ...sized,
@@ -70,15 +73,21 @@ export function PixelCard({
           rotate && !selected ? `rotate(${rotate}deg)` : style?.transform,
       }}
     >
-      <span className={`corner tl ${colorClass}`}>
-        {rank}
-        <span className="suit">{suit}</span>
-      </span>
-      <span className={`center-suit ${colorClass}`}>{suit}</span>
-      <span className={`corner br ${colorClass}`}>
-        {rank}
-        <span className="suit">{suit}</span>
-      </span>
+      {joker ? (
+        <JokerFace kind={joker} />
+      ) : (
+        <>
+          <span className={`corner tl ${colorClass}`}>
+            {rank}
+            <span className="suit">{suit}</span>
+          </span>
+          <span className={`center-suit ${colorClass}`}>{suit}</span>
+          <span className={`corner br ${colorClass}`}>
+            {rank}
+            <span className="suit">{suit}</span>
+          </span>
+        </>
+      )}
     </div>
   );
 }
