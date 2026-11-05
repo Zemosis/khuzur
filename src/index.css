@@ -401,6 +401,15 @@ html, body, #root { height: 100%; }
   background: linear-gradient(180deg, #fff3d0 0%, #f0d9a8 100%);
 }
 
+/* Khuzur: a card that just landed on the stack slides in from its owner's
+   side of the table (components/khuzur/StackColumns.jsx). */
+@keyframes kz-land {
+  from { transform: translate(var(--from-x, 0), var(--from-y, 0)); opacity: 0; }
+  to { transform: translate(0, 0); opacity: 1; }
+}
+.kz-land { animation: kz-land 260ms ease-out; }
+html[data-motion="reduced"] .kz-land { animation: none; }
+
 .suit-red { color: #c0203a; }
 .suit-black { color: #1a1024; }
 

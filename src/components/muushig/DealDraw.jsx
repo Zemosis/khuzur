@@ -120,7 +120,7 @@ function DrawnCard({ card, depth, w, from, tone, pop }) {
     >
       <div ref={moveRef}>
         <div ref={flipRef} className="relative">
-          <PixelCard rank={card.rank} suit={card.suit} width={w} />
+          <PixelCard rank={card.rank} suit={card.suit} joker={card.joker} width={w} />
           <div ref={backRef} className="absolute inset-0 invisible">
             <PixelCard faceDown width={w} />
           </div>

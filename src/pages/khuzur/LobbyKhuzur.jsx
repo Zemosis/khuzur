@@ -9,11 +9,11 @@ import { Btn, Panel, TopBar } from "../../components/PixelUI";
 import PixelIcon from "../../components/PixelIcon";
 import SettingsModal from "../../components/SettingsModal";
 import TablePreview from "../../components/khuzur/TablePreview";
+import { KHUZUR_ACCENT } from "../../components/khuzur/teams";
 import { INK, TONES } from "../../components/pixelTokens";
 import { createDeck } from "../../utils/khuzur/cards";
 import { isValidTable } from "../../utils/khuzur/engine";
 
-export const KHUZUR_ACCENT = { main: "#f08a4b", deep: "#a8552a" };
 const PER_TEAM = [
   [1, "SOLO"],
   [2, "PAIRS"],
@@ -111,7 +111,7 @@ export default function LobbyKhuzur() {
                 START
               </Btn>
             </div>
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center order-first md:order-none max-md:max-w-[340px] max-md:mx-auto max-md:w-full">
               <TablePreview table={table} />
             </div>
           </div>

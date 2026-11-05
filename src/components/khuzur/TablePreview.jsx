@@ -14,7 +14,7 @@ const CX = W / 2;
 const CY = H / 2;
 const RX = 118; // seat ring
 const RY = 82;
-const SEAT_R = 17;
+const SEAT_R = 20;
 
 // Seat i sits clockwise from the bottom: on screen (y down) a growing angle
 // turns clockwise, and the bottom is 90°.
@@ -44,8 +44,9 @@ function Card({ x, y, w = 18, h = 26, face, rotate = 0 }) {
 
 export default function TablePreview({ table }) {
   const n = table.perTeam * table.teams;
-  const [ax, ay] = arcPoint(108, RX - 34, RY - 26);
-  const [bx, by] = arcPoint(150, RX - 34, RY - 26);
+  // On the felt by your seat, turning toward your left.
+  const [ax, ay] = arcPoint(72, RX - 30, RY - 22);
+  const [bx, by] = arcPoint(128, RX - 30, RY - 22);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={`A table of ${n}, play going clockwise`} shapeRendering="crispEdges">
       <defs>
@@ -67,7 +68,7 @@ export default function TablePreview({ table }) {
       <text x={CX + 62} y={CY + 30} fill="#ead8b1" fontSize="8" textAnchor="middle" fontFamily="'Press Start 2P', monospace">
         DEAD
       </text>
-      <path d={`M ${ax} ${ay} A ${RX - 34} ${RY - 26} 0 0 1 ${bx} ${by}`} fill="none" stroke="#f4c430" strokeWidth={3} markerEnd="url(#kz-arrow)" />
+      <path d={`M ${ax} ${ay} A ${RX - 30} ${RY - 22} 0 0 1 ${bx} ${by}`} fill="none" stroke="#f4c430" strokeWidth={3} markerEnd="url(#kz-arrow)" />
       {Array.from({ length: n }, (_, seat) => {
         const [x, y] = seatXY(seat, n);
         const label = seat === 0 ? "YOU" : teammates(table, 0, seat) ? "MATE" : null;
