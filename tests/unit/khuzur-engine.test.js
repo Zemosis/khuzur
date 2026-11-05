@@ -15,8 +15,9 @@ import {
   pickUp,
   seatCount,
   standings,
+  skipLead,
   startNextMatch,
-  surrender,
+  concede,
   swapTrumpSeven,
   topLayer,
 } from "../../src/utils/khuzur/engine.js";
@@ -495,34 +496,99 @@ describe("going out", () => {
   });
 });
 
-describe("surrender", () => {
-  it("free for all: you're last, and the rest are placed by cards held, fewest first", () => {
-    let s = playState({ hands: ["8♦ 7♣ 9♠", "9♦ 7♠", "10♦ 7♥", "J♦"], pile: "", trumpCard: null, out: [3] });
+describe("concede", () => {
+  const dry = { pile: "", trumpCard: null };
+
+  it("free for all: you take the lowest place left, your cards go dead, and the rest play on", () => {
+    let s = playState({ ...dry, hands: ["8♦ 7♣ 9♠", "9♦ 7♠", "10♦ 7♥", "J♦"], out: [3] });
     s = { ...s, places: [null, null, null, 1] };
-    s = surrender(s, 0);
-    expect(s.places).toEqual([4, 2, 3, 1]);
+    s = concede(s, 0);
+    expect(s.places).toEqual([4, null, null, 1]);
+    expect(s.players[0].out).toBe(true);
+    expect(s.players[0].hand).toHaveLength(0);
+    expect(idsOf(s.deadPile).sort()).toEqual(["8♦", "7♣", "9♠"].sort());
+    expect(s.phase).toBe(PHASES.PLAY);
+    expect(s.turn).toBe(1);
+    expect(s.events.at(-1)).toMatchObject({ type: "concede", seat: 0, team: 0, place: 4 });
+  });
+
+  it("free for all: the next concede takes the place above", () => {
+    let s = playState({ ...dry, hands: ["8♦ 7♣", "9♦ 7♠", "10♦ 7♥", "J♦ 8♠"] });
+    s = concede(s, 2);
+    s = concede(s, 3);
+    expect(s.places).toEqual([null, null, 4, 3]);
+    expect(s.phase).toBe(PHASES.PLAY);
+    s = concede(s, 1);
+    expect(s.places).toEqual([1, 2, 4, 3]);
     expect(s.phase).toBe(PHASES.MATCH_OVER);
   });
 
-  it("teams: the whole team is last, the others placed by their smallest hand", () => {
+  it("after a concede, the next player to go out still takes 1st", () => {
+    let s = playState({ ...dry, hands: ["8♦", "9♦ 7♠", "10♦ 7♥", "J♦ 8♠"] });
+    s = concede(s, 2);
+    s = lead(s, 0, ["8♦"]);
+    expect(s.places).toEqual([1, null, 4, null]);
+  });
+
+  it("2v2: the conceding team is last and the match ends", () => {
+    const s = concede(playState({ table: T2v2, hands: FOUR, pile: PILE }), 1);
+    expect(s.places).toEqual([1, 2]);
+    expect(s.phase).toBe(PHASES.MATCH_OVER);
+  });
+
+  it("2v2v2: the conceding team is 3rd and the other two play on", () => {
     const table = { perTeam: 2, teams: 3, handSize: 5 };
-    const s = surrender(playState({ table, hands: ["8♦", "9♦ 7♣ 8♣", "10♦ 7♠", "J♦ 8♠", "Q♦", "K♦ 9♠"], pile: PILE }), 3);
-    expect(s.places).toEqual([3, 1, 2]);
-    expect(standings(s)).toEqual([
-      { team: 1, place: 1, seats: [1, 4] },
-      { team: 2, place: 2, seats: [2, 5] },
-      { team: 0, place: 3, seats: [0, 3] },
-    ]);
+    const s = concede(playState({ table, hands: ["8♦", "9♦ 7♣ 8♣", "10♦ 7♠", "J♦ 8♠", "Q♦", "K♦ 9♠"], pile: PILE }), 3);
+    expect(s.places).toEqual([3, null, null]);
+    expect(s.players[0].out && s.players[3].out).toBe(true);
+    expect(s.phase).toBe(PHASES.PLAY);
+    expect(s.turn).toBe(1);
+  });
+
+  it("a concede by the player on turn mid-stack moves the turn to the next pending player", () => {
+    let s = lead(playState({ hands: FOUR, pile: PILE }), 0, ["8♦"]);
+    s = concede(s, 1);
+    expect(s.stack.pending).toEqual([2, 3]);
+    expect(s.turn).toBe(2);
+  });
+
+  it("a concede off turn leaves the turn where it is", () => {
+    let s = lead(playState({ hands: FOUR, pile: PILE }), 0, ["8♦"]);
+    s = concede(s, 3);
+    expect(s.stack.pending).toEqual([1, 2]);
+    expect(s.turn).toBe(1);
   });
 
   it("isn't open to a player who is already out", () => {
     const s = { ...playState({ hands: ["", "9♦ 7♠", "10♦ 7♥"], table: { perTeam: 1, teams: 3, handSize: 5 }, out: [0], turn: 1 }), places: [1, null, null] };
-    expect(() => surrender(s, 0)).toThrow("You're already out");
+    expect(() => concede(s, 0)).toThrow("You're already out");
   });
 
   it("is only possible during play", () => {
-    const s = newMatch(T2v2);
-    expect(() => surrender(s, 0)).toThrow();
+    expect(() => concede(newMatch(T2v2), 0)).toThrow("You can only surrender during play");
+  });
+
+  it("standings list every place once the match is over", () => {
+    const s = concede(playState({ table: T2v2, hands: FOUR, pile: PILE }), 0);
+    expect(standings(s)).toEqual([
+      { team: 1, place: 1, seats: [1, 3] },
+      { team: 0, place: 2, seats: [0, 2] },
+    ]);
+  });
+});
+
+describe("skipLead", () => {
+  it("passes the lead to the left", () => {
+    const s = skipLead(playState({ hands: FOUR, pile: PILE }), 0);
+    expect(s.turn).toBe(1);
+    expect(s.stack).toBeNull();
+    expect(s.events.at(-1)).toEqual({ type: "skip", seat: 0 });
+  });
+
+  it("is refused while a stack is open, and out of turn", () => {
+    const s = lead(playState({ hands: FOUR, pile: PILE }), 0, ["8♦"]);
+    expect(() => skipLead(s, 1)).toThrow();
+    expect(() => skipLead(playState({ hands: FOUR, pile: PILE }), 2)).toThrow("Not your turn");
   });
 });
 

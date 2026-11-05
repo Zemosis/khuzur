@@ -240,7 +240,12 @@ function drawUp(state, seat) {
   if (count) state.events.push({ type: "draw", seat, count, tookTrump });
 }
 
-const placesGiven = (state) => state.places.filter((p) => p !== null).length;
+/** The best place not given yet (going out), or the worst (conceding). */
+function freePlace(state, worst = false) {
+  const used = new Set(state.places);
+  const order = state.places.map((_, i) => i + 1);
+  return (worst ? order.reverse() : order).find((p) => !used.has(p));
+}
 const seatsOfTeam = (state, team) => state.players.filter((p) => p.team === team).map((p) => p.id);
 
 /**
@@ -252,14 +257,14 @@ function settleOut(state, seat) {
   if (state.players[seat].hand.length) return;
   const team = state.players[seat].team;
   for (const s of seatsOfTeam(state, team)) state.players[s].out = true;
-  const place = placesGiven(state) + 1;
+  const place = freePlace(state);
   state.places[team] = place;
   state.events.push({ type: "out", seat, team, place });
   if (state.stack) state.stack.pending = state.stack.pending.filter((s) => !state.players[s].out);
 
   const playing = [...new Set(state.players.filter((p) => !p.out).map((p) => p.team))];
   if (playing.length === 1) {
-    state.places[playing[0]] = placesGiven(state) + 1;
+    state.places[playing[0]] = freePlace(state);
     endMatch(state);
   }
 }
@@ -357,25 +362,54 @@ export function swapTrumpSeven(prev, seat) {
 // ---- Endings ---------------------------------------------------------------
 
 /**
- * Give up: you, or your whole team, take the last place and the match ends.
- * Everyone else still playing is placed by the cards they hold, fewest first
- * (a team by its smallest hand), ties to the lower seat.
+ * Give up (rulebook §10): you, or your whole team, take the worst place not
+ * given yet, your cards go to the dead pile, and play goes on until one team
+ * is left. The turn moves on if it was yours.
  */
-export function surrender(prev, seat) {
+export function concede(prev, seat) {
   if (prev.phase !== PHASES.PLAY) throw new Error("You can only surrender during play");
   if (prev.players[seat].out) throw new Error("You're already out");
   const state = clone(prev);
-  const quitter = state.players[seat].team;
-  const smallest = (team) => Math.min(...seatsOfTeam(state, team).map((s) => state.players[s].hand.length));
-  const rest = state.places
-    .map((place, team) => ({ place, team }))
-    .filter((t) => t.place === null && t.team !== quitter)
-    .sort((a, b) => smallest(a.team) - smallest(b.team) || a.team - b.team);
-  for (const { team } of rest) state.places[team] = placesGiven(state) + 1;
-  state.places[quitter] = state.places.length;
-  state.stack = null;
-  state.events.push({ type: "surrender", seat, team: quitter });
-  endMatch(state);
+  const team = state.players[seat].team;
+  const place = freePlace(state, true);
+  state.places[team] = place;
+  for (const s of seatsOfTeam(state, team)) {
+    const p = state.players[s];
+    p.out = true;
+    state.deadPile.push(...p.hand);
+    p.hand = [];
+  }
+  state.events.push({ type: "concede", seat, team, place });
+
+  const playing = [...new Set(state.players.filter((p) => !p.out).map((p) => p.team))];
+  if (playing.length === 1) {
+    state.places[playing[0]] = freePlace(state);
+    state.stack = null;
+    endMatch(state);
+    return state;
+  }
+  if (state.stack) {
+    state.stack.pending = state.stack.pending.filter((s) => !state.players[s].out);
+    if (!state.stack.pending.length) {
+      // Nobody left to beat it: the stack goes dead, and its last player leads.
+      const dead = state.stack.layers.flat();
+      const last = state.stack.owners.at(-1);
+      state.deadPile.push(...dead);
+      state.stack = null;
+      state.events.push({ type: "dead", count: dead.length, seat: last });
+      state.turn = state.players[last].out ? nextIn(state, last) : last;
+    } else state.turn = state.stack.pending[0];
+  } else if (state.players[state.turn].out) state.turn = nextIn(state, state.turn);
+  return state;
+}
+
+/** A leader whose time ran out (online): the player on their left leads instead. */
+export function skipLead(prev, seat) {
+  expectTurn(prev, PHASES.PLAY, seat);
+  if (prev.stack) throw new Error("Beat the stack or pick it up");
+  const state = clone(prev);
+  state.events.push({ type: "skip", seat });
+  state.turn = nextIn(state, seat);
   return state;
 }
 

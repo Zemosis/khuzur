@@ -44,7 +44,7 @@ import {
   seatCount,
   standings,
   startNextMatch,
-  surrender,
+  concede,
   swapTrumpSeven,
   topLayer,
 } from "../../utils/khuzur/engine";
@@ -388,7 +388,7 @@ export default function GameKhuzur() {
                 type="button"
                 onClick={() => {
                   setConfirming(false);
-                  apply((g) => surrender(g, ME));
+                  apply((g) => concede(g, ME));
                 }}
                 className="pixel-btn font-pixel-display text-[11px] px-4 py-2.5"
                 style={{ backgroundColor: "#e85a7a", borderColor: "#a83a5a", color: INK }}
