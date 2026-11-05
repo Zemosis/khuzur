@@ -109,9 +109,9 @@ export class KhuzurGame {
     const spec = MOVES[type];
     if (!spec) return { ok: false, error: "Unknown move" };
     if (player.type !== "HUMAN") return { ok: false, error: "That seat is played by a CPU" };
-    if (this.dealMsLeft() > 0) return { ok: false, error: "Still dealing" };
     const bad = spec.check(move);
     if (bad) return { ok: false, error: bad };
+    if (this.dealMsLeft() > 0) return { ok: false, error: "Still dealing" };
     let next;
     try {
       next = spec.run(this.state, seat, move, this.rng);

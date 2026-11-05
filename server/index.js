@@ -10,6 +10,8 @@ import { Server } from "socket.io";
 import { randomInt, randomUUID } from "node:crypto";
 import { ThirteenGame, redactState, DEFAULT_DELAYS } from "./game/engine.js";
 import { MuushigGame, muushigView, DEFAULT_MUUSHIG_DELAYS } from "./game/muushigGame.js";
+import { KhuzurGame, khuzurView, DEFAULT_KHUZUR_DELAYS } from "./game/khuzurGame.js";
+import { isValidTable, seatCount as khuzurSeatCount } from "./game/khuzur/engine.js";
 import { PokerTable, DEFAULT_POKER_DELAYS } from "./game/poker/table.js";
 import { MAX_SEATS as POKER_SEATS, viewFor } from "./game/poker/engine.js";
 import { tallyHand } from "./game/pokerTally.js";
@@ -58,6 +60,13 @@ const GAME_DELAYS = {
 const MUUSHIG_DELAYS = process.env.MUUSHIG_DELAY_MS
   ? Object.fromEntries(Object.keys(DEFAULT_MUUSHIG_DELAYS).map((k) => [k, envMs("MUUSHIG_DELAY_MS", 0)]))
   : DEFAULT_MUUSHIG_DELAYS;
+// Khuzur too: KHUZUR_DELAY_MS sets every CPU pause, KHUZUR_TURN_MS a person's turn clock.
+const KHUZUR_DELAYS = {
+  ...(process.env.KHUZUR_DELAY_MS
+    ? Object.fromEntries(Object.keys(DEFAULT_KHUZUR_DELAYS).filter((k) => k !== "turn").map((k) => [k, envMs("KHUZUR_DELAY_MS", 0)]))
+    : {}),
+  turn: envMs("KHUZUR_TURN_MS", DEFAULT_KHUZUR_DELAYS.turn),
+};
 // Poker: the test suite sets every pause to POKER_DELAY_MS, and the turn
 // clock and the sit-out kick on their own.
 const POKER_DELAYS = {
@@ -96,6 +105,13 @@ const GAMES = {
     view: muushigView,
     create: (seats, hooks) => new MuushigGame({ seats, delays: MUUSHIG_DELAYS, ...hooks }),
   },
+  // Khuzur seats 2 to 6, in the shape its host built (lobby.table).
+  khuzur: {
+    seats: 6,
+    stateEvent: "khuzur_state",
+    view: khuzurView,
+    create: (seats, hooks, lobby) => new KhuzurGame({ seats, table: lobby.table, delays: KHUZUR_DELAYS, ...hooks }),
+  },
   // A poker table is made with its lobby (createPokerTable) and seats people
   // itself: there is no waiting table, and no match end or rematch.
   poker: {
@@ -115,7 +131,7 @@ const GAMES = {
 const SELF_SEATING = new Set(["poker", "blackjack"]);
 const gameTypeOf = (type) => (Object.hasOwn(GAMES, type) ? type : "thirteen");
 // Games whose credit tables are a stake per match, the winner taking the pot.
-const STAKE_GAMES = new Set(["muushig", "thirteen"]);
+const STAKE_GAMES = new Set(["muushig", "thirteen", "khuzur"]);
 /** A credit table played for a stake per match (CreditMatch), not for chips. */
 const isCreditMatch = (lobby) => lobby.credits instanceof CreditMatch;
 
@@ -207,6 +223,14 @@ const shareCode = (id) => id.replace(/^PUB-/, "");
 
 const CPU_LEVELS = ["EASY", "MEDIUM", "HARD"];
 
+/** A Khuzur table shape from the browser, checked: { perTeam, teams, handSize }, or null. */
+function validKhuzurTable(table) {
+  if (!table || typeof table !== "object") return null;
+  const { perTeam, teams, handSize } = table;
+  if (![5, 7].includes(handSize) || !isValidTable({ perTeam, teams })) return null;
+  return { perTeam, teams, handSize };
+}
+
 // Chat floods are turned away (see chatGuard.js); quiet players are forgotten.
 const chatGuard = createChatGuard();
 setInterval(() => chatGuard.prune(60_000), 60_000).unref();
@@ -240,6 +264,7 @@ function tableViewFor(lobby, member) {
     isPrivate: lobby.isPrivate,
     status: "waiting",
     code: shareCode(lobby.id),
+    table: lobby.table ?? null, // Khuzur: { perTeam, teams, handSize }
     mySeat: member.seatIndex,
     isHost: lobby.hostKey === member.key,
     // A credit match: its stake and pot, and how many members haven't staked for the next match.
@@ -296,6 +321,7 @@ function publicLobbyList(gameType) {
         inProgress: l.gameType === "poker" ? l.game.started : l.gameType === "blackjack" ? l.game.state.phase !== "WAITING" : !!l.game,
         tier: l.tier ?? null,
         stake: isCreditMatch(l) ? l.credits.stake : null,
+        table: l.table ?? null,
       };
     });
 }
@@ -546,7 +572,9 @@ function startGame(lobby) {
     return { type: "HUMAN", name: m.displayName, socketId: m.socketId, avatar: m.avatar };
   });
 
-  lobby.game = GAMES[lobby.gameType].create(seats, {
+  lobby.game = GAMES[lobby.gameType].create(
+    seats,
+    {
     // The engine hands us itself, which is what makes the constructor-time
     // broadcast work -- see broadcastState.
     onState: (game) => broadcastState(lobby, game),
@@ -567,7 +595,9 @@ function startGame(lobby) {
     // A credit table's CPUs, and any that covers a player who left, play HARD.
     // (Thirteen's `level` is only for those covering.)
     ...(isCreditMatch(lobby) ? { level: "HARD" } : {}),
-  });
+    },
+    lobby,
+  );
 
   beginSession(lobby);
   console.log(`${lobby.gameType} started in lobby ${lobby.id} (${lobby.members.size} humans)`);
@@ -1035,8 +1065,11 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("create_lobby", async ({ lobbyName, isPrivate, gameType, tier, buyIn } = {}) => {
+  socket.on("create_lobby", async ({ lobbyName, isPrivate, gameType, tier, buyIn, table } = {}) => {
     const type = gameTypeOf(gameType);
+    // A Khuzur table is built to a shape: players per team, teams, the deal.
+    const khuzurTable = type === "khuzur" ? validKhuzurTable(table) : null;
+    if (type === "khuzur" && !khuzurTable) return socket.emit("error_message", "That isn't a Khuzur table");
     // A blackjack table is a credit table only at HOUSE, its one tier.
     const credit = type === "blackjack" ? tier === "HOUSE" : tier != null && (type === "poker" || STAKE_GAMES.has(type));
     if (credit) {
@@ -1051,7 +1084,7 @@ io.on("connection", (socket) => {
       await existing.member.cashedOut;
     }
 
-    const seatCount = GAMES[type].seats;
+    const seatCount = khuzurTable ? khuzurSeatCount(khuzurTable) : GAMES[type].seats;
     const lobbyId = makeLobbyId(!!isPrivate);
     const lobby = {
       id: lobbyId,
@@ -1070,11 +1103,12 @@ io.on("connection", (socket) => {
       seats: Array(seatCount).fill(null),
       tier: credit ? tier : null,
       credits: null,
+      table: khuzurTable,
     };
     if (type === "poker") lobby.game = credit ? createCreditTable(lobby) : createPokerTable(lobby);
     else if (type === "blackjack") lobby.game = credit ? createCreditBlackjack(lobby) : createBlackjackTable(lobby);
     // Muushig always seats 5, so CPUs fill a credit match; Thirteen's is for people only.
-    else if (credit) lobby.credits = new CreditMatch({ name: lobby.name, tier, isPrivate: lobby.isPrivate, gameType: type, botsFill: type === "muushig" });
+    else if (credit) lobby.credits = new CreditMatch({ name: lobby.name, tier, isPrivate: lobby.isPrivate, gameType: type, botsFill: type === "muushig" || type === "khuzur" });
     const member = addMember(lobby, socket);
     lobbies.set(lobbyId, lobby);
     // A credit table's room is entered once the buy-in succeeds: a refused one
@@ -1349,6 +1383,28 @@ io.on("connection", (socket) => {
   });
 
   // A Muushig move: { type, ...payload }. The seat is the socket's, never the payload's.
+  socket.on("khuzur_move", ({ lobbyId, move } = {}) => {
+    const lobby = lobbies.get(lobbyId);
+    const member = lobby?.members.get(socket.data.playerKey);
+    if (!lobby?.game || lobby.gameType !== "khuzur" || !member || member.seatIndex == null) return;
+    const result = lobby.game.move(member.seatIndex, move);
+    if (!result.ok) socket.emit("move_rejected", { reason: result.error });
+  });
+
+  // Khuzur's waiting table: you pick your own seat, and so your team.
+  socket.on("take_seat", ({ lobbyId, seat } = {}) => {
+    const lobby = lobbies.get(lobbyId);
+    const member = lobby?.members.get(socket.data.playerKey);
+    if (!lobby || !member || lobby.gameType !== "khuzur") return;
+    if (lobby.game) return reject("The match has started");
+    if (member.seatIndex == null) return reject(isCreditMatch(lobby) ? "Stake first to take a seat" : "Take a seat at the table first");
+    if (!isSeat(lobby, seat) || lobby.seats[seat] !== null) return reject("That seat isn't free");
+    lobby.seats[member.seatIndex] = null;
+    lobby.seats[seat] = { kind: "human", key: member.key };
+    member.seatIndex = seat;
+    broadcastTable(lobby);
+  });
+
   socket.on("muushig_move", ({ lobbyId, move } = {}) => {
     const lobby = lobbies.get(lobbyId);
     const member = lobby?.members.get(socket.data.playerKey);

@@ -40,6 +40,8 @@ beforeAll(async () => {
       DEAL_DELAY_MS: "2",
       ROUND_END_DELAY_MS: "2",
       MUUSHIG_DELAY_MS: "2",
+      KHUZUR_DELAY_MS: "2",
+      KHUZUR_TURN_MS: "150", // a person who doesn't act is moved on quickly
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -72,6 +74,8 @@ const guest = async (name = `G${++guestCount}`, tag = String(1000 + guestCount),
   sock.on("table_update", (t) => sock.tables.push(t));
   sock.muushig = [];
   sock.on("muushig_state", (v) => sock.muushig.push(v));
+  sock.khuzur = [];
+  sock.on("khuzur_state", (v) => sock.khuzur.push(v));
   open.push(sock);
   await new Promise((resolve, reject) => {
     sock.once("connect", resolve);
@@ -153,7 +157,7 @@ describe("connection", () => {
   it("get_stats counts open public lobbies per game", async () => {
     const a = await guest();
     const before = await ack(a, "get_stats");
-    expect(before.lobbies).toEqual({ thirteen: before.tables, muushig: 0, poker: 0, blackjack: 0 });
+    expect(before.lobbies).toEqual({ thirteen: before.tables, muushig: 0, poker: 0, blackjack: 0, khuzur: 0 });
 
     const host = await guest("HOST");
     await createLobby(host, { lobbyName: "Counted" });
@@ -995,5 +999,65 @@ describe("muushig tables", () => {
     // The match carries on through that seat: it gets past the draw for the deal.
     await viewWhere(host, (v) => v.roundNumber >= 1 && v.events.some((e) => e.type === "playIn" || e.type === "fold"), 15000);
     stop();
+  }, 20000);
+});
+
+describe("khuzur online", () => {
+  const T2v2 = { perTeam: 2, teams: 2, handSize: 5 };
+  const createKhuzur = (host, table = T2v2) => createLobby(host, { gameType: "khuzur", table });
+  const khuzurWhere = (sock, match = () => true, timeout) => {
+    const seen = [...sock.khuzur].reverse().find(match);
+    return seen ? Promise.resolve(seen) : next(sock, "khuzur_state", match, timeout);
+  };
+
+  it("a table is built to its shape, players pick their seats, and START fills the rest with bots", async () => {
+    const host = await guest("KZHOST");
+    const lobbyId = await createKhuzur(host);
+    const t = await tableWhere(host, (t) => t.lobbyId === lobbyId);
+    expect(t.seats).toHaveLength(4);
+    expect(t.table).toEqual(T2v2);
+    expect(t.mySeat).toBe(0);
+
+    const b = await guest("KZMATE");
+    await joinLobby(b, lobbyId);
+    await tableWhere(b, (t) => t.mySeat === 1);
+    b.emit("take_seat", { lobbyId, seat: 2 });
+    await tableWhere(host, (t) => t.seats[2]?.name?.startsWith("KZMATE") && t.seats[1] === null);
+
+    const [hs, bs] = [next(host, "khuzur_state"), next(b, "khuzur_state")];
+    host.emit("start_game", { lobbyId });
+    const [hv, bv] = await Promise.all([hs, bs]);
+    expect(hv.players.map((p) => p.type)).toEqual(["HUMAN", "AI", "HUMAN", "AI"]);
+    expect(hv.mySeat).toBe(0);
+    expect(bv.mySeat).toBe(2);
+    // Each sees no one else's cards.
+    const v = await khuzurWhere(host, (v) => v.phase === "PLAY");
+    expect(v.players[0].hand.every((c) => c.id)).toBe(true);
+    expect(v.players[2].hand.every((c) => c.hidden)).toBe(true);
+    expect(v.drawPile.every((c) => c.hidden)).toBe(true);
+  }, 20000);
+
+  it("refuses a table shape that isn't one", async () => {
+    const host = await guest("KZBAD");
+    const err = next(host, "error_message");
+    host.emit("create_lobby", { lobbyName: "Bad", gameType: "khuzur", table: { perTeam: 3, teams: 3, handSize: 5 } });
+    expect(await err).toMatch(/table/i);
+  });
+
+  it("refuses a seat a CPU sits in, and a malformed move", async () => {
+    const host = await guest("KZSEAT");
+    const lobbyId = await createKhuzur(host, { perTeam: 1, teams: 2, handSize: 5 });
+    await tableWhere(host, (t) => t.lobbyId === lobbyId);
+    host.emit("add_cpu", { lobbyId, seat: 1 });
+    await tableWhere(host, (t) => t.seats[1]?.kind === "cpu");
+    const refused = next(host, "move_rejected");
+    host.emit("take_seat", { lobbyId, seat: 1 });
+    expect((await refused).reason).toMatch(/free/i);
+
+    host.emit("start_game", { lobbyId });
+    await khuzurWhere(host, (v) => v.phase === "PLAY", 15000);
+    const out = next(host, "move_rejected");
+    host.emit("khuzur_move", { lobbyId, move: { type: "lead", cardIds: [] } });
+    expect((await out).reason).toBe("Pick the cards to lead");
   }, 20000);
 });
