@@ -50,7 +50,7 @@ describe("MainMenu", () => {
 
   it("is branded Khuzur, with no kicker, tagline or per-game kickers", () => {
     renderMenu();
-    expect(screen.getByText("KHUZUR")).toBeInTheDocument();
+    expect(screen.getByText("KHUZUR", { selector: ".text-glow-gold" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "CHOOSE YOUR GAME" })).toBeInTheDocument();
     expect(screen.queryByText("Card Hall")).not.toBeInTheDocument();
     expect(screen.queryByText(/dungeon-master/)).not.toBeInTheDocument();
@@ -173,7 +173,7 @@ describe("MainMenu", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu", { name: "Player menu" })).not.toBeInTheDocument();
     await user.click(badge);
-    await user.click(screen.getByText("KHUZUR"));
+    await user.click(screen.getByText("KHUZUR", { selector: ".text-glow-gold" }));
     expect(screen.queryByRole("menu", { name: "Player menu" })).not.toBeInTheDocument();
   });
 
@@ -205,6 +205,22 @@ describe("MainMenu", () => {
     await user.click(screen.getByRole("button", { name: "SIGN OUT" }));
     expect(auth.signOut).toHaveBeenCalled();
     expect(screen.queryByText("SETTINGS")).not.toBeInTheDocument();
+  });
+
+  it("has a Khuzur tile that opens its table builder", async () => {
+    const { container } = render(
+      <MemoryRouter>
+        <Routes>
+          <Route path="/" element={<MainMenu />} />
+          <Route path="/lobby-khuzur" element={<div>KHUZUR LOBBY</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("2-6 PLAYERS")).toBeInTheDocument();
+    expect(screen.getByText("Practice vs CPU")).toBeInTheDocument();
+    expect(container.querySelector(".joker-color")).not.toBeNull();
+    await userEvent.click(screen.getByTestId("tile-khuzur"));
+    expect(screen.getByText("KHUZUR LOBBY")).toBeInTheDocument();
   });
 
   it("the game row's arrows stay hidden while every game fits", () => {

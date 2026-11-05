@@ -13,6 +13,7 @@ const GamePoker = lazy(() => import("./pages/poker/GamePoker"));
 const LobbyPoker = lazy(() => import("./pages/poker/LobbyPoker"));
 const GameBlackjack = lazy(() => import("./pages/blackjack/GameBlackjack"));
 const LobbyBlackjack = lazy(() => import("./pages/blackjack/LobbyBlackjack"));
+const LobbyKhuzur = lazy(() => import("./pages/khuzur/LobbyKhuzur"));
 const AvatarPaint = lazy(() => import("./pages/AvatarPaint"));
 const Profile = lazy(() => import("./pages/Profile"));
 const MatchDetail = lazy(() => import("./pages/MatchDetail"));
@@ -40,6 +41,7 @@ function App() {
               <Route path="/game-poker" element={<GamePoker />} />
               <Route path="/lobby-blackjack" element={<LobbyBlackjack />} />
               <Route path="/game-blackjack" element={<GameBlackjack />} />
+              <Route path="/lobby-khuzur" element={<LobbyKhuzur />} />
               <Route path="/avatar-paint" element={<AvatarPaint />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/match/:id" element={<MatchDetail />} />

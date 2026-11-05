@@ -252,6 +252,26 @@ const MainMenu = () => {
           onClick={() => navigate("/lobby-blackjack")}
         />
         <GameTile
+          id="khuzur"
+          title="KHUZUR"
+          tag="2-6 PLAYERS"
+          desc="Mongolia's classic. Beat every card led at you or pick the stack up, and be first to empty your hand. Alone or in teams."
+          accent="ember"
+          cards={[
+            { rank: "J", suit: "♠" },
+            { rank: "J", suit: "♦" },
+            { rank: "9", suit: "♣" },
+            { joker: "gray" },
+            { joker: "color" },
+          ]}
+          difficulty={2}
+          note="Practice vs CPU"
+          hovered={hovered === "khuzur"}
+          onMouseEnter={() => setHovered("khuzur")}
+          onMouseLeave={() => setHovered(null)}
+          onClick={() => navigate("/lobby-khuzur")}
+        />
+        <GameTile
           id="locked"
           title="???"
           tag="COMING"
@@ -399,6 +419,7 @@ function GameRail({ children }) {
 }
 
 function GameTile({
+  id,
   title,
   tag,
   desc,
@@ -406,6 +427,7 @@ function GameTile({
   cards = [],
   difficulty = 1,
   lobbies,
+  note,
   locked,
   hovered,
   onMouseEnter,
@@ -434,6 +456,13 @@ function GameTile({
       tagBg: "#9bd14f",
       tagText: "#1a3a0e",
     },
+    ember: {
+      border: "#a8552a",
+      bg: "#2a160c",
+      text: "#f08a4b",
+      tagBg: "#f08a4b",
+      tagText: "#2a0e04",
+    },
     cyan: {
       border: "#2a8a8c",
       bg: "#0c2226",
@@ -455,6 +484,7 @@ function GameTile({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={!locked ? onClick : undefined}
+      data-testid={`tile-${id}`}
       className="cursor-pointer transition-transform flex-none snap-start w-[min(300px,calc(100vw-128px))]"
       style={{
         transform: hovered && !locked ? "translateY(-8px)" : "translateY(0)",
@@ -529,7 +559,7 @@ function GameTile({
                       transition: "transform 200ms ease",
                     }}
                   >
-                    <PixelCard rank={c.rank} suit={c.suit} size="medium" />
+                    <PixelCard rank={c.rank} suit={c.suit} joker={c.joker} size="medium" />
                   </div>
                 );
               })}
@@ -571,9 +601,10 @@ function GameTile({
           <div className="flex items-center justify-between">
             <div className="font-pixel-body text-bone/70 text-sm">
               <span>
-                {locked || lobbies == null
-                  ? "—"
-                  : `${lobbies} ${lobbies === 1 ? "lobby" : "lobbies"} open`}
+                {note ??
+                  (locked || lobbies == null
+                    ? "—"
+                    : `${lobbies} ${lobbies === 1 ? "lobby" : "lobbies"} open`)}
               </span>
             </div>
             {locked ? (
