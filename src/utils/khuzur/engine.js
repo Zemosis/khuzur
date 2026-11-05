@@ -14,7 +14,7 @@
 // Teams alternate seats, so a seat's team is seat % teams. In a free for all
 // every player is a team of one.
 
-import { HAND_SIZES, cardPower, createDeck, isJoker, shuffle, secureRandom } from "./cards.js";
+import { HAND_SIZES, cardPower, coverAssignment, createDeck, isJoker, isValidLead, shuffle, secureRandom } from "./cards.js";
 
 export const PHASES = { DRAW: "DRAW", PLAY: "PLAY", MATCH_OVER: "MATCH_OVER" };
 export const MAX_DRAW_DEPTH = 10; // the deepest card you may draw for the deal
@@ -192,4 +192,137 @@ export function deal(prev, dealer, rng = secureRandom, deck = shuffle(createDeck
 function expectTurn(state, phase, seat) {
   if (state.phase !== phase) throw new Error(`Not the ${phase} phase`);
   if (state.turn !== seat) throw new Error("Not your turn");
+}
+
+// Copies everything an action may change.
+function clone(state) {
+  return {
+    ...state,
+    players: state.players.map((p) => ({ ...p, hand: [...p.hand] })),
+    drawPile: [...state.drawPile],
+    deadPile: [...state.deadPile],
+    stack: state.stack && {
+      ...state.stack,
+      layers: state.stack.layers.map((layer) => [...layer]),
+      owners: [...state.stack.owners],
+      pending: [...state.stack.pending],
+    },
+    places: [...state.places],
+    events: [...state.events],
+  };
+}
+
+/** Takes the cards out of the player's hand, in the order the ids are given. */
+function takeFromHand(player, cardIds) {
+  if (new Set(cardIds).size !== cardIds.length) throw new Error("Pick each card once");
+  return cardIds.map((id) => {
+    const i = player.hand.findIndex((c) => c.id === id);
+    if (i < 0) throw new Error(`${id} isn't in your hand`);
+    return player.hand.splice(i, 1)[0];
+  });
+}
+
+/** Draw from the pile, then the face-up trump, back up to the hand size. */
+function drawUp(state, seat) {
+  const hand = state.players[seat].hand;
+  let count = 0;
+  let tookTrump = false;
+  while (hand.length < state.table.handSize && state.drawPile.length) {
+    hand.push(state.drawPile.shift());
+    count++;
+  }
+  if (hand.length < state.table.handSize && state.trumpCard) {
+    hand.push(state.trumpCard);
+    state.trumpCard = null;
+    tookTrump = true;
+    count++;
+  }
+  if (count) state.events.push({ type: "draw", seat, count, tookTrump });
+}
+
+// A player with no cards left is out (completed in settleOut below).
+function settleOut() {}
+
+// ---- PLAY ------------------------------------------------------------------
+
+/** The cards the next player must beat, or null with no stack open. */
+export const topLayer = (state) => state.stack?.layers.at(-1) ?? null;
+
+/** Lead 1, 3, 5 or 7 cards at the next player (rulebook §5). */
+export function lead(prev, seat, cardIds) {
+  expectTurn(prev, PHASES.PLAY, seat);
+  if (prev.stack) throw new Error("Beat the stack or pick it up");
+  const limit = leadLimit(prev);
+  const state = clone(prev);
+  const cards = takeFromHand(state.players[seat], cardIds);
+  if (!isValidLead(cards)) throw new Error("That isn't a valid lead");
+  if (cards.length > limit) throw new Error(`You can lead at most ${limit} card${limit === 1 ? "" : "s"}`);
+  state.stack = { leader: seat, layers: [cards], owners: [seat], pending: seatsAfter(state, seat) };
+  state.events.push({ type: "lead", seat, cards });
+  drawUp(state, seat);
+  settleOut(state, seat);
+  if (state.phase === PHASES.PLAY) state.turn = state.stack.pending[0];
+  return state;
+}
+
+/** Cover every card of the top layer, one card each (rulebook §6). */
+export function beat(prev, seat, cardIds) {
+  expectTurn(prev, PHASES.PLAY, seat);
+  if (!prev.stack) throw new Error("There's nothing to beat");
+  const top = topLayer(prev);
+  if (cardIds.length !== top.length) throw new Error(`Beat with exactly ${top.length} card${top.length === 1 ? "" : "s"}`);
+  const state = clone(prev);
+  const cards = takeFromHand(state.players[seat], cardIds);
+  const cover = coverAssignment(top, cards, state.trumpSuit);
+  if (!cover) throw new Error("Those cards don't beat the top layer");
+  state.stack.layers.push(cover);
+  state.stack.owners.push(seat);
+  state.stack.pending.shift();
+  state.events.push({ type: "beat", seat, cards: cover });
+  drawUp(state, seat);
+  settleOut(state, seat);
+  if (state.phase !== PHASES.PLAY) return state;
+  if (state.stack.pending.length) {
+    state.turn = state.stack.pending[0];
+    return state;
+  }
+  // All the way round: the stack goes dead and the last beater leads.
+  const dead = state.stack.layers.flat();
+  state.deadPile.push(...dead);
+  state.stack = null;
+  state.events.push({ type: "dead", count: dead.length, seat });
+  state.turn = state.players[seat].out ? nextIn(state, seat) : seat;
+  return state;
+}
+
+/** Take the whole stack into your hand; the player on your left leads (rulebook §6). */
+export function pickUp(prev, seat) {
+  expectTurn(prev, PHASES.PLAY, seat);
+  if (!prev.stack) throw new Error("There's nothing to pick up");
+  const state = clone(prev);
+  const cards = state.stack.layers.flat();
+  state.players[seat].hand.push(...cards);
+  state.stack = null;
+  state.events.push({ type: "pickUp", seat, count: cards.length });
+  state.turn = nextIn(state, seat);
+  return state;
+}
+
+/** On your own turn, you may swap the trump 7 for the face-up trump (rulebook §8). */
+export function canSwapSeven(state, seat) {
+  if (state.phase !== PHASES.PLAY || state.turn !== seat) return false;
+  const face = state.trumpCard;
+  if (!face || face.rank === "7") return false;
+  return state.players[seat].hand.some((c) => c.rank === "7" && c.suit === state.trumpSuit);
+}
+
+export function swapTrumpSeven(prev, seat) {
+  if (!canSwapSeven(prev, seat)) throw new Error("You can't swap now");
+  const state = clone(prev);
+  const hand = state.players[seat].hand;
+  const i = hand.findIndex((c) => c.rank === "7" && c.suit === state.trumpSuit);
+  const [seven] = hand.splice(i, 1, state.trumpCard);
+  state.events.push({ type: "swapSeven", seat, card: state.trumpCard });
+  state.trumpCard = seven;
+  return state;
 }

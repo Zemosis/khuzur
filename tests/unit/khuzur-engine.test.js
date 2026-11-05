@@ -2,7 +2,21 @@
 
 import { describe, it, expect } from "vitest";
 import { createDeck } from "../../src/utils/khuzur/cards.js";
-import { PHASES, createMatch, deal, drawForDeal, isValidTable, leadLimit, seatCount } from "../../src/utils/khuzur/engine.js";
+import {
+  PHASES,
+  beat,
+  canSwapSeven,
+  createMatch,
+  deal,
+  drawForDeal,
+  isValidTable,
+  lead,
+  leadLimit,
+  pickUp,
+  seatCount,
+  swapTrumpSeven,
+  topLayer,
+} from "../../src/utils/khuzur/engine.js";
 import { seededRandom } from "../helpers/cards.js";
 import { c, cs, idsOf } from "../helpers/khuzur.js";
 
@@ -195,5 +209,198 @@ describe("leadLimit", () => {
 
   it("never passes the game's hand size", () => {
     expect(leadLimit(withHands([9, 9, 9]))).toBe(5);
+  });
+});
+
+/**
+ * A PLAY state built directly. hands: one id string per seat. trump: the trump
+ * suit. trumpCard: the face-up card's id, or null once drawn. pile: the draw
+ * pile, top first.
+ */
+function playState({ table = { perTeam: 1, teams: 4, handSize: 5 }, hands, trump = "♥", trumpCard = "A♥", pile = "", turn = 0, dealer = null, out = [] }) {
+  const s = deal(newMatch(table), 0, seededRandom(1));
+  return {
+    ...s,
+    dealer: dealer ?? (turn + hands.length - 1) % hands.length,
+    players: s.players.map((p, i) => ({ ...p, hand: cs(hands[i]), out: out.includes(i) })),
+    trumpSuit: trump,
+    trumpCard: trumpCard ? c(trumpCard) : null,
+    drawPile: cs(pile),
+    deadPile: [],
+    stack: null,
+    turn,
+    events: [],
+  };
+}
+const handOf = (s, seat) => idsOf(s.players[seat].hand).sort();
+const FOUR = ["J♠ J♦ 9♣ 7♦ 8♦", "A♠ 10♣ Q♥ 7♣ 8♣", "K♦ K♣ 9♦ 10♦ 7♠", "Q♠ Q♦ 10♠ 9♠ 8♠"];
+const PILE = "J♣ J♥ 10♥ 9♥ K♠ K♥ Q♣ Q♥:2";
+
+describe("leading", () => {
+  it("puts the cards on a new stack, draws back up and passes the turn left", () => {
+    const s = lead(playState({ hands: FOUR, pile: PILE }), 0, ["J♠", "J♦", "9♣"]);
+    expect(idsOf(s.stack.layers[0])).toEqual(["J♠", "J♦", "9♣"]);
+    expect(s.stack.leader).toBe(0);
+    expect(s.stack.owners).toEqual([0]);
+    expect(s.stack.pending).toEqual([1, 2, 3]);
+    expect(handOf(s, 0)).toEqual(["7♦", "8♦", "J♣", "J♥", "10♥"].sort());
+    expect(s.drawPile).toHaveLength(5);
+    expect(s.turn).toBe(1);
+    expect(s.events.map((e) => e.type)).toEqual(["lead", "draw"]);
+  });
+
+  it("refuses an invalid lead", () => {
+    expect(() => lead(playState({ hands: FOUR, pile: PILE }), 0, ["J♠", "9♣"])).toThrow("That isn't a valid lead");
+    expect(() => lead(playState({ hands: FOUR, pile: PILE }), 0, ["J♠", "8♦", "9♣"])).toThrow("That isn't a valid lead");
+  });
+
+  it("refuses a lead bigger than the smallest hand", () => {
+    const hands = [...FOUR];
+    hands[2] = "K♦ K♣";
+    expect(() => lead(playState({ hands, pile: PILE }), 0, ["J♠", "J♦", "9♣"])).toThrow("You can lead at most 2 cards");
+  });
+
+  it("refuses cards that aren't in the hand, and moves out of turn", () => {
+    expect(() => lead(playState({ hands: FOUR, pile: PILE }), 0, ["A♠"])).toThrow();
+    expect(() => lead(playState({ hands: FOUR, pile: PILE }), 1, ["A♠"])).toThrow("Not your turn");
+  });
+
+  it("refuses a lead while a stack is open", () => {
+    const s = lead(playState({ hands: FOUR, pile: PILE }), 0, ["9♣"]);
+    expect(() => lead(s, 1, ["A♠"])).toThrow("Beat the stack or pick it up");
+  });
+
+  it("teammates must beat too: the pending list holds every other player", () => {
+    const s = lead(playState({ table: { perTeam: 2, teams: 2, handSize: 5 }, hands: FOUR, pile: PILE }), 0, ["9♣"]);
+    expect(s.stack.pending).toEqual([1, 2, 3]);
+  });
+});
+
+describe("beating", () => {
+  const led = () => lead(playState({ hands: FOUR, pile: PILE }), 0, ["J♠", "J♦", "9♣"]);
+
+  it("covers every card of the top layer, column by column, and draws back up", () => {
+    const hands = [...FOUR];
+    hands[1] = "Q♠ K♠ 10♣ 7♣ 8♣";
+    let s = lead(playState({ hands, pile: PILE }), 0, ["J♠", "J♦", "9♣"]);
+    s = beat(s, 1, ["10♣", "K♠", "Q♠"]);
+    expect(idsOf(topLayer(s))).toEqual(["K♠", "Q♠", "10♣"]);
+    expect(s.stack.owners).toEqual([0, 1]);
+    expect(s.stack.pending).toEqual([2, 3]);
+    expect(s.players[1].hand).toHaveLength(5);
+    expect(s.turn).toBe(2);
+  });
+
+  it("refuses the wrong number of cards", () => {
+    expect(() => beat(led(), 1, ["A♠"])).toThrow("Beat with exactly 3 cards");
+  });
+
+  it("refuses cards that don't beat", () => {
+    expect(() => beat(led(), 1, ["A♠", "10♣", "7♣"])).toThrow("Those cards don't beat the top layer");
+  });
+
+  it("refuses a beat from anyone but the next player", () => {
+    expect(() => beat(led(), 2, ["K♦", "K♣", "10♦"])).toThrow("Not your turn");
+  });
+
+  it("a stack that goes all the way round goes dead, and the last beater leads", () => {
+    let s = lead(playState({ hands: FOUR, pile: PILE }), 0, ["8♦"]);
+    s = beat(s, 1, ["8♣"]);
+    s = beat(s, 2, ["9♦"]);
+    s = beat(s, 3, ["9♠"]);
+    expect(s.stack).toBeNull();
+    expect(idsOf(s.deadPile).sort()).toEqual(["8♦", "8♣", "9♦", "9♠"].sort());
+    expect(s.turn).toBe(3);
+    expect(s.events.at(-1)).toMatchObject({ type: "dead", count: 4, seat: 3 });
+  });
+
+  it("in 1v1 one beat ends the stack and the beater leads", () => {
+    const table = { perTeam: 1, teams: 2, handSize: 5 };
+    let s = lead(playState({ table, hands: FOUR.slice(0, 2), pile: PILE }), 0, ["8♦"]);
+    s = beat(s, 1, ["8♣"]);
+    expect(s.stack).toBeNull();
+    expect(s.turn).toBe(1);
+  });
+});
+
+describe("picking up", () => {
+  it("takes every layer into the hand, without drawing, and the player on the left leads", () => {
+    let s = lead(playState({ hands: FOUR, pile: PILE }), 0, ["8♦"]);
+    s = beat(s, 1, ["8♣"]);
+    const pileBefore = s.drawPile.length;
+    s = pickUp(s, 2);
+    expect(handOf(s, 2)).toEqual(["K♦", "K♣", "9♦", "10♦", "7♠", "8♦", "8♣"].sort());
+    expect(s.drawPile).toHaveLength(pileBefore);
+    expect(s.stack).toBeNull();
+    expect(s.turn).toBe(3);
+    expect(s.events.at(-1)).toMatchObject({ type: "pickUp", seat: 2, count: 2 });
+  });
+
+  it("is allowed even when the player could beat", () => {
+    const s = pickUp(lead(playState({ hands: FOUR, pile: PILE }), 0, ["7♦"]), 1);
+    expect(handOf(s, 1)).toContain("7♦");
+  });
+
+  it("is refused from anyone but the next player, and with no stack", () => {
+    const s = lead(playState({ hands: FOUR, pile: PILE }), 0, ["7♦"]);
+    expect(() => pickUp(s, 2)).toThrow("Not your turn");
+    expect(() => pickUp(playState({ hands: FOUR, pile: PILE }), 0)).toThrow();
+  });
+});
+
+describe("drawing back up when the pile runs dry", () => {
+  it("takes what's left, then the face-up trump, and stops there", () => {
+    let s = lead(playState({ hands: FOUR, pile: "8♥", trumpCard: "A♥" }), 0, ["J♠", "J♦", "9♣"]);
+    expect(handOf(s, 0)).toEqual(["7♦", "8♦", "8♥", "A♥"].sort());
+    expect(s.drawPile).toHaveLength(0);
+    expect(s.trumpCard).toBeNull();
+    expect(s.trumpSuit).toBe("♥");
+    expect(s.events.at(-1)).toMatchObject({ type: "draw", seat: 0, count: 2, tookTrump: true });
+    const hands = [...FOUR];
+    hands[1] = "Q♠ K♠ 10♣ 7♣ 8♣";
+    s = lead(playState({ hands, pile: "8♥", trumpCard: "A♥" }), 0, ["J♠", "J♦", "9♣"]);
+    s = beat(s, 1, ["10♣", "K♠", "Q♠"]);
+    expect(s.players[1].hand).toHaveLength(2);
+  });
+});
+
+describe("the trump 7", () => {
+  const hands = ["7♥ J♦ 9♣ 7♦ 8♦", ...FOUR.slice(1)];
+
+  it("swaps for the face-up trump on your turn to lead", () => {
+    const s0 = playState({ hands, pile: PILE, trumpCard: "A♥" });
+    expect(canSwapSeven(s0, 0)).toBe(true);
+    const s = swapTrumpSeven(s0, 0);
+    expect(handOf(s, 0)).toContain("A♥");
+    expect(handOf(s, 0)).not.toContain("7♥");
+    expect(s.trumpCard.id).toBe("7♥");
+    expect(s.turn).toBe(0);
+    expect(s.events.at(-1)).toMatchObject({ type: "swapSeven", seat: 0 });
+  });
+
+  it("swaps on your turn to beat", () => {
+    const h = [...FOUR];
+    h[1] = "7♥ 10♣ Q♥ 7♣ 8♣";
+    const s = lead(playState({ hands: h, pile: PILE, trumpCard: "A♥" }), 0, ["8♦"]);
+    expect(canSwapSeven(s, 1)).toBe(true);
+    expect(handOf(swapTrumpSeven(s, 1), 1)).toContain("A♥");
+  });
+
+  it("is refused when it isn't your turn", () => {
+    const s = playState({ hands, pile: PILE, trumpCard: "A♥", turn: 1 });
+    expect(canSwapSeven(s, 0)).toBe(false);
+    expect(() => swapTrumpSeven(s, 0)).toThrow("You can't swap now");
+  });
+
+  it("is refused once the trump card has been drawn", () => {
+    const s = playState({ hands, pile: PILE, trumpCard: null });
+    expect(canSwapSeven(s, 0)).toBe(false);
+  });
+
+  it("nothing swaps for a face-up 7, so the second trump 7 can't swap", () => {
+    const table = { perTeam: 1, teams: 4, handSize: 7 };
+    const h = ["7♥:2 J♦ 9♣ 7♦ 8♦", ...FOUR.slice(1)];
+    const s = playState({ table, hands: h, pile: PILE, trumpCard: "7♥" });
+    expect(canSwapSeven(s, 0)).toBe(false);
   });
 });
