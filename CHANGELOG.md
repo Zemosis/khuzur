@@ -8,13 +8,18 @@ The hall is in early access, so versions are 0.x: the middle number moves
 for a new game or a big new system, the last for everything else. 1.0.0 is
 the first stable release.
 
-## 0.7.0 — 5 November 2026
+## 0.7.0 — 6 November 2026
 
 ### A new game: Khuzur
 - **Mongolia's classic card game is in the hall.** Lead cards at the next player, who must beat every one or pick the whole stack up. Your hand refills from the pile after every play, and once the pile runs dry, the first to empty their hand wins.
 - **Play alone or in teams.** Free for all with 2 to 6 players, or 2v2, 2v2v2 and 3v3, with the 5-card game (one deck) or the 7-card game (two decks). Build your table and see it before you sit down.
 - **Leads of 1, 3, 5 or 7 cards.** Pairs plus one more card, and the gray and colored jokers beat every trump.
-- **Practice against CPUs.** Online tables come later. The full rules are in RULES on the main menu.
+- **Play online with friends.** Host a table, share its code, and pick your own seat: your seat decides your team. Bots fill any seat left empty, and each turn has a 45-second clock.
+- **Surrender together.** In a team game, a surrender goes through only once everyone on your team agrees.
+- **Play for credits.** Everyone stakes the same, and 1st place takes the pot.
+- **Three CPU levels.** Practice against Easy, Medium or Hard bots, or seat them at your online table.
+- **XP, gold and stats.** Online matches pay XP and gold by place, and every match, practice included, counts on your profile. Khuzur has its own profile tab, match pages and leaderboard column.
+- **The full rules** are in RULES on the main menu and at the table.
 
 ## 0.6.6 — 3 November 2026
 

@@ -129,11 +129,13 @@ describe("the table", () => {
     expect(fakeSocket.emit).toHaveBeenCalledWith("khuzur_move", { lobbyId: LOBBY, move: { type: "keepPlaying" } });
   });
 
-  it("a refused move shows the server's reason", async () => {
+  it("a refused move shows the server's reason until the table moves on", async () => {
     openTable();
     await act(async () => {});
     serverSends("khuzur_state", view(dealt(ME)));
     serverSends("move_rejected", { reason: "Not your turn" });
     expect(screen.getByRole("alert")).toHaveTextContent("Not your turn");
+    serverSends("khuzur_state", view(dealt(1)));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

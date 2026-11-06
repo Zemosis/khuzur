@@ -79,13 +79,13 @@ function Plate({ name, face, color, count, chips, active, out, compact }) {
   );
 }
 
-function Pile({ count, cw, label, faceDown = true, children }) {
+function Pile({ count, cw, label, faceDown = true, stacked = count > 0, children }) {
   const ch = Math.round(cw * CARD_RATIO);
   return (
     <div className="flex flex-col items-center gap-1.5">
       <div className="relative" style={{ width: cw + 8, height: ch + 6 }}>
         {children}
-        {count > 0 ? (
+        {stacked ? (
           <div className="absolute" style={{ left: 2, top: 0 }}>
             <PixelCard faceDown={faceDown} width={cw} />
           </div>
@@ -134,7 +134,8 @@ export default function KhuzurTable({ game, seats, colorOf, positionOfSeat, comp
         }}
       >
         <div className="absolute inset-0 flex items-center justify-center gap-[4%]" style={{ visibility: drawing ? "hidden" : "visible" }}>
-          <Pile count={game.drawPile.length} cw={pileW} label="DRAW">
+          {/* The face-up trump is the pile's last card, so it counts. */}
+          <Pile count={game.drawPile.length + (trumpCard ? 1 : 0)} stacked={game.drawPile.length > 0} cw={pileW} label="DRAW">
             {trumpCard && (
               <div className="absolute" style={{ left: pileW * 0.5, top: pileW * 0.35, transform: "rotate(90deg)", transformOrigin: "center" }} data-testid="trump-card">
                 <PixelCard {...toPixelCardProps(trumpCard)} width={pileW} />

@@ -24,7 +24,10 @@ Mongolia's classic card game, for 2 to 6 players, alone or in teams. Lead cards 
 8. [The trump 7](#8-the-trump-7)
 9. [Going out and standings](#9-going-out-and-standings)
 10. [Time limit and surrender](#10-time-limit-and-surrender)
-11. [The CPU](#11-the-cpu)
+11. [Playing online](#11-playing-online)
+12. [The CPU](#12-the-cpu)
+13. [Playing for credits](#13-playing-for-credits)
+14. [XP, levels and gold](#14-xp-levels-and-gold)
 
 ### Words used in this rulebook
 
@@ -192,16 +195,62 @@ When someone goes out partway through a stack:
 
 ### Surrender
 
-You can **surrender** at any time. You take **last place**; in a team game, your **whole team** does.
+You can **surrender** at any time during play. You, or your whole team, take the **lowest place not yet given**, your cards go to the **dead pile**, and everyone else plays on. In a game of two teams, that ends the match.
+
+**In a team game online, every person on your team has to agree.** Pressing SURRENDER asks your teammates; it goes through once all of them have pressed it too, and any of them can press KEEP PLAYING to call it off. Bots don't vote.
 
 ---
 
-## 11. The CPU
+## 11. Playing online
 
-Practice tables seat you with CPU players. The CPU never sees anyone's cards: it knows only its own hand, the face-up trump, every card that's been played, picked up or sent to the dead pile, and how many cards each player holds.
+From the Khuzur lobby, build the table (players per team, teams, the deal) and host it, public or private. Friends join from the open tables or with its code.
 
-It leads its weakest cards and saves its trumps and jokers. It beats with the cheapest cards that hold, and picks up when beating would cost too much. In a team game it plays for the team: it won't spend its best cards on a teammate's lead when picking up costs the team less.
+- **Pick your seat.** At the waiting table, press **SIT HERE** on any empty seat to move there. Your seat decides your team.
+- **Bots fill the rest.** The host can seat CPUs and set their levels. Any seat still empty at START gets a **Medium** CPU (**Hard** at a credit table).
+- **Leaving.** A CPU plays your seat from the moment you leave. Come back to the table and the seat is yours again.
+- **Play again.** The host deals the next match at the same table, with no draw: the last-place team deals.
 
 ---
 
-<sub>**For contributors:** `src/utils/khuzur/cards.js` (card order, leads, covering) and `src/utils/khuzur/engine.js` (the match) implement exactly these rules, and the CPU is `src/utils/khuzur/ai.js`. The in-game rulebook is `src/components/khuzur/KhuzurRules.jsx`. Change them together.</sub>
+## 12. The CPU
+
+CPU players come in three levels. Pick one for a practice table; online, the host picks each CPU seat's level. A CPU never sees anyone's cards: it knows only its own hand, the face-up trump, every card that's been played, and how many cards each player holds.
+
+| Level | How it plays |
+| --- | --- |
+| **Easy** | A beginner. Often leads a random card, and picks up about one stack in three it could have beaten. |
+| **Medium** | A steady player. Leads its weakest cards, saves its trumps and jokers, beats with the cheapest cards that hold, and picks up small stacks rather than spend a trump while there are cards left to draw. |
+| **Hard** | A strong player. Plays each choice out many times against guesses of the cards it can't see, and picks the one that ends best for its team. |
+
+---
+
+## 13. Playing for credits
+
+On the lobby's **CREDITS** tab, signed-in players with a linked Google or Discord login play for credits. Everyone at the table stakes **the same amount**, and **1st place takes the pot**.
+
+| | |
+| --- | --- |
+| **Stakes** | LOW 100 · MID 500 · HIGH 2,000. The host picks one |
+| **Starting** | At least 2 players with stakes in. Hard bots fill the empty seats |
+| **The pot** | Every player's stake. Bots put nothing in |
+| **1st place** | The people on the 1st-place team split the whole pot. 2nd and lower get nothing back |
+
+> **A bot team wins, the pot is lost.** If nobody on the 1st-place team is a person still in their seat, nobody gets the pot.
+
+**Leaving mid-match.** A Hard bot plays your seat and your stake stays in the pot. Come back before the match ends and the seat is yours again. Still away at the end, and your seat counts as the bot's. Leaving before the deal gives your stake back. Each credit match starts from the waiting table, with a new draw for the deal.
+
+---
+
+## 14. XP, levels and gold
+
+Signed in, every online match with at least two people pays **XP** and **gold** by place, at free and credit tables alike. Teammates share their team's place. Practice games against CPUs pay nothing, but count for your profile's stats.
+
+| | |
+| --- | --- |
+| **1st place** | 70 XP and 80 gold |
+| **Last place** | 30 XP and 20 gold. The places between are spread evenly |
+| **Leaving** | Leave before the end and don't come back, and the match pays you nothing |
+
+---
+
+<sub>**For contributors:** `src/utils/khuzur/cards.js` (card order, leads, covering) and `src/utils/khuzur/engine.js` (the match) implement exactly these rules, and the CPU is `src/utils/khuzur/ai.js`; the server runs byte-identical copies in `server/game/khuzur/`, wrapped by `server/game/khuzurGame.js` (turn clock, surrender votes, redacted views). The in-game rulebook is `src/components/khuzur/KhuzurRules.jsx`. Change them together.</sub>

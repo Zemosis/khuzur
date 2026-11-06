@@ -10,7 +10,17 @@ import { seededRandom } from "../helpers/cards.js";
 import { c, cs } from "../helpers/khuzur.js";
 
 // The page opens on whatever state `start.state` holds (or a real new match).
-const { start, reportSoloMatch } = vi.hoisted(() => ({ start: { state: null, failLead: null }, reportSoloMatch: vi.fn() }));
+const { start, reportSoloMatch } = vi.hoisted(() => ({ start: { state: null, failLead: null, failAi: false }, reportSoloMatch: vi.fn() }));
+vi.mock("../../src/utils/khuzur/ai", async (importOriginal) => {
+  const real = await importOriginal();
+  return {
+    ...real,
+    aiAction: (...args) => {
+      if (start.failAi) throw new Error("CPU broke");
+      return real.aiAction(...args);
+    },
+  };
+});
 vi.mock("../../src/lib/soloMatches", () => ({ reportSoloMatch }));
 vi.mock("../../src/utils/khuzur/engine", async (importOriginal) => {
   const real = await importOriginal();
@@ -69,6 +79,26 @@ const btn = (name) => screen.getByRole("button", { name });
 beforeEach(() => {
   start.state = null;
   start.failLead = null;
+  start.failAi = false;
+});
+
+describe("the table", () => {
+  it("the DRAW count includes the face-up trump still to be drawn", () => {
+    open({ ...playing({ mine: "J♠ J♦ 9♣ Q♦ 7♦" }), drawPile: [] });
+    expect(screen.getByText("DRAW 1")).toBeInTheDocument();
+  });
+
+  it("marks you as the dealer when you deal", () => {
+    open({ ...playing({ mine: "J♠ J♦ 9♣ Q♦ 7♦", turn: 1 }), dealer: 0 });
+    expect(screen.getByText(/YOU.*DEALER/)).toBeInTheDocument();
+  });
+
+  it("a CPU whose move fails still plays: the table never stalls", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    start.failAi = true;
+    open(playing({ mine: "J♠ J♦ 9♣ Q♦ 7♦", turn: 1 }));
+    expect(await screen.findAllByTestId("stack-card", {}, { timeout: 2000 })).toHaveLength(1);
+  });
 });
 
 describe("leading", () => {

@@ -6,7 +6,9 @@
 // three. Examples are drawn with real PixelCards.
 
 import React from "react";
-import Rulebook, { Callout, CardRow, Cards, Hi, Key, Section, Steps, Versus } from "../Rulebook";
+import Rulebook, { Callout, CardRow, Cards, CpuLevels, Hi, Key, Section, Steps, Versus, XpRules } from "../Rulebook";
+import { MIN_STAKED, STAKES } from "../../utils/stakes";
+import { fmt } from "../../utils/poker/tiers";
 import { MAX_DRAW_DEPTH } from "../../utils/khuzur/engine";
 
 const SECTIONS = [
@@ -20,7 +22,32 @@ const SECTIONS = [
   ["seven", "The trump 7"],
   ["out", "Going out and standings"],
   ["surrender", "Time limit and surrender"],
-  ["cpu", "The CPU"],
+  ["online", "Playing online"],
+  ["levels", "CPU levels"],
+  ["credits", "Playing for credits"],
+  ["xp", "XP, levels and gold"],
+];
+
+// How each CPU level plays (utils/khuzur/ai.js).
+const LEVELS = [
+  {
+    id: "EASY",
+    who: "A beginner",
+    traits: ["Often leads a random card.", "Picks up about one stack in three it could have beaten."],
+  },
+  {
+    id: "MEDIUM",
+    who: "A steady player",
+    traits: [
+      "Leads its weakest cards and saves its trumps and jokers.",
+      "Beats with the cheapest cards that hold, and picks up small stacks rather than spend a trump while there are cards to draw.",
+    ],
+  },
+  {
+    id: "HARD",
+    who: "A strong player",
+    traits: ["Plays each choice out many times against guesses of the cards it can't see.", "Picks the one that ends best for its team."],
+  },
 ];
 
 function Tiles({ items }) {
@@ -201,17 +228,66 @@ export default function KhuzurRules({ onClose }) {
           beating and you pick up. Practice tables have no timer.
         </p>
         <p>
-          You can <Key>surrender</Key> at any time: you, or your whole team, take last place.
+          You can <Key>surrender</Key> at any time during play: you, or your whole team, take the <Key>lowest place left</Key>,
+          your cards go to the dead pile, and the rest play on. With two teams, that ends the match.
         </p>
+        <Callout tone="rule" title="TEAMS VOTE">
+          In a team game online, every person on your team has to agree: SURRENDER asks your teammates, and any of them can press{" "}
+          <Key>KEEP PLAYING</Key> to call it off. Bots don't vote.
+        </Callout>
       </Section>
 
-      <Section id="cpu" n={11} title="The CPU">
-        <p>
-          The CPU never sees anyone's cards. It leads its weakest cards, saves its trumps and jokers, beats with the cheapest
-          cards that hold, and picks up small stacks rather than spend a trump while there are cards left to draw. Once the pile
-          is dry it beats whenever it can.
-        </p>
+      <Section id="online" n={11} title="Playing online">
+        <Steps
+          items={[
+            <>
+              <Key>Build the table</Key> in the lobby (players per team, teams, the deal) and host it, public or private.
+            </>,
+            <>
+              Friends join from the open tables or with its code. At the waiting table, press <Key>SIT HERE</Key> on an empty
+              seat to move there: your seat decides your team.
+            </>,
+            <>
+              The host can seat CPUs. Seats still empty at START get a <Key>Medium</Key> CPU (<Key>Hard</Key> at a credit table).
+            </>,
+            <>
+              Leave mid-match and a CPU plays your seat until you come back. <Key>PLAY AGAIN</Key> deals the next match: the
+              last-place team deals.
+            </>,
+          ]}
+        />
       </Section>
+
+      <Section id="levels" n={12} title="CPU levels">
+        <p>A CPU never sees anyone's cards: only its own hand, the trump, the cards played, and how many each player holds.</p>
+        <CpuLevels levels={LEVELS} />
+      </Section>
+
+      <Section id="credits" n={13} title="Playing for credits">
+        <p>
+          On the lobby's <Key>CREDITS</Key> tab, signed-in players play for a stake: everyone puts in <Key>the same amount</Key>,
+          and <Key>1st place takes the pot</Key>.
+        </p>
+        <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(140px,auto) 1fr" }}>
+          {[
+            ["STAKES", `LOW ${fmt(STAKES.LOW)} · MID ${fmt(STAKES.MID)} · HIGH ${fmt(STAKES.HIGH)}. The host picks one`],
+            ["STARTING", `At least ${MIN_STAKED} players with stakes in. Hard bots fill the empty seats`],
+            ["THE POT", "Every player's stake. Bots put nothing in"],
+            ["1ST PLACE", "The people on the 1st-place team split the whole pot. 2nd and lower get nothing back"],
+          ].map(([k, v]) => (
+            <React.Fragment key={k}>
+              <div className="font-pixel-display text-[10px] text-parchment flex items-center">{k}</div>
+              <div className="text-bone/80">{v}</div>
+            </React.Fragment>
+          ))}
+        </div>
+        <Callout tone="rule" title="A BOT TEAM WINS, THE POT IS LOST">
+          If nobody on the 1st-place team is a person still in their seat, nobody gets the pot. Leave mid-match and a Hard bot
+          plays your seat; come back before the end and it's yours again, or it counts as the bot's.
+        </Callout>
+      </Section>
+
+      <XpRules n={14} />
     </Rulebook>
   );
 }

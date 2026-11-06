@@ -18,7 +18,10 @@ const SECTIONS = [
   "The trump 7",
   "Going out and standings",
   "Time limit and surrender",
-  "The CPU",
+  "Playing online",
+  "CPU levels",
+  "Playing for credits",
+  "XP, levels and gold",
 ];
 
 describe("KhuzurRules", () => {
@@ -34,6 +37,14 @@ describe("KhuzurRules", () => {
     expect(container.querySelectorAll(".joker-gray").length).toBeGreaterThan(0);
     expect(container.querySelectorAll(".joker-color").length).toBeGreaterThan(0);
     expect(screen.getByText(/at most one/i)).toBeInTheDocument();
+  });
+
+  it("explains online seats, the team vote, and that 1st takes the pot", () => {
+    render(<KhuzurRules onClose={() => {}} />);
+    expect(screen.getByText(/SIT HERE/)).toBeInTheDocument();
+    expect(screen.getByText(/every person on your team has to agree/i)).toBeInTheDocument();
+    expect(screen.getByText(/1st place takes the pot/i)).toBeInTheDocument();
+    expect(screen.getAllByText("EASY").length).toBeGreaterThan(0);
   });
 
   it("states the deck sizes and the 45-second online turn", () => {
