@@ -953,7 +953,9 @@ function removeMember(lobby, member, { convertSeat = true } = {}) {
     tableLog(
       lobby,
       isCreditMatch(lobby)
-        ? `${member.name} left. A Hard bot plays their seat: they have ${FORFEIT_ROUNDS} rounds to come back.`
+        ? lobby.gameType === "khuzur"
+          ? `${member.name} left. A Hard bot plays their seat: they can come back until the match ends.` // one round
+          : `${member.name} left. A Hard bot plays their seat: they have ${FORFEIT_ROUNDS} rounds to come back.`
         : `${member.name} left. A CPU plays their seat.`,
       "away",
     );

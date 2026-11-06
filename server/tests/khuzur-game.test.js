@@ -104,6 +104,33 @@ describe("people", () => {
     expect(clocks.slice(-2)).toEqual([50, 50]);
   });
 
+  it("someone else reconnecting or leaving keeps the clock of the person on turn running", () => {
+    humanGame({ perTeam: 1, teams: 3, handSize: 5 }, [human(0), human(1), human(2)]);
+    vi.advanceTimersByTime(30);
+    game.replaceSeat(2, { type: "HUMAN", name: "P2 #0002" }); // P2 reconnects
+    game.replaceSeat(1, { type: "AI", name: "P1 (CPU)" }); // P1 leaves
+    expect(game.turnMsLeft()).toBe(20);
+    vi.advanceTimersByTime(20);
+    expect(game.state.events.at(-1)).toEqual({ type: "skip", seat: 0 });
+  });
+
+  it("the person on turn reconnecting doesn't get a fresh clock", () => {
+    humanGame(T1v1, [human(0), human(1)]);
+    vi.advanceTimersByTime(30);
+    game.replaceSeat(0, { type: "HUMAN", name: "P0 #0000" });
+    expect(game.turnMsLeft()).toBe(20);
+    vi.advanceTimersByTime(20);
+    expect(game.state.turn).toBe(1);
+  });
+
+  it("a CPU taking over the seat on turn plays it", () => {
+    humanGame(T1v1, [human(0), human(1)]);
+    game.replaceSeat(0, { type: "AI", name: "P0 (CPU)" });
+    expect(game.turnMsLeft()).toBeNull();
+    vi.advanceTimersByTime(5);
+    expect(game.state.stack).not.toBeNull();
+  });
+
   it("a clock armed for a turn that already moved never fires", () => {
     humanGame(T1v1, [human(0), human(1)]);
     vi.advanceTimersByTime(49);
@@ -147,6 +174,14 @@ describe("surrender votes", () => {
     game.move(2, { type: "surrender" });
     expect(game.state.phase).toBe(PHASES.MATCH_OVER);
     expect(game.state.places).toEqual([2, 1]);
+  });
+
+  it("a team's vote shows only on that team's tables", () => {
+    voteGame();
+    game.move(0, { type: "surrender" });
+    expect(khuzurView(game.state, 2, game).votes).toEqual({ 0: [0] });
+    expect(khuzurView(game.state, 1, game).votes).toEqual({});
+    expect(khuzurView(game.state, -1, game).votes).toEqual({});
   });
 
   it("KEEP PLAYING clears the vote", () => {

@@ -112,9 +112,9 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
       sock.on(event, on);
     });
   }
-  async function host(userId, { tier = "LOW", buyIn = 100, isPrivate = false, gameType = "muushig" } = {}) {
+  async function host(userId, { tier = "LOW", buyIn = 100, isPrivate = false, gameType = "muushig", table } = {}) {
     const sock = await client(userId);
-    sock.emit("create_lobby", { gameType, tier, buyIn, lobbyName: "Ger", isPrivate });
+    sock.emit("create_lobby", { gameType, tier, buyIn, lobbyName: "Ger", isPrivate, ...(table ? { table } : {}) });
     const { lobbyId } = await waitFor(sock, "lobby_joined");
     await waitFor(sock, "table_update", (t) => t.mySeat === 0);
     return { sock, lobbyId };
@@ -237,6 +237,22 @@ describe.skipIf(!TEST_DATABASE_URL)("credit matches over sockets (Postgres)", ()
     await waitFor(b, "table_update", (t) => t.credit.staked === 2);
     expect(await balance(ann)).toBe(800 + (paid[0] ?? 0));
   }, 90000);
+
+  it("Khuzur: leaving mid-match says you can come back until the match ends (it's one round)", async () => {
+    const ann = await player();
+    const bob = await player();
+    const { sock: a, lobbyId } = await host(ann, { gameType: "khuzur", table: { perTeam: 1, teams: 2, handSize: 5 } });
+    const b = await join(bob, lobbyId);
+    a.emit("start_game", { lobbyId });
+    await waitFor(b, "khuzur_state");
+    b.emit("leave_lobby", { lobbyId });
+    const covered = await waitFor(a, "khuzur_state", (v) => v.players[1].type === "AI");
+    expect(covered.players[1].level).toBe("HARD");
+    const bobName = covered.players[1].name.replace(" (CPU)", "");
+    expect(await waitFor(a, "receive_chat", (l) => l.tone === "away")).toMatchObject({
+      text: `${bobName} left. A Hard bot plays their seat: they can come back until the match ends.`,
+    });
+  }, 30000);
 
   it("leaving mid-match: a Hard CPU covers the seat, /me offers the way back, and coming back takes it again", async () => {
     const ann = await player();

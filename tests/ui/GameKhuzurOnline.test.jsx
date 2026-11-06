@@ -138,4 +138,18 @@ describe("the table", () => {
     serverSends("khuzur_state", view(dealt(1)));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+
+  it("after a credit match, the next one opens with your draw for the deal, even if you'd joined the last one late", async () => {
+    openTable();
+    await act(async () => {});
+    // You came back to the last match partway through.
+    serverSends("khuzur_state", view(dealt(0)));
+    // It ended; you staked again and are back at the waiting table.
+    serverSends("table_update", waiting({ mySeat: ME, credit: { stake: 100, pot: 200 } }));
+    // The next match is a new game: match 1 again, opening with the draw.
+    const players = NAMES.map((name, i) => ({ name, type: i % 2 ? "AI" : "HUMAN" }));
+    const draw = { ...createMatch({ players, table: T2v2, rng: seededRandom(4) }), turn: ME, drawers: [ME, 3, 0, 1] };
+    serverSends("khuzur_state", view(draw));
+    expect(screen.getByRole("button", { name: "TAKE" })).toBeInTheDocument();
+  });
 });

@@ -76,6 +76,9 @@ export class KhuzurGame {
     this.turnEndsAt = 0;
     this.dealEndsAt = 0;
     this.votes = {}; // team -> Set of seats that pressed SURRENDER
+    // Moves the game on: a turn clock armed before the latest move never fires.
+    // (A seat changing hands swaps the state object without moving the game.)
+    this.step = 0;
     this.destroyed = false;
     this.startedAt = new Date();
     this.finishedAt = null;
@@ -99,6 +102,7 @@ export class KhuzurGame {
     this.clearTimers();
     this.votes = {};
     this.state = state;
+    this.step += 1;
     this.schedule();
     this.broadcast();
   }
@@ -162,22 +166,28 @@ export class KhuzurGame {
     return true;
   }
 
-  /** Each team's open vote: { team: [seats] }. */
-  voteView() {
-    return Object.fromEntries(Object.entries(this.votes).map(([team, seats]) => [team, [...seats].sort((a, b) => a - b)]));
+  /** A team's open vote, as only its own players see it: { team: [seats] }, or {}. */
+  voteView(team) {
+    const seats = this.votes[team];
+    return seats?.size ? { [team]: [...seats].sort((a, b) => a - b) } : {};
   }
 
-  /** Swap a seat's occupant: a CPU taking over, or a person (back) in their place. */
+  /**
+   * Swap a seat's occupant: a CPU taking over, or a person (back) in their
+   * place. The turn clock keeps running: only a seat on turn that changes
+   * between a person and a CPU needs its timer armed again.
+   */
   replaceSeat(seat, { type, name, avatar = null, level }) {
     const s = this.state;
     if (!s.players[seat]) return;
+    const switched = s.players[seat].type !== type;
     this.state = {
       ...s,
       players: s.players.map((p, i) => (i === seat ? { ...p, type, name, avatar, level: type === "AI" ? level || this.level : null } : p)),
     };
     const team = this.state.players[seat].team;
     if (this.settleVote(team)) return;
-    if (seat === this.state.turn) this.schedule();
+    if (seat === this.state.turn && switched) this.schedule();
     this.broadcast();
   }
 
@@ -188,6 +198,7 @@ export class KhuzurGame {
     this.startedAt = new Date();
     this.finishedAt = null;
     this.state = startNextMatch(this.state, this.rng);
+    this.step += 1;
     this.schedule();
     this.broadcast();
     return { ok: true };
@@ -196,6 +207,7 @@ export class KhuzurGame {
   applyState(next) {
     const prev = this.state;
     this.state = next;
+    this.step += 1;
     const fresh = next.events.slice(next.events.length >= prev.events.length ? prev.events.length : 0);
     if (fresh.some((e) => e.type === "firstDealer")) this.dealEndsAt = Date.now() + this.delays.drawReveal;
     this.clearTimers();
@@ -224,11 +236,11 @@ export class KhuzurGame {
       }, wait + think);
       return;
     }
-    const armed = s;
+    const armed = this.step;
     this.turnEndsAt = Date.now() + wait + this.delays.turn;
     this.turnTimer = setTimeout(() => {
       this.turnTimer = null;
-      if (!this.destroyed && this.state === armed) this.timeOut();
+      if (!this.destroyed && this.step === armed) this.timeOut();
     }, wait + this.delays.turn);
   }
 
@@ -308,6 +320,6 @@ export function khuzurView(state, seat, game) {
     deadPile: hide(state.deadPile),
     mySeat: seat,
     turnMsLeft: game?.turnMsLeft() ?? null,
-    votes: game?.voteView() ?? {},
+    votes: game?.voteView(state.players[seat]?.team) ?? {},
   };
 }

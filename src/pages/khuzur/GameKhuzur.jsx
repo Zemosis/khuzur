@@ -276,8 +276,14 @@ function OnlineKhuzur({ lobbyId, playerName }) {
     };
     const onTable = (t) => {
       setWaiting(t);
-      // A credit match is over and you staked for the next: back to the waiting table.
-      if (t.mySeat != null) setGame(null);
+      // A credit match is over and you staked for the next: back to the waiting
+      // table. The next match is a new game (its match number starts at 1 again),
+      // so nothing kept about the last one carries over.
+      if (t.mySeat != null) {
+        setGame(null);
+        joinedLate.current = null;
+        setRevealed(null);
+      }
     };
     const onLeft = () => navigate("/lobby-khuzur", { state: { tab: "credits" } });
     const onChat = (msg) => setMessages((m) => [...m, { ...msg, isMe: msg.sender === playerName }]);
