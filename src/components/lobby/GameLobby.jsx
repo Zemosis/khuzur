@@ -356,7 +356,7 @@ function TablesPanel({ game, lobbies, onJoin, onRefresh }) {
                     </span>
                     {lobby.table && (
                       <span className="font-pixel-display text-[8px] px-1.5 py-1 shrink-0" style={{ backgroundColor: "#a8552a", color: INK }}>
-                        {lobby.table.perTeam === 1 ? `FFA ${lobby.table.teams}` : Array(lobby.table.teams).fill(lobby.table.perTeam).join(" V ")} · {lobby.table.handSize} CARDS
+                        {lobby.table.perTeam === 1 ? `FFA ${lobby.table.teams}` : Array(lobby.table.teams).fill(lobby.table.perTeam).join(" V ")} · {lobby.table.handSize} CARDS · {lobby.table.handSize === 7 ? "2 DECKS" : "1 DECK"}
                       </span>
                     )}
                     {lobby.tier && (

@@ -99,6 +99,9 @@ describe("building the table", () => {
     await act(async () => {});
     serverSends("table_update", waiting({ mySeat: 0, isHost: true }));
     expect(screen.getByRole("radio", { name: "PAIRS" })).toBeChecked();
+    // Its own box beside the invite, which says how many decks the deal takes.
+    expect(screen.getByRole("region", { name: "Build your table" })).toHaveTextContent("One deck · 4 × 5 = 20 dealt · 13 to draw");
+    expect(screen.getByText(/2 V 2 · 5 CARDS · 1 DECK/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "3 TEAMS" }));
     expect(fakeSocket.emit).toHaveBeenCalledWith("set_table", { lobbyId: LOBBY, table: { perTeam: 2, teams: 3, handSize: 5 } });
     await userEvent.click(screen.getByRole("radio", { name: "7 CARDS" }));
@@ -108,9 +111,10 @@ describe("building the table", () => {
   it("a guest sees the shape but can't change it", async () => {
     openTable();
     await act(async () => {});
-    serverSends("table_update", waiting());
-    expect(screen.getByText(/2 V 2 · 5 CARDS/)).toBeInTheDocument();
+    serverSends("table_update", waiting({ table: { perTeam: 2, teams: 2, handSize: 7 } }));
+    expect(screen.getByText(/2 V 2 · 7 CARDS · 2 DECKS/)).toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Build your table" })).not.toBeInTheDocument();
   });
 });
 
@@ -132,6 +136,15 @@ describe("the table", () => {
     expect(screen.queryByText("DRAW FOR THE DEAL")).not.toBeInTheDocument();
     expect(screen.queryByText("HIGHEST CARD DEALS")).not.toBeInTheDocument();
     expect(screen.getByText(/ANN leads/)).toBeInTheDocument();
+  });
+
+  it("the match line and the felt say how many decks the match is played with", async () => {
+    openTable();
+    await act(async () => {});
+    serverSends("khuzur_state", view(dealt(ME)));
+    expect(screen.getByText("5-CARD GAME · 1 DECK")).toBeInTheDocument();
+    // On the felt too, beside the trump, where small screens see it.
+    expect(screen.getByTestId("decks")).toHaveTextContent("1 DECK");
   });
 
   it("shows the turn clock", async () => {

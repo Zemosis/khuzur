@@ -13,6 +13,7 @@ import Suit from "../muushig/Suit";
 import { CARD_RATIO } from "../../hooks/useTableMetrics";
 import { useElementWidth } from "../../hooks/useElementWidth";
 import { INK } from "../pixelTokens";
+import { decksOf } from "./teams";
 import StackColumns from "./StackColumns";
 import { toPixelCardProps } from "./cardProps";
 
@@ -144,8 +145,15 @@ export default function KhuzurTable({ game, seats, colorOf, positionOfSeat, comp
           </Pile>
           <div className="flex flex-col items-center gap-2 min-w-[30%]">
             {game.trumpSuit && (
-              <div className="font-pixel-display text-[9px] leading-none px-2 py-1.5" style={{ backgroundColor: "#0a0712", color: "#ead8b1" }}>
-                TRUMP <Suit suit={game.trumpSuit} size={12} />
+              <div className="flex items-center gap-1.5">
+                <div className="font-pixel-display text-[9px] leading-none px-2 py-1.5" style={{ backgroundColor: "#0a0712", color: "#ead8b1" }}>
+                  TRUMP <Suit suit={game.trumpSuit} size={12} />
+                </div>
+                {game.table && (
+                  <div className="font-pixel-display text-[9px] leading-none px-2 py-1.5" style={{ backgroundColor: "#0a0712", color: "#ead8b1" }} data-testid="decks">
+                    {decksOf(game.table)}
+                  </div>
+                )}
               </div>
             )}
             <StackColumns layers={game.stack?.layers} owners={game.stack?.owners} cardW={stackW} colorOf={colorOf} fromOf={fromOf} />

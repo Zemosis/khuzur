@@ -106,7 +106,7 @@ describe("LobbyKhuzur", () => {
       { id: "PUB-AAA111", gameType: "khuzur", name: "Ger", host: "BAT #0001", current: 1, max: 6, inProgress: false, tier: null, stake: null, table: { perTeam: 2, teams: 3, handSize: 7 } },
       { id: "PUB-BBB222", gameType: "khuzur", name: "Yurt", host: "ANA #0002", current: 2, max: 4, inProgress: false, tier: null, stake: null, table: { perTeam: 1, teams: 4, handSize: 5 } },
     ]);
-    expect(screen.getByText("2 V 2 V 2 · 7 CARDS")).toBeInTheDocument();
-    expect(screen.getByText("FFA 4 · 5 CARDS")).toBeInTheDocument();
+    expect(screen.getByText("2 V 2 V 2 · 7 CARDS · 2 DECKS")).toBeInTheDocument();
+    expect(screen.getByText("FFA 4 · 5 CARDS · 1 DECK")).toBeInTheDocument();
   });
 });

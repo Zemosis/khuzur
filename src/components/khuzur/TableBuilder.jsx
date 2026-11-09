@@ -83,7 +83,15 @@ export default function TableBuilder({ value, onChange, compact = false }) {
     </>
   );
 
-  if (compact) return <div className="flex flex-col gap-1.5">{choices}</div>;
+  if (compact)
+    return (
+      <div className="flex flex-col gap-1.5">
+        {choices}
+        <p className="font-pixel-body text-[19px] text-bone leading-tight mt-1 text-center">
+          {handSize === 7 ? "Two decks" : "One deck"} · {players} × {handSize} = {dealt} dealt · {left} to draw
+        </p>
+      </div>
+    );
   return (
     <div className="flex flex-col sm:flex-row gap-4">
       <div className="flex flex-col gap-3 sm:w-[55%]">

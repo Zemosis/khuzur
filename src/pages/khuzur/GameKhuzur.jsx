@@ -33,7 +33,7 @@ import KhuzurControls from "../../components/khuzur/KhuzurControls";
 import Standings from "../../components/khuzur/Standings";
 import KhuzurRules from "../../components/khuzur/KhuzurRules";
 import { toPixelCardProps } from "../../components/khuzur/cardProps";
-import { FFA_COLOR, TEAM_COLORS, ordinal, seatColor, teammates } from "../../components/khuzur/teams";
+import { FFA_COLOR, TEAM_COLORS, decksOf, ordinal, seatColor, shapeOf, teammates } from "../../components/khuzur/teams";
 import { INK } from "../../components/pixelTokens";
 import { BOT_NAMES } from "../../utils/constants";
 import { positionOf } from "../../utils/seatPosition";
@@ -66,7 +66,6 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const short = (name = "") => name.split(" #")[0];
 /** The builder's value for a table the server sent. */
 const buildOf = (t) => ({ ...t, soloCount: t.perTeam === 1 ? t.teams : 4, teamCount: t.perTeam === 2 ? t.teams : 2 });
-const shapeOf = (t) => (t.perTeam === 1 ? `FFA ${t.teams}` : Array(t.teams).fill(t.perTeam).join(" V ")) + ` · ${t.handSize} CARDS`;
 const validTable = (t) => (t && isValidTable(t) && [5, 7].includes(t.handSize) ? t : null);
 
 /** A practice move from `seat`: the engine's, with SURRENDER as concede. */
@@ -561,7 +560,9 @@ function KhuzurPlay({ game, mySeat, table, kicker, onMove, rejection = null, rev
       <div className="font-pixel-display text-[10px] text-bone/70 self-start flex flex-wrap gap-x-3 gap-y-1 [&>span]:whitespace-nowrap">
         <span>MATCH {game.matchNumber}</span>
         <span>{table.perTeam === 1 ? `FREE FOR ALL · ${n} PLAYERS` : Array(table.teams).fill(table.perTeam).join(" V ")}</span>
-        <span>{table.handSize}-CARD GAME</span>
+        <span>
+          {table.handSize}-CARD GAME · {decksOf(table)}
+        </span>
         {online?.credit && <span className="text-glow-gold">POT {online.credit.pot}</span>}
       </div>
       <div className="flex-1 min-h-0 w-full max-w-[1200px] flex items-center justify-center">

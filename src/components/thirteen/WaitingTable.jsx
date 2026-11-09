@@ -30,6 +30,8 @@ import { fmt } from "../../utils/poker/tiers";
 import { MIN_STAKED } from "../../utils/stakes";
 
 const SIDE_SEAT_W = 224;
+// The waiting table's centre boxes: the invite, and Khuzur's table builder.
+const BOX = { backgroundColor: "rgba(10,7,18,0.8)", border: "4px solid #0a0712", boxShadow: "0 0 0 4px #463a78" };
 const LEVELS = ["EASY", "MEDIUM", "HARD"];
 const LEVEL_COLOR = { EASY: "#9bd14f", MEDIUM: "#f4c430", HARD: "#e85a7a" };
 const nextLevel = (level) => LEVELS[(LEVELS.indexOf(level) + 1) % LEVELS.length];
@@ -205,7 +207,7 @@ function PotBanner({ credit }) {
   );
 }
 
-function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMessage, fillsEmptySeats, setup }) {
+function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMessage, fillsEmptySeats, slim = false }) {
   const [copied, setCopied] = useState(null);
   // One START per press: a double-click would be rejected after the game has
   // already begun. A rejection (e.g. no longer host) re-arms the button.
@@ -234,8 +236,8 @@ function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMe
 
   return (
     <div
-      className={`flex flex-col items-center text-center ${setup && table.isHost ? "gap-3 p-4 sm:p-5" : "gap-4 p-4 sm:p-6"}`}
-      style={{ backgroundColor: "rgba(10,7,18,0.8)", border: "4px solid #0a0712", boxShadow: "0 0 0 4px #463a78", maxWidth: 520 }}
+      className="flex flex-col items-center gap-4 p-4 sm:p-6 text-center"
+      style={{ ...BOX, maxWidth: slim ? 400 : 520 }}
     >
       {credit && <PotBanner credit={credit} />}
       <div className="font-pixel-display text-[14px] text-glow-gold">WAITING FOR PLAYERS</div>
@@ -289,7 +291,6 @@ function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMe
         </>
       ) : table.isHost ? (
         <>
-          {setup}
           <button
             onClick={() => {
               setStarting(true);
@@ -339,7 +340,7 @@ export default function WaitingTable({
   seatTeam, // Khuzur: (seat) => { color, label } for each seat's team
   onTakeSeat, // Khuzur: move yourself to an empty seat
   shape, // Khuzur: the table's shape, shown beside its name
-  setup, // Khuzur: the host's switches for the table's shape, above START
+  setup, // Khuzur: the host's switches for the table's shape, in a box beside the invite
 }) {
   const { compact, narrow } = useTableMetrics();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -389,18 +390,28 @@ export default function WaitingTable({
     return index === table.mySeat ? myFace : seatFace(table.seats[index], index);
   };
   const hostName = shortName(table.seats.find((s) => s?.isHost)?.name || "the host");
+  // The host's table builder sits beside the invite (not while a credit host is still deciding to stake again).
+  const building = setup && table.isHost && !(table.credit && table.mySeat == null);
   const invite = (
     <div className="flex flex-col items-center gap-3">
-      <InvitePanel
-        table={table}
-        seatedCount={seatedCount}
-        hostName={hostName}
-        onStart={onStart}
-        onRestake={onRestake}
-        errorMessage={errorMessage}
-        fillsEmptySeats={fillsEmptySeats}
-        setup={setup}
-      />
+      <div className="flex flex-wrap items-center justify-center gap-4">
+        <InvitePanel
+          table={table}
+          seatedCount={seatedCount}
+          hostName={hostName}
+          onStart={onStart}
+          onRestake={onRestake}
+          errorMessage={errorMessage}
+          fillsEmptySeats={fillsEmptySeats}
+          slim={building}
+        />
+        {building && (
+          <section aria-label="Build your table" className="flex flex-col gap-3 p-4" style={BOX}>
+            <div className="font-pixel-display text-[11px] text-glow-gold text-center">BUILD YOUR TABLE</div>
+            {setup}
+          </section>
+        )}
+      </div>
       {errorMessage && (
         <div role="alert" className="font-pixel-body text-[20px] px-3 py-1" style={{ backgroundColor: "#7a1530", color: "#ead8b1" }}>
           {errorMessage}
