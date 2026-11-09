@@ -12,7 +12,7 @@ the first stable release.
 
 ### A new game: Khuzur
 - **Mongolia's classic card game is in the hall.** Lead cards at the next player, who must beat every one or pick the whole stack up. Your hand refills from the pile after every play, and once the pile runs dry, the first to empty their hand wins.
-- **Play alone or in teams.** Free for all with 2 to 6 players, or 2v2, 2v2v2 and 3v3, with the 5-card game (one deck) or the 7-card game (two decks). Build your table and see it before you sit down.
+- **Play alone or in teams.** Free for all with 2 to 6 players, or 2v2, 2v2v2 and 3v3, with the 5-card game (one deck) or the 7-card game (two decks). Build your table at the waiting table, or before a practice game.
 - **Leads of 1, 3, 5 or 7 cards.** Pairs plus one more card, and the gray and colored jokers beat every trump.
 - **Play online with friends.** Host a table, share its code, and pick your own seat: your seat decides your team. Bots fill any seat left empty, and each turn has a 45-second clock.
 - **Surrender together.** In a team game, a surrender goes through only once everyone on your team agrees.

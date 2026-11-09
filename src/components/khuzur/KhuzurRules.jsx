@@ -241,7 +241,7 @@ export default function KhuzurRules({ onClose }) {
         <Steps
           items={[
             <>
-              <Key>Build the table</Key> in the lobby (players per team, teams, the deal) and host it, public or private.
+              Host a table, public or private, then <Key>build it</Key> at the waiting table: players per team, teams, the deal.
             </>,
             <>
               Friends join from the open tables or with its code. At the waiting table, press <Key>SIT HERE</Key> on an empty

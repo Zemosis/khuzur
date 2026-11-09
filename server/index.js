@@ -1408,6 +1408,34 @@ io.on("connection", (socket) => {
     broadcastTable(lobby);
   });
 
+  // The host reshapes a waiting Khuzur table. Seats past the new count go: a
+  // CPU there leaves, a person there moves to the first free seat (or a CPU's).
+  socket.on("set_table", ({ lobbyId, table } = {}) => {
+    const lobby = hostCommand(lobbyId);
+    if (!lobby || lobby.gameType !== "khuzur") return;
+    const shape = validKhuzurTable(table);
+    if (!shape) return reject("That isn't a Khuzur table");
+    const count = khuzurSeatCount(shape);
+    if (lobby.members.size > count) return reject(`${lobby.members.size} people are at this table: it needs ${lobby.members.size} seats or more`);
+    const seats = lobby.seats.slice(0, count);
+    while (seats.length < count) seats.push(null);
+    for (const s of lobby.seats.slice(count)) {
+      if (s?.kind !== "human") continue;
+      let i = seats.indexOf(null);
+      if (i === -1) i = seats.findIndex((x) => x?.kind === "cpu");
+      seats[i] = s;
+    }
+    lobby.seats = seats;
+    seats.forEach((s, i) => {
+      const m = s?.kind === "human" && lobby.members.get(s.key);
+      if (m) m.seatIndex = i;
+    });
+    lobby.table = shape;
+    lobby.maxPlayers = count;
+    broadcastTable(lobby);
+    broadcastLobbyList(lobby.gameType);
+  });
+
   socket.on("muushig_move", ({ lobbyId, move } = {}) => {
     const lobby = lobbies.get(lobbyId);
     const member = lobby?.members.get(socket.data.playerKey);

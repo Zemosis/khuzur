@@ -203,7 +203,7 @@ You can **surrender** at any time during play. You, or your whole team, take the
 
 ## 11. Playing online
 
-From the Khuzur lobby, build the table (players per team, teams, the deal) and host it, public or private. Friends join from the open tables or with its code.
+Host a table from the Khuzur lobby, public or private. It starts as 2v2 with the 5-card deal, and the host builds it at the waiting table (players per team, teams, the deal) until the match starts. Friends join from the open tables or with its code. For a practice game, pick a CPU level and build the table before you start.
 
 - **Pick your seat.** At the waiting table, press **SIT HERE** on any empty seat to move there. Your seat decides your team.
 - **Bots fill the rest.** The host can seat CPUs and set their levels. Any seat still empty at START gets a **Medium** CPU (**Hard** at a credit table).

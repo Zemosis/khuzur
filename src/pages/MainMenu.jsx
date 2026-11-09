@@ -255,7 +255,7 @@ const MainMenu = () => {
           id="khuzur"
           title="KHUZUR"
           tag="2-6 PLAYERS"
-          desc="Mongolia's classic. Beat every card led at you or pick the stack up, and be first to empty your hand. Alone or in teams."
+          desc="Mongolia's classic. Beat every card led at you or pick the stack up, and be first to empty your hand."
           accent="ember"
           cards={[
             { rank: "J", suit: "♠" },
@@ -265,7 +265,7 @@ const MainMenu = () => {
             { joker: "color" },
           ]}
           difficulty={2}
-          note="Practice vs CPU"
+          lobbies={stats.lobbies?.khuzur}
           hovered={hovered === "khuzur"}
           onMouseEnter={() => setHovered("khuzur")}
           onMouseLeave={() => setHovered(null)}

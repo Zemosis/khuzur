@@ -17,6 +17,7 @@ import { useChatLimit } from "../../hooks/useChatLimit";
 import { useSoloMatchReport } from "../../hooks/useSoloMatchReport";
 import { khuzurSoloReport } from "../../utils/soloReport";
 import WaitingTable from "../../components/thirteen/WaitingTable";
+import TableBuilder from "../../components/khuzur/TableBuilder";
 import GameChat from "../../components/thirteen/GameChat";
 import RewardPanel from "../../components/RewardPanel";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -63,6 +64,8 @@ const CPU_DELAY_REDUCED = 300;
 const CPU_DELAY_OUT = 250; // once you're out, the CPUs play the rest out quickly
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const short = (name = "") => name.split(" #")[0];
+/** The builder's value for a table the server sent. */
+const buildOf = (t) => ({ ...t, soloCount: t.perTeam === 1 ? t.teams : 4, teamCount: t.perTeam === 2 ? t.teams : 2 });
 const shapeOf = (t) => (t.perTeam === 1 ? `FFA ${t.teams}` : Array(t.teams).fill(t.perTeam).join(" V ")) + ` · ${t.handSize} CARDS`;
 const validTable = (t) => (t && isValidTable(t) && [5, 7].includes(t.handSize) ? t : null);
 
@@ -376,6 +379,13 @@ function OnlineKhuzur({ lobbyId, playerName }) {
         shape={shapeOf(shape)}
         seatTeam={shape.perTeam > 1 ? (seat) => ({ color: TEAM_COLORS[seat % shape.teams], label: teammates(shape, waiting.mySeat ?? -1, seat) || seat === waiting.mySeat ? "YOUR TEAM" : "TEAM" }) : undefined}
         onTakeSeat={(seat) => socket.emit("take_seat", { lobbyId, seat })}
+        setup={
+          <TableBuilder
+            compact
+            value={buildOf(shape)}
+            onChange={(b) => socket.emit("set_table", { lobbyId, table: { perTeam: b.perTeam, teams: b.teams, handSize: b.handSize } })}
+          />
+        }
       />
     );
   }

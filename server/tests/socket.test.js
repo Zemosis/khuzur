@@ -1044,6 +1044,47 @@ describe("khuzur online", () => {
     expect(await err).toMatch(/table/i);
   });
 
+  it("the host changes the table's shape at the waiting table; people in seats that go keep a seat", async () => {
+    const host = await guest("KZSHAPE");
+    const lobbyId = await createKhuzur(host, { perTeam: 1, teams: 6, handSize: 5 });
+    await tableWhere(host, (t) => t.lobbyId === lobbyId);
+    const b = await guest("KZFAR");
+    await joinLobby(b, lobbyId);
+    await tableWhere(b, (t) => t.mySeat === 1);
+    b.emit("take_seat", { lobbyId, seat: 5 });
+    await tableWhere(b, (t) => t.mySeat === 5);
+    host.emit("add_cpu", { lobbyId, seat: 3 });
+    await tableWhere(host, (t) => t.seats[3]?.kind === "cpu");
+
+    // A guest can't, and the shape must be a real one.
+    const refused = next(b, "move_rejected");
+    b.emit("set_table", { lobbyId, table: { perTeam: 1, teams: 2, handSize: 5 } });
+    expect((await refused).reason).toMatch(/host/i);
+    const bad = next(host, "move_rejected");
+    host.emit("set_table", { lobbyId, table: { perTeam: 3, teams: 3, handSize: 5 } });
+    expect((await bad).reason).toMatch(/table/i);
+
+    // A third person: now a 2-seat table is too small for who's here.
+    const c = await guest("KZTHIRD");
+    await joinLobby(c, lobbyId);
+    await tableWhere(c, (t) => t.mySeat != null);
+    const small = next(host, "move_rejected");
+    host.emit("set_table", { lobbyId, table: { perTeam: 1, teams: 2, handSize: 5 } });
+    expect((await small).reason).toMatch(/3 people/);
+    c.emit("leave_lobby", { lobbyId });
+    await tableWhere(host, (t) => t.seats.filter((s) => s?.kind === "human").length === 2);
+
+    const watcher = await guest();
+    const listed = next(watcher, "public_lobbies_update", (l) => l.some((x) => x.id === lobbyId && x.max === 2));
+    watcher.emit("get_public_lobbies", { gameType: "khuzur" });
+    host.emit("set_table", { lobbyId, table: { perTeam: 1, teams: 2, handSize: 7 } });
+    const t = await tableWhere(b, (t) => t.table.teams === 2);
+    expect(t.table).toEqual({ perTeam: 1, teams: 2, handSize: 7 });
+    expect(t.seats).toHaveLength(2);
+    expect(t.mySeat).toBe(1); // seat 5 went: the free seat 1 is theirs now
+    expect((await listed).find((x) => x.id === lobbyId).table).toEqual({ perTeam: 1, teams: 2, handSize: 7 });
+  }, 20000);
+
   it("refuses a seat a CPU sits in, and a malformed move", async () => {
     const host = await guest("KZSEAT");
     const lobbyId = await createKhuzur(host, { perTeam: 1, teams: 2, handSize: 5 });

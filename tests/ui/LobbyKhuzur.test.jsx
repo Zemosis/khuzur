@@ -1,6 +1,7 @@
 // The Khuzur lobby: the shared lobby (host, join, open tables, credits,
-// practice) with the table builder on top. Every table and practice game is
-// built to the shape the builder shows.
+// practice), laid out like every other game's. The table builder opens when a
+// practice level is picked; a hosted table starts as 2 v 2 and its host
+// reshapes it at the waiting table.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
@@ -55,33 +56,43 @@ beforeEach(() => {
 });
 
 describe("LobbyKhuzur", () => {
-  it("shows the builder, starting on pairs, 2 teams and the 5-card deal", () => {
+  it("is laid out like the other games': no builder until you pick a practice level", () => {
     renderLobby();
-    expect(screen.getByRole("radio", { name: "PAIRS" })).toBeChecked();
-    expect(screen.getByText("4 players × 5 = 20 dealt · trump + 13 left to draw")).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "PAIRS" })).not.toBeInTheDocument();
+    expect(screen.getByText("Open tables")).toBeInTheDocument();
     expect(fakeSocket.emit).toHaveBeenCalledWith("get_public_lobbies", { gameType: "khuzur" });
   });
 
-  it("hosts a table built to the shape chosen", async () => {
+  it("hosts a 2 v 2 table, 5 cards", async () => {
     renderLobby();
-    await choose("3 TEAMS");
-    await choose("7 CARDS · 2 DECKS");
     await userEvent.click(screen.getByRole("button", { name: /public/i }));
     expect(fakeSocket.emit).toHaveBeenCalledWith(
       "create_lobby",
-      expect.objectContaining({ gameType: "khuzur", isPrivate: false, table: { perTeam: 2, teams: 3, handSize: 7 } }),
+      expect.objectContaining({ gameType: "khuzur", isPrivate: false, table: { perTeam: 2, teams: 2, handSize: 5 } }),
     );
     serverSends("lobby_joined", { lobbyId: "PUB-KZ0001", gameType: "khuzur", isHost: true });
     expect(screen.getByText(/KHUZUR TABLE/)).toBeInTheDocument();
   });
 
-  it("practice opens the table at the level picked, in the shape chosen", async () => {
+  it("a practice level opens the builder; START opens the table at that level, in the shape built", async () => {
     renderLobby();
+    await userEvent.click(screen.getByRole("button", { name: /hard/i }));
+    const builder = screen.getByRole("dialog", { name: /build your table/i });
+    expect(screen.getByRole("radio", { name: "PAIRS" })).toBeChecked();
+    expect(builder).toHaveTextContent("4 players × 5 = 20 dealt · trump + 13 left to draw");
     await choose("SOLO");
     await choose("3 PLAYERS");
-    await userEvent.click(screen.getByRole("button", { name: /hard/i }));
+    await userEvent.click(screen.getByRole("button", { name: /start/i }));
     expect(landed()).toMatchObject({ aiDifficulty: "HARD", table: { perTeam: 1, teams: 3, handSize: 5 } });
     expect(landed().lobbyId).toMatch(/^SOLO-/);
+  });
+
+  it("CANCEL closes the builder and stays in the lobby", async () => {
+    renderLobby();
+    await userEvent.click(screen.getByRole("button", { name: /easy/i }));
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText(/KHUZUR TABLE/)).not.toBeInTheDocument();
   });
 
   it("has a CREDITS tab", () => {

@@ -402,6 +402,8 @@ export default function GameLobby({ game }) {
   const [error, setError] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  // A game whose practice is built first (Khuzur): the level picked, while its builder is open.
+  const [practicing, setPracticing] = useState(null);
 
   const playerName = `${identity.name} #${identity.tag}`;
   const ev = game.events;
@@ -457,7 +459,7 @@ export default function GameLobby({ game }) {
     };
   }, [ev, game.id, game.route, navigate, playerName]);
 
-  // A game with a setup panel (Khuzur's table builder) sends its values with every table it hosts.
+  // A game with setup values (Khuzur's table shape) sends them with every table it hosts.
   const setup = game.setup?.values ?? {};
 
   function createTable(name, isPrivate) {
@@ -490,7 +492,7 @@ export default function GameLobby({ game }) {
     socket.emit(ev.create, { lobbyName, playerName, isPrivate: true, gameType: game.id, ...(credit ? { tier: "HOUSE" } : {}), ...setup });
   }
 
-  function startPractice(difficulty) {
+  function startPractice(difficulty, values = setup) {
     navigate(game.route, {
       state: {
         lobbyId: `SOLO-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
@@ -499,7 +501,7 @@ export default function GameLobby({ game }) {
         mySocketId: socket.id || `solo-${Date.now()}`,
         myPlayerIndex: 0,
         aiDifficulty: difficulty,
-        ...setup,
+        ...values,
       },
     });
   }
@@ -571,23 +573,21 @@ export default function GameLobby({ game }) {
             <>
               <HostPanel game={game} onCreate={createTable} />
               <JoinPanel onJoin={joinTable} />
-              {game.playAlone ? <PlayAlonePanel onPlay={() => playAlone(game.defaultTableName)} /> : <PracticePanel onStart={startPractice} />}
+              {game.playAlone ? <PlayAlonePanel onPlay={() => playAlone(game.defaultTableName)} /> : <PracticePanel onStart={game.setup?.practice ? setPracticing : startPractice} />}
             </>
           )}
         </div>
-        <div className={`shrink-0 lg:min-h-0 ${game.setup ? "flex flex-col lg:h-auto" : "h-[420px] lg:h-auto"}`} style={game.setup ? { gap: "var(--gap)" } : undefined}>
-          {game.setup?.panel}
-          <div className={game.setup ? "h-[420px] lg:h-auto lg:flex-1 lg:min-h-0 flex flex-col" : "contents"}>
+        <div className="shrink-0 h-[420px] lg:h-auto lg:min-h-0">
           <TablesPanel
             game={game}
             lobbies={game.credits ? lobbies.filter((l) => !!l.tier === credit) : lobbies}
             onJoin={joinTable}
             onRefresh={() => socket.emit(ev.list)}
           />
-          </div>
         </div>
       </main>
 
+      {practicing && game.setup.practice({ difficulty: practicing, onStart: (values) => startPractice(practicing, values), onCancel: () => setPracticing(null) })}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
       {buyIn && credits && buyIn.stake != null && (

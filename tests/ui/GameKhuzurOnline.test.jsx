@@ -93,6 +93,27 @@ describe("the waiting table", () => {
   });
 });
 
+describe("building the table", () => {
+  it("the host reshapes the table at the waiting table", async () => {
+    openTable();
+    await act(async () => {});
+    serverSends("table_update", waiting({ mySeat: 0, isHost: true }));
+    expect(screen.getByRole("radio", { name: "PAIRS" })).toBeChecked();
+    await userEvent.click(screen.getByRole("radio", { name: "3 TEAMS" }));
+    expect(fakeSocket.emit).toHaveBeenCalledWith("set_table", { lobbyId: LOBBY, table: { perTeam: 2, teams: 3, handSize: 5 } });
+    await userEvent.click(screen.getByRole("radio", { name: "7 CARDS" }));
+    expect(fakeSocket.emit).toHaveBeenCalledWith("set_table", { lobbyId: LOBBY, table: { perTeam: 2, teams: 2, handSize: 7 } });
+  });
+
+  it("a guest sees the shape but can't change it", async () => {
+    openTable();
+    await act(async () => {});
+    serverSends("table_update", waiting());
+    expect(screen.getByText(/2 V 2 · 5 CARDS/)).toBeInTheDocument();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+  });
+});
+
 describe("the table", () => {
   it("shows your hand, and LEAD sends a khuzur_move", async () => {
     openTable();

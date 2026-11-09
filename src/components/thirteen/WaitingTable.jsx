@@ -205,7 +205,7 @@ function PotBanner({ credit }) {
   );
 }
 
-function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMessage, fillsEmptySeats }) {
+function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMessage, fillsEmptySeats, setup }) {
   const [copied, setCopied] = useState(null);
   // One START per press: a double-click would be rejected after the game has
   // already begun. A rejection (e.g. no longer host) re-arms the button.
@@ -234,7 +234,7 @@ function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMe
 
   return (
     <div
-      className="flex flex-col items-center gap-4 p-4 sm:p-6 text-center"
+      className={`flex flex-col items-center text-center ${setup && table.isHost ? "gap-3 p-4 sm:p-5" : "gap-4 p-4 sm:p-6"}`}
       style={{ backgroundColor: "rgba(10,7,18,0.8)", border: "4px solid #0a0712", boxShadow: "0 0 0 4px #463a78", maxWidth: 520 }}
     >
       {credit && <PotBanner credit={credit} />}
@@ -289,6 +289,7 @@ function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMe
         </>
       ) : table.isHost ? (
         <>
+          {setup}
           <button
             onClick={() => {
               setStarting(true);
@@ -338,6 +339,7 @@ export default function WaitingTable({
   seatTeam, // Khuzur: (seat) => { color, label } for each seat's team
   onTakeSeat, // Khuzur: move yourself to an empty seat
   shape, // Khuzur: the table's shape, shown beside its name
+  setup, // Khuzur: the host's switches for the table's shape, above START
 }) {
   const { compact, narrow } = useTableMetrics();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -397,6 +399,7 @@ export default function WaitingTable({
         onRestake={onRestake}
         errorMessage={errorMessage}
         fillsEmptySeats={fillsEmptySeats}
+        setup={setup}
       />
       {errorMessage && (
         <div role="alert" className="font-pixel-body text-[20px] px-3 py-1" style={{ backgroundColor: "#7a1530", color: "#ead8b1" }}>

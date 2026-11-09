@@ -1,11 +1,12 @@
-// KHUZUR LOBBY — the shared GameLobby configured for Khuzur, with the table
-// builder on top: every table hosted and every practice game is built to the
-// shape it shows. The CREDITS tab hosts and joins credit matches: everyone
+// KHUZUR LOBBY — the shared GameLobby configured for Khuzur, laid out like
+// every other game's. A hosted table starts as 2 v 2 with the 5-card deal and
+// its host reshapes it at the waiting table; a practice level opens the table
+// builder first. The CREDITS tab hosts and joins credit matches: everyone
 // stakes the same, and 1st place takes the pot.
 
 import React, { useMemo, useState } from "react";
 import GameLobby from "../../components/lobby/GameLobby";
-import TableBuilder from "../../components/khuzur/TableBuilder";
+import PracticeBuilder from "../../components/khuzur/PracticeBuilder";
 import { DEFAULT_BUILD, KHUZUR_ACCENT } from "../../components/khuzur/teams";
 
 const KHUZUR = {
@@ -25,9 +26,22 @@ const KHUZUR = {
   },
 };
 
+const tableOf = (build) => ({ perTeam: build.perTeam, teams: build.teams, handSize: build.handSize });
+const HOSTED = { table: tableOf(DEFAULT_BUILD) };
+
 export default function LobbyKhuzur() {
   const [build, setBuild] = useState(DEFAULT_BUILD);
-  const table = useMemo(() => ({ perTeam: build.perTeam, teams: build.teams, handSize: build.handSize }), [build.perTeam, build.teams, build.handSize]);
-  const game = useMemo(() => ({ ...KHUZUR, setup: { panel: <TableBuilder value={build} onChange={setBuild} />, values: { table } } }), [build, table]);
+  const game = useMemo(
+    () => ({
+      ...KHUZUR,
+      setup: {
+        values: HOSTED,
+        practice: ({ difficulty, onStart, onCancel }) => (
+          <PracticeBuilder difficulty={difficulty} value={build} onChange={setBuild} onStart={() => onStart({ table: tableOf(build) })} onCancel={onCancel} />
+        ),
+      },
+    }),
+    [build],
+  );
   return <GameLobby game={game} />;
 }

@@ -207,7 +207,8 @@ describe("MainMenu", () => {
     expect(screen.queryByText("SETTINGS")).not.toBeInTheDocument();
   });
 
-  it("has a Khuzur tile that opens its table builder", async () => {
+  it("has a Khuzur tile, as long as the others, that opens its lobby", async () => {
+    stats = { ...stats, lobbies: { ...stats.lobbies, khuzur: 3 } };
     const { container } = render(
       <MemoryRouter>
         <Routes>
@@ -217,7 +218,9 @@ describe("MainMenu", () => {
       </MemoryRouter>,
     );
     expect(screen.getByText("2-6 PLAYERS")).toBeInTheDocument();
-    expect(screen.getByText("Practice vs CPU")).toBeInTheDocument();
+    expect(screen.getByText("3 lobbies open")).toBeInTheDocument();
+    // Three lines at most, like every other tile's description.
+    expect(screen.getByText(/^Mongolia's classic/).textContent.length).toBeLessThanOrEqual(110);
     expect(container.querySelector(".joker-color")).not.toBeNull();
     await userEvent.click(screen.getByTestId("tile-khuzur"));
     expect(screen.getByText("KHUZUR LOBBY")).toBeInTheDocument();

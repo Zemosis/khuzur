@@ -4,7 +4,7 @@
 import React, { useEffect } from "react";
 import { Panel } from "../PixelUI";
 
-export default function Modal({ title, icon, deep = "#463a78", onClose, children }) {
+export default function Modal({ title, icon, deep = "#463a78", onClose, children, width = 440 }) {
   useEffect(() => {
     if (!onClose) return;
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -17,7 +17,7 @@ export default function Modal({ title, icon, deep = "#463a78", onClose, children
       style={{ backgroundColor: "rgba(10,7,18,0.82)" }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}
     >
-      <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-[440px]">
+      <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-h-full overflow-y-auto py-4" style={{ maxWidth: width }}>
         <Panel title={title} icon={icon} deep={deep}>
           <div className="flex flex-col gap-4 p-4">{children}</div>
         </Panel>
