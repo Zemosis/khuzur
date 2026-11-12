@@ -15,10 +15,13 @@
 // Nudging it back onto the grid can't reach inside a transformed plate, where
 // the browser rounds layout away before the transform. Squares are drawn
 // fresh wherever they land: at worst the whole face moves by a pixel, in one
-// piece.
+// piece. Each run of squares is its own <rect>: Chrome anti-aliases a big
+// combined path's edges even under crispEdges when it sits off the grid,
+// blending them with the plate behind into dark lines across the face;
+// rectangles it draws crisp.
 
 import React, { useEffect, useMemo, useState } from "react";
-import { GRID_SIZE, avatarPaths, snapAvatarSize } from "../utils/avatarConstants";
+import { GRID_SIZE, avatarRuns, snapAvatarSize } from "../utils/avatarConstants";
 
 function useDevicePixelRatio() {
   const [dpr, setDpr] = useState(() => (typeof window === "undefined" ? 1 : window.devicePixelRatio || 1));
@@ -35,7 +38,7 @@ function useDevicePixelRatio() {
 export default function CustomAvatarCanvas({ avatarData, size = 51, border = true }) {
   const dpr = useDevicePixelRatio();
   const { css } = snapAvatarSize(size, dpr);
-  const paths = useMemo(() => avatarPaths(avatarData), [avatarData]);
+  const runs = useMemo(() => avatarRuns(avatarData), [avatarData]);
 
   return (
     <svg
@@ -50,8 +53,8 @@ export default function CustomAvatarCanvas({ avatarData, size = 51, border = tru
         boxShadow: border ? "0 0 0 2px #0a0712, 2px 2px 0 2px #0a0712" : "none",
       }}
     >
-      {paths.map(({ color, d }) => (
-        <path key={color} d={d} fill={color} />
+      {runs.map(({ color, x, y, w }) => (
+        <rect key={`${x}-${y}`} x={x} y={y} width={w} height={1} fill={color} />
       ))}
     </svg>
   );

@@ -45,7 +45,8 @@ const square = { width: 36, height: 36, padding: 0 };
  * screens. kicker: the small line over the title (null for none).
  * match / round: omit either to leave its box out. signal: node for
  * the right side. rulesTone: { bg, deep, ink } for the RULES button.
- * onPanel / unread: the compact layout's sidebar button.
+ * onPanel / unread: the compact layout's sidebar button. extra: a node right
+ * of the title (Khuzur's turn clock), on every layout.
  */
 export function TableHeader({
   compact,
@@ -64,6 +65,7 @@ export function TableHeader({
   onSettings,
   onPanel,
   unread = 0,
+  extra = null,
 }) {
   const box = { backgroundColor: "#0a0712", border: "3px solid #1f1a3d" };
   return (
@@ -94,6 +96,7 @@ export function TableHeader({
                 R{round}
               </span>
             )}
+            {extra}
           </div>
         )}
       </div>
@@ -118,6 +121,7 @@ export function TableHeader({
               <div className="font-pixel-display text-sm text-glow-gold">{round}</div>
             </div>
           )}
+          {extra}
         </div>
       )}
 

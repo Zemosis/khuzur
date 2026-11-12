@@ -152,6 +152,14 @@ describe("leaderboard", () => {
     expect(within(items("Top 100")[0]).getByLabelText("Khuzur +300")).toBeInTheDocument();
   });
 
+  it("the header keeps one column per game, so no game wraps onto a second line", async () => {
+    await open({ top: [rowOf(1, "EVE", 1300, { sources: sources(0) })], me: null });
+    const header = screen.getAllByText("Khuzur").map((el) => el.closest('[class*="grid-cols"]')).find((el) => el && !el.closest("button"));
+    const games = [...header.children].filter((el) => /^(Thirteen|Muushig|Poker|Blackjack|Khuzur)$/i.test(el.textContent.trim())).length;
+    expect(games).toBe(5);
+    expect(header.className).toContain(`repeat(${games},104px)`);
+  });
+
   it("the leaderboard has a Blackjack column and the source breakdown lists Blackjack", async () => {
     const bj = rowOf(1, "EVE", 1500, { sources: { ...sources(0), blackjack: 500 } });
     await open({ top: [bj], me: null });

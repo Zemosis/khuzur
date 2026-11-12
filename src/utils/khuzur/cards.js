@@ -2,10 +2,15 @@
 // functions (docs/khuzur-rulebook.md §1, §5, §6). The engine and the CPU both
 // build on these; nothing here touches React, timers or sockets.
 //
-// Every card falls in one line, weakest first: plain cards by rank then suit,
-// then trumps by rank, then the gray joker, then the colored joker. A card
-// beats another only if it is strictly higher in that line, so twins (the
-// 7-card game's second deck) never beat each other.
+// Beating (rulebook §1): a plain card is beaten by a higher card of its own
+// suit, or by any trump; a trump only by a higher trump; every trump by the
+// gray joker, and the gray joker by the colored one, which nothing beats.
+// Twins (the 7-card game's second deck) never beat each other.
+//
+// cardPower puts every card in one line, weakest first (plain cards by rank
+// then suit, trumps, the gray joker, the colored joker): it sorts hands, ranks
+// the draw for the deal, and is the CPU's sense of a card's worth. It is not
+// what beats what.
 
 export const RANKS = ["7", "8", "9", "10", "J", "Q", "K", "A"];
 export const SUITS = ["♦", "♣", "♥", "♠"]; // lowest to highest
@@ -50,7 +55,13 @@ export function cardPower(card, trumpSuit) {
   return card.rankValue * SUITS.length + card.suitValue;
 }
 
-export const beats = (a, b, trumpSuit) => cardPower(a, trumpSuit) > cardPower(b, trumpSuit);
+/** Whether card `a` beats card `b` with `trumpSuit` trump (rulebook §1). */
+export function beats(a, b, trumpSuit) {
+  if (isJoker(a)) return !isJoker(b) || (a.joker === "color" && b.joker === "gray");
+  if (isJoker(b)) return false;
+  if (a.suit === b.suit) return a.rankValue > b.rankValue;
+  return a.suit === trumpSuit;
+}
 
 /**
  * 1, 3, 5 or 7 cards where every card has a partner of the same rank except
@@ -70,21 +81,37 @@ export function isValidLead(cards) {
 
 /**
  * The cards reordered so result[i] beats layer[i], or null if they can't
- * cover the layer. "Beats" is a threshold on one line, so pairing both sides
- * sorted weakest first finds a cover whenever one exists.
+ * cover the layer. The cards as given, if they already line up; otherwise any
+ * pairing that works.
  */
 export function coverAssignment(layer, cards, trumpSuit) {
   if (layer.length !== cards.length) return null;
-  const power = (card) => cardPower(card, trumpSuit);
-  const columns = layer.map((card, i) => i).sort((a, b) => power(layer[a]) - power(layer[b]));
-  const sorted = [...cards].sort((a, b) => power(a) - power(b));
-  const result = new Array(layer.length);
-  for (let k = 0; k < columns.length; k++) {
-    const col = columns[k];
-    if (power(sorted[k]) <= power(layer[col])) return null;
-    result[col] = sorted[k];
-  }
-  return result;
+  if (cards.every((card, i) => beats(card, layer[i], trumpSuit))) return [...cards];
+  return coverWith(layer, cards, trumpSuit);
+}
+
+/**
+ * One card from `pool` on each card of the layer, each beating the card it
+ * covers, in the layer's column order; null if the pool can't cover it. A
+ * matching found by augmenting paths (at most 7 columns), the pool's earlier
+ * cards tried first.
+ */
+export function coverWith(layer, pool, trumpSuit) {
+  if (pool.length < layer.length) return null;
+  const holder = new Array(layer.length).fill(-1); // column -> index into pool
+  const place = (k, tried) => {
+    for (let col = 0; col < layer.length; col++) {
+      if (tried[col] || !beats(pool[k], layer[col], trumpSuit)) continue;
+      tried[col] = true;
+      if (holder[col] < 0 || place(holder[col], tried)) {
+        holder[col] = k;
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let k = 0; k < pool.length; k++) place(k, new Array(layer.length).fill(false));
+  return holder.every((k) => k >= 0) ? holder.map((k) => pool[k]) : null;
 }
 
 /** A number in [0, 1) from the platform's cryptographic generator. */

@@ -43,6 +43,16 @@ describe("cheapestCover", () => {
     expect(idsOf(cheapestCover(cs("9♣ K♠"), cs("A♠ 10♣ 7♥"), "♥"))).toEqual(["10♣", "A♠"]);
   });
 
+  it("follows suit where it can and spends a trump only where it must", () => {
+    expect(idsOf(cheapestCover(cs("9♣ 10♦"), cs("8♥ J♣ Q♦ A♥"), "♥"))).toEqual(["J♣", "Q♦"]);
+    expect(idsOf(cheapestCover(cs("9♣ 10♦"), cs("8♥ J♣ 9♦ A♥"), "♥"))).toEqual(["J♣", "8♥"]);
+  });
+
+  it("finds a cover the greedy pick would miss", () => {
+    // 7♥ is the cheapest answer to both; it must go on K♠, the card only a trump beats.
+    expect(idsOf(cheapestCover(cs("8♣ K♠"), cs("7♥ 9♣"), "♥"))).toEqual(["9♣", "7♥"]);
+  });
+
   it("is null when the layer can't be covered", () => {
     expect(cheapestCover(cs("9♣ K♠"), cs("10♣ Q♠"), "♥")).toBeNull();
   });
@@ -123,7 +133,7 @@ describe("levels", () => {
   });
 
   it("EASY sometimes picks up a stack it could beat", () => {
-    const s = withLevel(lead(playState({ hands: ["9♣ 8♦ 7♦ 10♠ J♠", "K♠ 7♣ 8♣ 7♠ 8♠"] }), 0, ["9♣"]), "EASY");
+    const s = withLevel(lead(playState({ hands: ["9♣ 8♦ 7♦ 10♠ J♠", "K♣ 7♣ 8♣ 7♠ 8♠"] }), 0, ["9♣"]), "EASY");
     const types = new Set(Array.from({ length: 40 }, (_, i) => aiAction(s, seededRandom(i + 1)).type));
     expect(types).toEqual(new Set(["beat", "pickUp"]));
   });

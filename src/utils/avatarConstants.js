@@ -121,6 +121,28 @@ export function deserializeAvatar(data) {
  * avatar pixel is a whole number of canvas pixels — no seams, no uneven cells.
  */
 /**
+ * The avatar as runs of same-coloured squares, one per row segment:
+ * [{ color, x, y, w }] in grid cells. Drawn as plain rectangles, which the
+ * browser never anti-aliases with crispEdges (combined paths it sometimes
+ * does, blending their edges with whatever is behind into dark seams).
+ */
+export function avatarRuns(avatarData) {
+  const runs = [];
+  const pixels = avatarData?.pixels ?? [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    let c = 0;
+    while (c < GRID_SIZE) {
+      const color = pixels[r]?.[c];
+      let end = c + 1;
+      while (end < GRID_SIZE && pixels[r]?.[end] === color) end++;
+      if (color) runs.push({ color, x: c, y: r, w: end - c });
+      c = end;
+    }
+  }
+  return runs;
+}
+
+/**
  * The avatar as SVG paths, one per colour: [{ color, d }] in grid units (a
  * 17-wide viewBox). Each row's run of same-coloured cells is one rectangle.
  */

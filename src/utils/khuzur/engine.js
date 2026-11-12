@@ -298,7 +298,11 @@ export function lead(prev, seat, cardIds) {
   return state;
 }
 
-/** Cover every card of the top layer, one card each (rulebook §6). */
+/**
+ * Cover every card of the top layer, one card each (rulebook §6). cardIds[i]
+ * covers the top layer's card i when that pairing beats; otherwise any
+ * pairing of the same cards that beats is used.
+ */
 export function beat(prev, seat, cardIds) {
   expectTurn(prev, PHASES.PLAY, seat);
   if (!prev.stack) throw new Error("There's nothing to beat");

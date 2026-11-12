@@ -1,176 +1,269 @@
-// KHUZUR TABLE — the felt and everyone round it. Up to six seats, you at the
-// foot (your hand, under the table, is your seat) and the rest clockwise from
-// your left (utils/seatPosition). Each plate shows the face, the name, the
-// team colour, the cards held and a tag: DEALER, TURN, or a place once out.
+// KHUZUR TABLE — the felt and everyone round it, built like Muushig's (see
+// muushig/StadiumTable): a card room table with straight sides and round
+// ends, green felt in an oak rim. Up to six seats: you at the foot (your hand,
+// under the table, is your seat), the rest clockwise from your left
+// (utils/seatPosition), each plate (KhuzurSeat) just off the rim with their
+// cards face down on the felt in front of them.
 //
 // Across the middle of the felt, left to right: the draw pile with the
-// face-up trump tucked under it, the stack, the dead pile. `overlay` is drawn
-// over the felt (the draw for the deal).
+// face-up trump tucked sideways under it, the stack, the dead pile. A line
+// under the stack says what it's waiting for (and the trump and the decks).
+// The dealer button travels round the rim, and the rim glows toward the seat
+// on turn.
+//
+// The table keeps its shape whatever the space: a box of a fixed aspect
+// ratio, everything in it placed by percentages and sized to its width.
+// `layout` "compact" (phones) stands it up, the plates on the rim and no
+// cards in front of them.
 
-import React, { useRef } from "react";
-import { PixelAvatar, PixelCard } from "../PixelCard";
-import Suit from "../muushig/Suit";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { PixelCard } from "../PixelCard";
 import { CARD_RATIO } from "../../hooks/useTableMetrics";
 import { useElementWidth } from "../../hooks/useElementWidth";
-import { INK } from "../pixelTokens";
-import { decksOf } from "./teams";
+import { DealerButton } from "../poker/OvalTable";
+import { stadiumPoint } from "../poker/tableShape";
+import { fractionOf, plateAt, turnAt } from "../muushig/stadiumGeometry";
+import KhuzurFan from "./KhuzurFan";
+import { EmptySpot, Felt, Pile, Spot } from "../muushig/StadiumTable";
+import { KHUZUR_GEOMETRY, KHUZUR_SEAT_NAMES, STACK_PEEK, stackPeeks, stackRows } from "./khuzurGeometry";
 import StackColumns from "./StackColumns";
 import { toPixelCardProps } from "./cardProps";
 
-// Where each seat's plate sits, in % of the table box.
-const PLATE_AT = {
-  bottom: [50, 100],
-  bottomLeft: [5, 74],
-  left: [3, 46],
-  topLeft: [17, 6],
-  top: [50, 3],
-  topRight: [83, 6],
-  right: [97, 46],
-  bottomRight: [95, 74],
-};
-// Which way a seat lies from the middle, for cards flying in from it.
-const DIRECTION = {
-  bottom: [0, 1],
-  bottomLeft: [-1, 0.6],
-  left: [-1, 0],
-  topLeft: [-0.8, -1],
-  top: [0, -1],
-  topRight: [0.8, -1],
-  right: [1, 0],
-  bottomRight: [1, 0.6],
-};
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-function Chip({ label, bg, fg = INK, blink = false }) {
-  return (
-    <span className={`font-pixel-display text-[9px] leading-none px-1.5 py-1 whitespace-nowrap ${blink ? "blink" : ""}`} style={{ backgroundColor: bg, color: fg, boxShadow: "0 0 0 2px #0a0712" }}>
-      {label}
-    </span>
-  );
+const ROOMY_PX = 858; // a table at least this wide has room for the felt line's long form
+
+/** The space the table has, { w, h } px, kept current. */
+function useBoxSize(ref) {
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    setBox({ w: el.offsetWidth, h: el.offsetHeight });
+    const ro = new ResizeObserver(([entry]) => setBox({ w: entry.contentRect.width, h: entry.contentRect.height }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return box;
 }
 
-function Plate({ name, face, color, count, chips, active, out, compact }) {
-  return (
-    <div
-      className={`relative flex items-center ${compact ? "flex-col gap-1 px-1.5 pt-2.5 pb-1.5" : "gap-2 p-2 pt-3"}`}
-      style={{
-        width: compact ? 78 : 160,
-        backgroundColor: active ? "#241a3a" : "#1f1a3d",
-        border: `3px solid ${active ? "#f4c430" : "#2a234d"}`,
-        boxShadow: `inset 0 -4px 0 ${color}, 3px 3px 0 #0a0712${active ? ", 0 0 16px rgba(244,196,48,0.45)" : ""}`,
-        opacity: out ? 0.6 : 1,
-      }}
-    >
-      {chips.length > 0 && (
-        <span className="absolute -top-3 inset-x-1 flex justify-end gap-1 pointer-events-none">
-          {chips.map((chip) => (
-            <Chip key={chip.label} {...chip} />
-          ))}
-        </span>
-      )}
-      <PixelAvatar variant={face.variant} customAvatarData={face.customAvatarData} size={compact ? 20 : 36} active={active} eliminated={out} />
-      <div className={`min-w-0 text-center ${compact ? "w-full" : "flex-1"}`}>
-        <div className="font-pixel-display text-[9px] truncate" style={{ color: "#ead8b1" }} title={name}>
-          {name}
-        </div>
-        <div className="font-pixel-body text-[18px] leading-none mt-1" style={{ color: "#c8b890" }}>
-          {out ? "OUT" : `${count} card${count === 1 ? "" : "s"}`}
-        </div>
-      </div>
-    </div>
-  );
+/**
+ * The big-screen shape that gives the bigger felt in a w × h space: the
+ * longer `wide` table when the space is wide enough for it to win.
+ */
+function pickShape(w, h) {
+  if (!w || !h) return "full";
+  const felt = (key) => {
+    const g = KHUZUR_GEOMETRY[key];
+    const scale = Math.min(w / g.width, h / g.height);
+    return scale * scale * (g.felt.x1 - g.felt.x0) * (g.felt.y1 - g.felt.y0);
+  };
+  // Plates keep their size: shrunk too far, the wide table's three top seats would touch.
+  const wideScale = Math.min(w / KHUZUR_GEOMETRY.wide.width, h / KHUZUR_GEOMETRY.wide.height);
+  return wideScale >= 0.6 && felt("wide") > felt("full") * 1.08 ? "wide" : "full";
 }
+/** Marks the dead pile's card box, where swept stacks fly to (see CardFlights). */
+const markDead = (el) => el?.setAttribute("data-kz-pile", "dead");
 
-function Pile({ count, cw, label, faceDown = true, stacked = count > 0, children }) {
+/**
+ * The draw pile: a straight face-down stack with the trump card lying
+ * sideways under it, sticking out to the right. Once the pile is gone the
+ * trump lies there alone until someone draws it. count: the pile's cards and
+ * the trump (it's drawn last, so it counts).
+ */
+function DrawPile({ count, trump, cw }) {
   const ch = Math.round(cw * CARD_RATIO);
+  const pile = Math.max(0, count - (trump ? 1 : 0));
+  const layers = Math.min(pile, 3);
+  const peek = Math.round(ch * 0.42); // how far the trump sticks out
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      <div className="relative" style={{ width: cw + 8, height: ch + 6 }}>
-        {children}
-        {stacked ? (
-          <div className="absolute" style={{ left: 2, top: 0 }}>
-            <PixelCard faceDown={faceDown} width={cw} />
-          </div>
+    // The caption hangs under the pile, out of the flow: the pile's own box is centred on its
+    // spot, exactly where TrumpReveal lays the deck, so the handover doesn't jump.
+    <div className="relative" aria-label={`DRAW pile: ${count}`}>
+      <div className="relative" style={{ width: cw, height: ch }} data-kz-pile="draw">
+        {count === 0 ? (
+          <EmptySpot w={cw} h={ch}>
+            EMPTY
+          </EmptySpot>
         ) : (
-          <div className="absolute" style={{ left: 2, top: 0, width: cw, height: ch, border: "3px dashed rgba(234,216,177,0.25)" }} />
+          <>
+            {trump && (
+              <div
+                data-testid="trump-card"
+                data-kz-pile="trump"
+                className="absolute left-1/2 top-1/2"
+                style={{ transform: `translate(-50%, -50%) translate(${peek}px, 0) rotate(90deg)`, filter: "drop-shadow(0 0 8px rgba(244,196,48,0.45)) drop-shadow(2px 3px 0 rgba(10,7,18,0.5))" }}
+                title={trump.joker ? "Trump card" : `Trump card: ${trump.rank}${trump.suit}`}
+              >
+                <PixelCard {...toPixelCardProps(trump)} width={cw} />
+              </div>
+            )}
+            {Array.from({ length: layers }, (_, i) => (
+              <div key={i} className="absolute inset-0" style={{ transform: `translate(${-i * 2}px, ${-i * 2}px)`, filter: "drop-shadow(2px 3px 0 rgba(10,7,18,0.5))" }}>
+                <PixelCard faceDown width={cw} />
+              </div>
+            ))}
+          </>
         )}
       </div>
-      <div className="font-pixel-display text-[9px] leading-none text-bone/80">
-        {label} {count}
+      <div className="absolute left-1/2 font-pixel-display text-[8px] tracking-widest leading-none whitespace-nowrap" style={{ top: "100%", marginTop: 8, transform: "translateX(-50%)", color: "#5fd4d6" }}>
+        {`DRAW ${count}`}
       </div>
     </div>
   );
 }
 
 /**
- * seats: [{ seat, position, name, face, color, count, chips, active, out }]
- * (not your own). game: the engine state. drawing: the draw for the deal is
+ * game: the engine state (its stack, piles and trump).
+ * seats: { [position]: { plate: node (a KhuzurSeat), cards, out } } — not yours.
+ * colorOf(seat): a seat's team colour. positionOfSeat(seat): where it sits.
+ * dealing: the deal is on: the piles and the stack wait for it, each seat's
+ * cards (seats[].cards) count up as they land.
+ * label({ roomy }): the line under the stack; roomy: there's room for its
+ * longer form (a big table). drawing: the draw for the deal is
  * on, so the piles and the stack stay hidden under it.
+ * overlay({ cardWidth, spots, pileY, labelY, countBelow, pileW, drawSpot }):
+ * drawn over the felt (the draw for the deal, the deal, the trump reveal);
+ * drawSpot is the draw pile's centre, px from the felt's.
+ * stackHidden: ids of stack cards still flying in from your hand.
+ * dealerSeat / turnSeat: positions for the dealer button and the rim glow.
+ * banner: drawn over everything (the YOUR TURN banner).
+ * onShape(shape): told which shape the table took ("full", "wide" or
+ * "compact"), so the page turns flown cards to match.
+ * staged / onUnstage / onStagedMove / onStagedDrop / dropCol / targets: the
+ * beat being placed (see StackColumns).
  */
-export default function KhuzurTable({ game, seats, colorOf, positionOfSeat, compact, overlay, drawing = false }) {
-  const boxRef = useRef(null);
-  const width = useElementWidth(boxRef);
-  const feltW = width * 0.74;
-  const pileW = Math.max(30, Math.min(72, Math.round(feltW * 0.07)));
-  const columns = game.stack?.layers[0].length ?? 1;
-  const stackW = Math.max(26, Math.min(64, Math.floor((feltW * 0.56) / columns) - 8));
-  const fromOf = (seat) => {
-    const [dx, dy] = DIRECTION[positionOfSeat(seat)] ?? [0, 0];
-    return [Math.round(dx * feltW * 0.3), Math.round(dy * feltW * 0.18)];
+export default function KhuzurTable({ layout = "full", game, seats = {}, colorOf, positionOfSeat, label = null, drawing = false, dealing = false, overlay, dealerSeat = null, turnSeat = null, banner = null, stackHidden = null, onShape, staged = null, onUnstage, onStagedMove, onStagedDrop, dropCol = null, targets = false }) {
+  const spaceRef = useRef(null);
+  const space = useBoxSize(spaceRef);
+  const shape = layout === "compact" ? "compact" : pickShape(space.w, space.h);
+  useEffect(() => onShape?.(shape), [shape, onShape]);
+  const geo = KHUZUR_GEOMETRY[shape] ?? KHUZUR_GEOMETRY.full;
+  const rootRef = useRef(null);
+  const width = useElementWidth(rootRef);
+  const scale = width ? clamp(width / geo.width, 0.5, 1.5) : 1;
+  const size = Object.fromEntries(Object.entries(geo.sizes).map(([k, v]) => [k, Math.round(v * scale)]));
+  const ratio = geo.width / geo.height;
+  const feltW = geo.felt.x1 - geo.felt.x0;
+  const feltH = geo.felt.y1 - geo.felt.y0;
+  const cx = (geo.felt.x0 + geo.felt.x1) / 2;
+  const cy = (geo.felt.y0 + geo.felt.y1) / 2;
+  const fromCentre = ({ x, y }, [ox, oy] = [cx, cy]) => [Math.round((x - ox) * scale), Math.round((y - oy) * scale)];
+
+  // The stack fits its box: narrower cards for more columns, a second row for a lead of 5 or 7.
+  // However many layers land, the pile keeps its size (see StackColumns), so a beat never
+  // shrinks or moves the cards.
+  const layers = game.stack?.layers ?? [];
+  const columns = layers[0]?.length ?? 1;
+  const rows = stackRows(columns);
+  const perRow = rows[0].length;
+  const boxW = geo.stackBox[0] * feltW * scale;
+  const boxH = geo.stackBox[1] * feltH * scale;
+  const fitW = (boxW - (perRow - 1) * Math.max(6, size.stack * 0.16)) / perRow;
+  const fitH = (boxH - (rows.length - 1) * 6) / (rows.length * CARD_RATIO * (1 + STACK_PEEK * stackPeeks(columns)));
+  const stackW = Math.max(22, Math.floor(Math.min(size.stack, fitW, fitH)));
+  const stackAt = [geo.felt.x0 + geo.stackAt[0] * feltW, geo.felt.y0 + geo.stackAt[1] * feltH];
+  const entry = Object.fromEntries(KHUZUR_SEAT_NAMES.map((s) => [s, fromCentre(stadiumPoint(geo.felt, geo.seats[s].t, 10), stackAt)]));
+  const fromOf = (seat) => entry[positionOfSeat(seat)] ?? entry.bottom;
+
+  // The draw for the deal: where each seat's card lies, px from the felt's centre.
+  const spots = Object.fromEntries(
+    KHUZUR_SEAT_NAMES.map((s) => [s, geo.drawSpots ? geo.drawSpots[s].map((v) => Math.round(v * scale)) : fromCentre(stadiumPoint(geo.felt, geo.seats[s].t, geo.seats[s].draw))]),
+  );
+  // On a big table the pile is a little smaller, its caption under it, every drawn card round it.
+  const drawCw = geo.drawSpots ? Math.round(size.stack * 0.85) : size.stack;
+  const drawLayout =
+    layout === "compact"
+      ? { pileY: 0, labelY: -Math.round((feltH * scale) / 2 - 44 * scale), countBelow: true }
+      : { pileY: -Math.round(8 * scale), labelY: Math.round(-8 * scale + drawCw * CARD_RATIO * 0.5 + 20) };
+  const feltBox = {
+    left: `${(geo.felt.x0 / geo.width) * 100}%`,
+    top: `${(geo.felt.y0 / geo.height) * 100}%`,
+    width: `${(feltW / geo.width) * 100}%`,
+    height: `${(feltH / geo.height) * 100}%`,
   };
-  const trumpCard = game.trumpCard;
 
   return (
-    <div ref={boxRef} className="relative w-full" style={{ aspectRatio: compact ? "1.25 / 1" : "2.2 / 1", maxHeight: "100%" }}>
-      <div
-        className="absolute"
-        style={{
-          left: "13%",
-          right: "13%",
-          top: "13%",
-          bottom: "8%",
-          borderRadius: "999px",
-          background: "radial-gradient(ellipse at center, #2f7a4c 0%, #23603b 70%, #1b4d2f 100%)",
-          border: "10px solid #7a5a2b",
-          boxShadow: `0 0 0 4px ${INK}, inset 0 0 0 3px #1a3a2c, 0 10px 0 rgba(10,7,18,0.5)`,
-        }}
-      >
-        <div className="absolute inset-0 flex items-center justify-center gap-[4%]" style={{ visibility: drawing ? "hidden" : "visible" }}>
-          {/* The face-up trump is the pile's last card, so it counts. */}
-          <Pile count={game.drawPile.length + (trumpCard ? 1 : 0)} stacked={game.drawPile.length > 0} cw={pileW} label="DRAW">
-            {trumpCard && (
-              <div className="absolute" style={{ left: pileW * 0.5, top: pileW * 0.35, transform: "rotate(90deg)", transformOrigin: "center" }} data-testid="trump-card">
-                <PixelCard {...toPixelCardProps(trumpCard)} width={pileW} />
-              </div>
-            )}
-          </Pile>
-          <div className="flex flex-col items-center gap-2 min-w-[30%]">
-            {game.trumpSuit && (
-              <div className="flex items-center gap-1.5">
-                <div className="font-pixel-display text-[9px] leading-none px-2 py-1.5" style={{ backgroundColor: "#0a0712", color: "#ead8b1" }}>
-                  TRUMP <Suit suit={game.trumpSuit} size={12} />
-                </div>
-                {game.table && (
-                  <div className="font-pixel-display text-[9px] leading-none px-2 py-1.5" style={{ backgroundColor: "#0a0712", color: "#ead8b1" }} data-testid="decks">
-                    {decksOf(game.table)}
-                  </div>
+    <div className="relative w-full h-full" style={{ minHeight: geo.minHeight }}>
+      <div ref={spaceRef} className="absolute" style={{ inset: "14px 0 6px", containerType: "size" }}>
+        <div
+          ref={rootRef}
+          data-khuzur-table
+          data-layout={layout}
+          className="absolute left-1/2 top-1/2"
+          style={{ width: `min(100cqw, calc(100cqh * ${ratio}))`, height: `min(100cqh, calc(100cqw / ${ratio}))`, transform: "translate(-50%, -50%)" }}
+        >
+          <Felt geo={geo} turnSeat={turnSeat} />
+
+          {!drawing && !dealing && (
+            <>
+              <Spot geo={geo} at={geo.drawAt}>
+                <DrawPile count={game.drawPile.length + (game.trumpCard ? 1 : 0)} trump={game.trumpCard} cw={size.pile} />
+              </Spot>
+              <Spot geo={geo} at={geo.deadAt} className="kz-fade">
+                <Pile label="DEAD" count={game.deadPile.length} cw={size.pile} dead boxRef={markDead} />
+              </Spot>
+              <Spot geo={geo} at={geo.stackAt} z="z-[14]" className="kz-fade">
+                {layers.length ? (
+                  <StackColumns
+                    layers={layers}
+                    owners={game.stack.owners}
+                    cardW={stackW}
+                    colorOf={colorOf}
+                    fromOf={fromOf}
+                    hidden={stackHidden}
+                    staged={staged}
+                    stagedColor={staged ? colorOf(game.turn) : null}
+                    onUnstage={onUnstage}
+                    onStagedMove={onStagedMove}
+                    onStagedDrop={onStagedDrop}
+                    dropCol={dropCol}
+                    targets={targets}
+                  />
+                ) : (
+                  <EmptySpot w={size.stack} h={Math.round(size.stack * CARD_RATIO)}>
+                    LEAD
+                  </EmptySpot>
                 )}
-              </div>
-            )}
-            <StackColumns layers={game.stack?.layers} owners={game.stack?.owners} cardW={stackW} colorOf={colorOf} fromOf={fromOf} />
+              </Spot>
+              {label && (
+                <Spot geo={geo} at={geo.labelAt} z="z-[13]" className="kz-fade">
+                  {label({ roomy: layout === "full" && scale * geo.width >= ROOMY_PX })}
+                </Spot>
+              )}
+            </>
+          )}
+
+          {KHUZUR_SEAT_NAMES.map((name) => {
+            const s = seats[name];
+            const at = geo.seats[name];
+            if (!s || name === "bottom") return null;
+            return (
+              <React.Fragment key={name}>
+                {at.fan ? (
+                  !drawing && (
+                    <div className="absolute z-[16]" style={{ ...fractionOf(geo, stadiumPoint(geo.felt, at.t, at.fan)), transform: "translate(-50%, -50%)" }}>
+                      <KhuzurFan seat={name} count={s.cards} cardW={size.fan} turn={turnAt(geo, at.t)} hidden={s.out || !s.cards} />
+                    </div>
+                  )
+                ) : (
+                  // No cards shown in front of the seat: dealt and drawn cards fly to the rim by its plate.
+                  <div data-deal-seat={name} data-card-w={size.fan} className="absolute w-px h-px" style={fractionOf(geo, stadiumPoint(geo.felt, at.t, 14))} />
+                )}
+                <div className="absolute z-[25]" style={plateAt(geo, at.t, width)}>
+                  {s.plate}
+                </div>
+              </React.Fragment>
+            );
+          })}
+          {dealerSeat && <DealerButton geo={geo} t={geo.seats[dealerSeat].t + geo.seats[dealerSeat].button} seat={dealerSeat} size={size.button} />}
+
+          <div className="absolute z-30 pointer-events-none" style={feltBox}>
+            {overlay?.({ cardWidth: size.stack, drawCw, spots, ...drawLayout, pileW: size.pile, drawSpot: [Math.round((geo.drawAt[0] - 0.5) * feltW * scale), Math.round((geo.drawAt[1] - 0.5) * feltH * scale)] })}
           </div>
-          <Pile count={game.deadPile.length} cw={pileW} label="DEAD" />
+          {banner}
         </div>
-        {overlay && <div className="absolute inset-0 pointer-events-none">{overlay({ feltW, feltH: feltW * (compact ? 0.62 : 0.4), cardW: pileW })}</div>}
       </div>
-      {seats.map((s) => {
-        const [x, y] = PLATE_AT[s.position] ?? PLATE_AT.top;
-        const half = (compact ? 78 : 160) / 2 + 4; // keeps the plate on screen
-        return (
-          <div key={s.seat} className="absolute z-20" style={{ left: `clamp(${half}px, ${x}%, calc(100% - ${half}px))`, top: `${y}%`, transform: "translate(-50%, -50%)" }} data-seat={s.seat}>
-            <Plate {...s} compact={compact} />
-          </div>
-        );
-      })}
     </div>
   );
 }

@@ -37,7 +37,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const pct = (f) => `${f * 100}%`;
 const baseName = (name = "") => name.split(" #")[0];
 
-function Label({ children, color = "rgba(234,216,177,0.55)" }) {
+export function Label({ children, color = "rgba(234,216,177,0.55)" }) {
   return (
     <div className="font-pixel-display text-[8px] tracking-widest leading-none whitespace-nowrap text-center" style={{ color }}>
       {children}
@@ -45,7 +45,7 @@ function Label({ children, color = "rgba(234,216,177,0.55)" }) {
   );
 }
 
-function EmptySpot({ w, h, children }) {
+export function EmptySpot({ w, h, children }) {
   return (
     <div
       className="flex items-center justify-center text-center font-pixel-display text-[9px] leading-tight px-1"
@@ -57,16 +57,16 @@ function EmptySpot({ w, h, children }) {
 }
 
 /** Something lying on the felt at `at` ([x, y], fractions of the felt), centred there. */
-function Spot({ geo, at, z = "z-[12]", children }) {
+export function Spot({ geo, at, z = "z-[12]", className = "", children }) {
   return (
-    <div className={`absolute ${z}`} style={{ ...onFelt(geo, at), transform: "translate(-50%, -50%)" }}>
+    <div className={`absolute ${z} ${className}`} style={{ ...onFelt(geo, at), transform: "translate(-50%, -50%)" }}>
       {children}
     </div>
   );
 }
 
 /** The draw or dead pile: a straight face-down stack (the dead one darker), its name and count under it. */
-function Pile({ label, count, cw, dead = false, boxRef }) {
+export function Pile({ label, count, cw, dead = false, boxRef }) {
   const ch = Math.round(cw * CARD_RATIO);
   const layers = Math.min(count, 3);
   return (
@@ -233,7 +233,7 @@ function TrickStack({ stack, cw, entry }) {
  * the pixel look. turnT: where round the rim the seat on turn sits; a gold
  * glow there, kept inside the felt, slides round as the turn passes.
  */
-function Felt({ geo, turnSeat }) {
+export function Felt({ geo, turnSeat }) {
   const id = useId().replace(/:/g, "");
   const { felt } = geo;
   const glow = turnSeat ? stadiumPoint(felt, geo.seats[turnSeat].t) : null;

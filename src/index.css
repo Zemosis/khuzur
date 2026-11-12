@@ -149,6 +149,11 @@ html, body, #root { height: 100%; }
   cursor: not-allowed;
   transform: none;
 }
+/* Waiting on you, not unavailable (Khuzur's BEAT before every card is covered): it stays
+   bright enough to read as the move to make. */
+.pixel-btn.is-waiting:disabled {
+  opacity: 0.85;
+}
 /* Working, not unavailable (a claim going through): full color, its loader readable. */
 .pixel-btn.is-busy:disabled {
   opacity: 1;
@@ -384,8 +389,10 @@ html, body, #root { height: 100%; }
 .pixel-card.small .center-suit { font-size: 14px; }
 .pixel-card.sized .center-suit { font-size: var(--center-fs); }
 
-/* Jokers (Khuzur): JOKER spelled down each corner, a pixel jester in the
-   middle (components/JokerFace.jsx). */
+/* Jokers (Khuzur): JOKER spelled down each corner and a framed pixel scene in
+   the middle (components/JokerFace.jsx): the gray joker a moonlit Pierrot on
+   silver card, the colored joker a harlequin on gold card, each with a foil
+   shine sweeping across its scene now and then. */
 .pixel-card .joker-word {
   display: flex;
   flex-direction: column;
@@ -393,13 +400,53 @@ html, body, #root { height: 100%; }
   font-size: 0.8em;
   line-height: 1.05;
 }
-.pixel-card .joker-jester {
-  width: 58%;
+.pixel-card .joker-art {
+  position: relative;
+  display: block;
+  width: 62%;
+  overflow: hidden;
+  box-shadow: 1px 2px 0 rgba(26, 16, 36, 0.35);
+}
+.pixel-card .joker-art svg {
+  display: block;
+  width: 100%;
   height: auto;
+}
+.pixel-card.joker-gray {
+  background: linear-gradient(180deg, #f1f2f7 0%, #c9ccd8 100%);
+  box-shadow:
+    inset 0 0 0 1px #a4a7b8,
+    inset 0 3px 0 0 #ffffff,
+    2px 2px 0 #1a1024;
 }
 .pixel-card.joker-color {
   background: linear-gradient(180deg, #fff3d0 0%, #f0d9a8 100%);
+  box-shadow:
+    inset 0 0 0 2px #f4c430,
+    inset 0 3px 0 0 #fff7d8,
+    2px 2px 0 #1a1024;
 }
+@keyframes joker-foil {
+  0%, 62% { transform: translateX(-130%) skewX(-20deg); }
+  100% { transform: translateX(230%) skewX(-20deg); }
+}
+.pixel-card.joker-color .joker-art::after,
+.pixel-card.joker-gray .joker-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 246, 210, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
+  animation: joker-foil 4.2s ease-in-out infinite;
+  pointer-events: none;
+}
+/* The gray joker's shine is cool silver, and out of step with the colored one's. */
+.pixel-card.joker-gray .joker-art::after {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(226, 232, 255, 0.5) 50%, rgba(255, 255, 255, 0) 100%);
+  animation-delay: -2.1s;
+}
+html[data-motion="reduced"] .pixel-card.joker-color .joker-art::after,
+html[data-motion="reduced"] .pixel-card.joker-gray .joker-art::after { animation: none; display: none; }
 
 /* Khuzur: a card that just landed on the stack slides in from its owner's
    side of the table (components/khuzur/StackColumns.jsx). */
@@ -407,8 +454,36 @@ html, body, #root { height: 100%; }
   from { transform: translate(var(--from-x, 0), var(--from-y, 0)); opacity: 0; }
   to { transform: translate(0, 0); opacity: 1; }
 }
-.kz-land { animation: kz-land 260ms ease-out; }
+.kz-land { animation: kz-land 520ms cubic-bezier(0.22, 0.8, 0.3, 1); }
 html[data-motion="reduced"] .kz-land { animation: none; }
+/* What the table shows once play starts fades in, rather than popping in. */
+@keyframes kz-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.kz-fade { animation: kz-fade 400ms ease-out; }
+html[data-motion="reduced"] .kz-fade { animation: none; }
+/* The layer just played glows a moment, so you see what changed. */
+@keyframes kz-fresh {
+  0%, 60% { filter: drop-shadow(0 0 7px rgba(244, 196, 48, 0.95)) drop-shadow(0 0 2px #f4c430); }
+  100% { filter: none; }
+}
+.kz-fresh { animation: kz-fresh 2200ms ease-out forwards; }
+html[data-motion="reduced"] .kz-fresh { animation: none; filter: drop-shadow(0 0 2px #f4c430); }
+/* Where a dragged card would land: the top card it would beat. */
+@keyframes kz-target {
+  0%, 100% { box-shadow: 0 0 0 3px #f4c430, 0 0 12px 2px rgba(244, 196, 48, 0.6); }
+  50% { box-shadow: 0 0 0 3px #f4c430, 0 0 4px 1px rgba(244, 196, 48, 0.3); }
+}
+.kz-target { animation: kz-target 900ms ease-in-out infinite; }
+html[data-motion="reduced"] .kz-target { animation: none; box-shadow: 0 0 0 3px #f4c430; }
+/* A card coming into your Khuzur hand rises into place (its own transform holds its slot in the fan). */
+@keyframes kz-rise {
+  from { translate: 0 40px; opacity: 0; }
+  to { translate: 0 0; opacity: 1; }
+}
+.kz-rise { animation: kz-rise 280ms ease-out; }
+html[data-motion="reduced"] .kz-rise { animation: none; }
 
 .suit-red { color: #c0203a; }
 .suit-black { color: #1a1024; }

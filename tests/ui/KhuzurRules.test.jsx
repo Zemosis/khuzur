@@ -47,11 +47,11 @@ describe("KhuzurRules", () => {
     expect(screen.getAllByText("EASY").length).toBeGreaterThan(0);
   });
 
-  it("states the deck sizes and the 45-second online turn", () => {
+  it("states the deck sizes and the 2-minute online turn", () => {
     render(<KhuzurRules onClose={() => {}} />);
     expect(screen.getAllByText(/34 cards/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/66 cards/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/45 seconds/)).toBeInTheDocument();
+    expect(screen.getByText(/2 minutes/)).toBeInTheDocument();
   });
 });
 

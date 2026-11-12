@@ -28,27 +28,31 @@ describe("createDeck", () => {
   });
 });
 
-describe("card order (trump ♥)", () => {
+describe("beating (trump ♥)", () => {
   const T = "♥";
   it.each([
-    ["8♦", "7♠", true], // a higher rank wins whatever the suit
-    ["9♠", "9♣", true], // same rank: the higher suit wins
-    ["9♣", "9♠", false],
-    ["9♣", "9♦", true], // ♦ is the lowest suit
+    ["9♠", "8♠", true], // a higher card of the same suit
+    ["8♦", "7♠", false], // a higher rank of another suit doesn't beat
+    ["9♠", "9♣", false], // nor does the same rank in another suit
+    ["A♣", "7♦", false],
+    ["7♠", "8♠", false],
     ["7♥", "A♠", true], // any trump beats any plain card
-    ["8♥", "7♥", true],
+    ["8♥", "7♥", true], // a trump only by a higher trump
+    ["7♥", "8♥", false],
     ["A♠", "7♥", false],
     ["GJ", "A♥", true], // the gray joker beats every trump
+    ["GJ", "7♣", true],
     ["CJ", "GJ", true],
     ["GJ", "CJ", false],
     ["A♥", "GJ", false],
+    ["A♠", "GJ", false],
     ["J♠:2", "J♠", false], // twins can't beat each other
     ["8♥:2", "8♥", false],
   ])("%s beats %s: %s", (a, b, expected) => {
     expect(beats(c(a), c(b), T)).toBe(expected);
   });
 
-  it("puts plain cards, then trumps, then the gray and colored joker in one line", () => {
+  it("ranks plain cards, then trumps, then the gray and colored joker in one line (sorting, the draw for the deal)", () => {
     expect(cardPower(c("7♦"), T)).toBe(0);
     expect(cardPower(c("A♠"), T)).toBe(31);
     expect(cardPower(c("7♥"), T)).toBe(32);
@@ -105,6 +109,14 @@ describe("coverAssignment", () => {
     expect(idsOf(coverAssignment(cs("K♠ 9♣ 7♥"), cs("8♥ A♠ 10♣"), "♥"))).toEqual(["A♠", "10♣", "8♥"]);
   });
 
+  it("keeps the order given when it already beats", () => {
+    expect(idsOf(coverAssignment(cs("9♣ K♠"), cs("7♥ A♠"), "♥"))).toEqual(["7♥", "A♠"]);
+  });
+
+  it("pairs by suit: a trump goes where no plain card can", () => {
+    expect(idsOf(coverAssignment(cs("9♣ 10♦"), cs("8♥ J♣"), "♥"))).toEqual(["J♣", "8♥"]);
+  });
+
   it("is null when the counts differ", () => {
     expect(coverAssignment(cs("9♣ K♠"), cs("A♠"), "♥")).toBeNull();
   });
@@ -113,5 +125,6 @@ describe("coverAssignment", () => {
     expect(coverAssignment(cs("K♠"), cs("K♠:2"), "♥")).toBeNull();
     expect(coverAssignment(cs("9♣ K♠"), cs("10♣ Q♠"), "♥")).toBeNull();
     expect(coverAssignment(cs("CJ"), cs("GJ"), "♥")).toBeNull();
+    expect(coverAssignment(cs("9♣"), cs("10♦"), "♥")).toBeNull();
   });
 });

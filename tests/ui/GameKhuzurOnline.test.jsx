@@ -46,7 +46,10 @@ function dealt(turn = ME, over = {}) {
   return { ...s, turn, ...over };
 }
 /** The server's view for seat ME, with a game for the clock and votes. */
-const view = (s, { turnMsLeft = null, votes = {} } = {}) => ({ ...khuzurView(s, ME, { turnMsLeft: () => turnMsLeft, voteView: () => votes }), amHost: false });
+const view = (s, { turnMsLeft = null, votes = {}, staged = null } = {}) => ({
+  ...khuzurView(s, ME, { turnMsLeft: () => turnMsLeft, voteView: () => votes, stagedView: () => staged }),
+  amHost: false,
+});
 
 const waiting = (over = {}) => ({
   lobbyId: LOBBY,
@@ -138,13 +141,12 @@ describe("the table", () => {
     expect(screen.getByText(/ANN leads/)).toBeInTheDocument();
   });
 
-  it("the match line and the felt say how many decks the match is played with", async () => {
+  it("the felt says how many cards are dealt and how many decks the match is played with", async () => {
     openTable();
     await act(async () => {});
     serverSends("khuzur_state", view(dealt(ME)));
-    expect(screen.getByText("5-CARD GAME · 1 DECK")).toBeInTheDocument();
-    // On the felt too, beside the trump, where small screens see it.
-    expect(screen.getByTestId("decks")).toHaveTextContent("1 DECK");
+    // On the felt, beside the trump.
+    expect(screen.getByTestId("decks")).toHaveTextContent("5 CARDS · 1 DECK");
   });
 
   it("shows the turn clock", async () => {
@@ -185,5 +187,42 @@ describe("the table", () => {
     const draw = { ...createMatch({ players, table: T2v2, rng: seededRandom(4) }), turn: ME, drawers: [ME, 3, 0, 1] };
     serverSends("khuzur_state", view(draw));
     expect(screen.getByRole("button", { name: "TAKE" })).toBeInTheDocument();
+  });
+});
+
+describe("placing a beat", () => {
+  /** Seat `turn` must beat 9♣ K♠ (trump ♥); you hold `mine`. */
+  const facing = (turn, mine) => {
+    const s = dealt(turn);
+    return {
+      ...s,
+      trumpSuit: "♥",
+      players: s.players.map((p, i) => (i === ME ? { ...p, hand: cs(mine) } : p)),
+      stack: { leader: 0, layers: [cs("9♣ K♠")], owners: [(turn + 3) % 4], pending: [turn] },
+    };
+  };
+
+  it("tells the table which top cards you've covered, never which cards, and BEAT sends them in column order", async () => {
+    openTable();
+    await act(async () => {});
+    serverSends("khuzur_state", view(facing(ME, "10♣ 7♥ 8♦ 7♠ J♦")));
+    fakeSocket.emit.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: "7♥" }));
+    expect(fakeSocket.emit).toHaveBeenCalledWith("khuzur_move", { lobbyId: LOBBY, move: { type: "stage", cols: [1] } });
+    await userEvent.click(screen.getByRole("button", { name: "10♣" }));
+    expect(fakeSocket.emit).toHaveBeenLastCalledWith("khuzur_move", { lobbyId: LOBBY, move: { type: "stage", cols: [0, 1] } });
+    await userEvent.click(screen.getByRole("button", { name: "BEAT" }));
+    expect(fakeSocket.emit).toHaveBeenLastCalledWith("khuzur_move", { lobbyId: LOBBY, move: { type: "beat", cardIds: ["10♣", "7♥"] } });
+  });
+
+  it("shows a face-down card on each top card another player has covered", async () => {
+    openTable();
+    await act(async () => {});
+    serverSends("khuzur_state", view(facing(3, "10♣ 7♥ 8♦ 7♠ J♦"), { staged: { seat: 3, cols: [1] } }));
+    const placed = screen.getAllByTestId("staged-card");
+    expect(placed).toHaveLength(1);
+    expect(placed[0]).toHaveAttribute("data-staged-col", "1");
+    expect(placed[0]).toBeDisabled();
+    expect(placed[0]).not.toHaveAttribute("data-staged-card");
   });
 });

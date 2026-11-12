@@ -1,7 +1,8 @@
 // KHUZUR GAME — the server-authoritative wrapper around the Khuzur rules.
 // One instance per online table. Owns the full (secret) state, checks every
 // human move, plays the CPU seats on timers, runs each person's turn clock,
-// counts surrender votes, and reports each change through onState.
+// counts surrender votes, shows where the person beating has placed cards,
+// and reports each change through onState.
 //
 // The rules are server/game/khuzur/, byte-identical copies of the browser's
 // src/utils/khuzur/ (tests/unit/rules-copies.test.js keeps them so).
@@ -21,14 +22,18 @@ import {
 import { aiAction, applyAction, cheapestLead } from "./khuzur/ai.js";
 import { khuzurSummary } from "./khuzurStats.js";
 
-// Milliseconds. CPU pauses follow what the browser shows; `turn` is a
-// person's turn clock (rulebook §10).
+// Milliseconds. CPU pauses follow what the browser shows, slow enough to
+// follow each CPU's move; `turn` is a person's turn clock (rulebook §10).
 export const DEFAULT_KHUZUR_DELAYS = {
-  draw: 1300, // a CPU drawing for the deal
-  lead: 1000, // a CPU leading
-  beat: 900, // a CPU beating or picking up
+  draw: 1500, // a CPU drawing for the deal
+  lead: 2000, // a CPU leading
+  beat: 1900, // a CPU beating or picking up
   drawReveal: 1500, // the winning draw card shows before the first lead (the browser shows it at least 1.6 s)
-  turn: 45000, // a person's turn
+  deal: 2900, // the shuffle at the start of a deal (the browser's DealAnimation), and a little slack
+  dealCard: 90, // each card dealt
+  trumpReveal: 3200, // then the trump turned up, laid under the pile, and the first leader named (the browser's TrumpReveal)
+  cleared: 1600, // a stack beaten whole stays on the table a moment, then is swept away: CPUs wait for it
+  turn: 120000, // a person's turn: 2 minutes
 };
 
 const isCardId = (v) => typeof v === "string" && v.length > 0 && v.length <= 6;
@@ -76,6 +81,7 @@ export class KhuzurGame {
     this.turnEndsAt = 0;
     this.dealEndsAt = 0;
     this.votes = {}; // team -> Set of seats that pressed SURRENDER
+    this.staged = null; // { seat, cols }: the top cards the person beating has placed a card on so far
     // Moves the game on: a turn clock armed before the latest move never fires.
     // (A seat changing hands swaps the state object without moving the game.)
     this.step = 0;
@@ -114,6 +120,7 @@ export class KhuzurGame {
     if (!player) return { ok: false, error: "Not your turn" };
     if (type === "surrender") return this.vote(seat);
     if (type === "keepPlaying") return this.keepPlaying(seat);
+    if (type === "stage") return this.stage(seat, move.cols);
     const spec = MOVES[type];
     if (!spec) return { ok: false, error: "Unknown move" };
     if (player.type !== "HUMAN") return { ok: false, error: "That seat is played by a CPU" };
@@ -140,6 +147,30 @@ export class KhuzurGame {
     (this.votes[player.team] ??= new Set()).add(seat);
     if (!this.settleVote(player.team)) this.broadcast();
     return { ok: true };
+  }
+
+  /**
+   * The person beating has placed cards on these top cards (column numbers),
+   * not played yet: every screen shows a face-down card there. Not the cards
+   * themselves: they're only known once the beat is played.
+   */
+  stage(seat, cols) {
+    const s = this.state;
+    // Late news (the turn already moved on) is dropped quietly.
+    if (s.phase !== PHASES.PLAY || s.turn !== seat || !s.stack) return { ok: true };
+    const width = s.stack.layers.at(-1).length;
+    if (!Array.isArray(cols) || cols.length > width || !cols.every((c) => Number.isInteger(c) && c >= 0 && c < width) || new Set(cols).size !== cols.length) {
+      return { ok: false, error: "Place each card on a card of the top layer" };
+    }
+    this.staged = cols.length ? { seat, step: this.step, cols: [...cols].sort((a, b) => a - b) } : null;
+    this.broadcast();
+    return { ok: true };
+  }
+
+  /** The placed-card columns while they still belong to the turn on, else null. */
+  stagedView() {
+    const st = this.staged;
+    return st && st.step === this.step && st.seat === this.state.turn ? { seat: st.seat, cols: st.cols } : null;
   }
 
   keepPlaying(seat) {
@@ -181,6 +212,7 @@ export class KhuzurGame {
     const s = this.state;
     if (!s.players[seat]) return;
     const switched = s.players[seat].type !== type;
+    if (this.staged?.seat === seat) this.staged = null; // placed cards go back with the person
     this.state = {
       ...s,
       players: s.players.map((p, i) => (i === seat ? { ...p, type, name, avatar, level: type === "AI" ? level || this.level : null } : p)),
@@ -198,6 +230,7 @@ export class KhuzurGame {
     this.startedAt = new Date();
     this.finishedAt = null;
     this.state = startNextMatch(this.state, this.rng);
+    this.dealEndsAt = Date.now() + this.dealMs();
     this.step += 1;
     this.schedule();
     this.broadcast();
@@ -209,7 +242,10 @@ export class KhuzurGame {
     this.state = next;
     this.step += 1;
     const fresh = next.events.slice(next.events.length >= prev.events.length ? prev.events.length : 0);
-    if (fresh.some((e) => e.type === "firstDealer")) this.dealEndsAt = Date.now() + this.delays.drawReveal;
+    // The winning draw card, then the shuffle and the deal, play on every screen before the first move.
+    if (fresh.some((e) => e.type === "deal")) this.dealEndsAt = Date.now() + (fresh.some((e) => e.type === "firstDealer") ? this.delays.drawReveal : 0) + this.dealMs();
+    else if (fresh.some((e) => e.type === "firstDealer")) this.dealEndsAt = Date.now() + this.delays.drawReveal;
+    this.cleared = fresh.some((e) => e.type === "dead");
     this.clearTimers();
     if (next.phase !== PHASES.MATCH_OVER) this.schedule();
     this.broadcast();
@@ -229,7 +265,7 @@ export class KhuzurGame {
     if (!player) return;
     const wait = this.dealMsLeft();
     if (player.type === "AI") {
-      const think = s.phase === PHASES.DRAW ? this.delays.draw : s.stack ? this.delays.beat : this.delays.lead;
+      const think = (s.phase === PHASES.DRAW ? this.delays.draw : s.stack ? this.delays.beat : this.delays.lead) + (this.cleared ? this.delays.cleared : 0);
       this.aiTimer = setTimeout(() => {
         this.aiTimer = null;
         if (!this.destroyed) this.playCpuTurn();
@@ -259,7 +295,13 @@ export class KhuzurGame {
     return this.turnTimer ? Math.max(0, this.turnEndsAt - Date.now()) : null;
   }
 
-  /** Milliseconds until the winning draw card has shown on every screen (0 once it has). */
+  /** How long a deal takes to show: the shuffle, every card, then the trump turned up. */
+  dealMs() {
+    const { players, table } = this.state;
+    return this.delays.deal + players.length * table.handSize * this.delays.dealCard + this.delays.trumpReveal;
+  }
+
+  /** Milliseconds until the winning draw card and the deal have shown on every screen (0 once they have). */
   dealMsLeft() {
     return Math.max(0, this.dealEndsAt - Date.now());
   }
@@ -320,6 +362,8 @@ export function khuzurView(state, seat, game) {
     deadPile: hide(state.deadPile),
     mySeat: seat,
     turnMsLeft: game?.turnMsLeft() ?? null,
+    dealMsLeft: game?.dealMsLeft?.() ?? 0,
     votes: game?.voteView(state.players[seat]?.team) ?? {},
+    staged: game?.stagedView?.() ?? null,
   };
 }

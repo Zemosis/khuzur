@@ -65,8 +65,8 @@ function bubbleAt(pos, small) {
 }
 
 function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, face, small = false, bubble = null, bubblePlace, credit = null, team = null, onTakeSeat = null }) {
-  const base = `relative flex flex-col items-center justify-center gap-2 py-3 text-center ${small ? "flex-1 min-w-0 px-1.5" : "px-3"}`;
-  const size = small ? { maxWidth: 132, minHeight: 112 } : { width: 184, minHeight: 124 };
+  const base = `relative flex flex-col items-center justify-center gap-1.5 py-2.5 text-center ${small ? "flex-1 min-w-0 px-1.5" : "px-3"}`;
+  const size = small ? { maxWidth: 132, minHeight: 112 } : { width: 184, minHeight: 128 };
   // Khuzur: the seat's team colour along its foot, and a button to move into an empty seat.
   const teamBar = team ? { boxShadow: `inset 0 -5px 0 ${team.color}` } : null;
   const sitHere = onTakeSeat && (
@@ -76,7 +76,7 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
       className="pixel-btn font-pixel-display text-[8px] px-2 py-1.5 whitespace-nowrap"
       style={{ backgroundColor: team?.color ?? "#9bd14f", borderColor: "#0a0712", color: "#1a1024" }}
     >
-      SIT HERE
+      {small ? "SIT" : "SIT HERE"}
     </button>
   );
 
@@ -103,19 +103,22 @@ function SeatSlot({ seat, index, isHost, onAddCpu, onRemoveCpu, onSetCpuLevel, f
         <div className="font-pixel-display text-[10px] text-bone/40">EMPTY SEAT</div>
         {sitHere}
         {isHost && !credit && (
-          <div className="flex flex-wrap justify-center gap-1">
-            {LEVELS.map((level) => (
-              <button
-                key={level}
-                onClick={() => onAddCpu(index, level)}
-                aria-label={`Add ${level} CPU to seat ${index + 1}`}
-                className={`pixel-btn font-pixel-display text-[8px] py-1.5 whitespace-nowrap ${small ? "px-1" : "px-1.5"}`}
-                style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: LEVEL_COLOR[level] }}
-              >
-                {/* A phone seat is too narrow for "+ MEDIUM" on one line. */}
-                {small ? level : `+ ${level}`}
-              </button>
-            ))}
+          <div className="flex flex-col items-center">
+            {/* One row of three on a full seat (MED keeps it to the seat's width). */}
+            {/* A phone seat has room for one: a MEDIUM CPU, whose level the host taps to change. */}
+            <div className="flex justify-center gap-1 flex-nowrap">
+              {(small ? ["MEDIUM"] : LEVELS).map((level) => (
+                <button
+                  key={level}
+                  onClick={() => onAddCpu(index, level)}
+                  aria-label={`Add ${level} CPU to seat ${index + 1}`}
+                  className="pixel-btn font-pixel-display text-[8px] py-1.5 px-1 whitespace-nowrap"
+                  style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: LEVEL_COLOR[level] }}
+                >
+                  {small ? "+ CPU" : level === "MEDIUM" ? "MED" : level}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -207,7 +210,7 @@ function PotBanner({ credit }) {
   );
 }
 
-function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMessage, fillsEmptySeats, slim = false }) {
+function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMessage, fillsEmptySeats, setup = null }) {
   const [copied, setCopied] = useState(null);
   // One START per press: a double-click would be rejected after the game has
   // already begun. A rejection (e.g. no longer host) re-arms the button.
@@ -234,18 +237,8 @@ function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMe
   const [restaking, setRestaking] = useState(false);
   if (errorMessage !== seenError && restaking) setRestaking(false);
 
-  return (
-    <div
-      className="flex flex-col items-center gap-4 p-4 sm:p-6 text-center"
-      style={{ ...BOX, maxWidth: slim ? 400 : 520 }}
-    >
-      {credit && <PotBanner credit={credit} />}
-      <div className="font-pixel-display text-[14px] text-glow-gold">WAITING FOR PLAYERS</div>
-      <div className="font-pixel-body text-[22px] text-bone/80">
-        {seatedCount}/{table.seats.length} seated
-        {credit?.deciding > 0 && <span className="text-bone/60"> · {credit.deciding} deciding</span>}
-      </div>
-
+  const code = (
+    <div className="flex flex-col items-center gap-3">
       <div className="flex flex-col items-center gap-1">
         <div className="font-pixel-display text-[9px] text-bone/60 flex items-center gap-2">
           <PixelIcon name={table.isPrivate ? "lock" : "globe"} size={10} />
@@ -253,66 +246,96 @@ function InvitePanel({ table, seatedCount, hostName, onStart, onRestake, errorMe
         </div>
         <div className="font-pixel-display text-[22px] tracking-[0.3em] text-glow-cyan">{table.code}</div>
       </div>
-
-      <div className="flex flex-wrap justify-center gap-3">
+      {/* A copy says so on its own button for a moment (no extra line to make room for). */}
+      <div className="flex flex-wrap justify-center gap-3" aria-live="polite">
         <button
           onClick={() => copy("code", table.code)}
+          aria-label={copied === "code" ? "Code copied" : "Copy code"}
           className="pixel-btn font-pixel-display text-[10px] px-3 py-2"
-          style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1" }}
+          style={{ backgroundColor: "#463a78", borderColor: "#2a234d", color: "#ead8b1", minWidth: 118 }}
         >
-          COPY CODE
+          {copied === "code" ? "COPIED!" : "COPY CODE"}
         </button>
         <button
           onClick={() => copy("link", link)}
+          aria-label={copied === "link" ? "Invite link copied" : "Copy invite link"}
           className="pixel-btn font-pixel-display text-[10px] px-3 py-2"
-          style={{ backgroundColor: "#5fd4d6", borderColor: "#2a8a8c", color: "#0a2a2c" }}
+          style={{ backgroundColor: "#5fd4d6", borderColor: "#2a8a8c", color: "#0a2a2c", minWidth: 190 }}
         >
-          COPY INVITE LINK
+          {copied === "link" ? "LINK COPIED!" : "COPY INVITE LINK"}
         </button>
       </div>
-      <div className="font-pixel-body text-[18px] text-glow-cyan h-5" aria-live="polite">
-        {copied === "code" ? "Code copied!" : copied === "link" ? "Invite link copied!" : ""}
+    </div>
+  );
+
+  const start =
+    credit && table.mySeat == null ? (
+      <>
+        <button
+          onClick={() => {
+            setRestaking(true);
+            onRestake();
+          }}
+          disabled={restaking}
+          className="pixel-btn font-pixel-display text-[14px] px-8 py-4 flex items-center gap-3"
+          style={{ backgroundColor: "#9bd14f", borderColor: "#6a9a30", color: "#1a1024" }}
+        >
+          <PixelIcon name="play" size={14} /> PLAY AGAIN · {fmt(credit.stake)}
+        </button>
+        <div className="font-pixel-body text-[18px] text-bone/60">Stake {fmt(credit.stake)} to take a seat for the next match, or EXIT.</div>
+      </>
+    ) : table.isHost ? (
+      <>
+        <button
+          onClick={() => {
+            setStarting(true);
+            onStart();
+          }}
+          disabled={starting || !canStart}
+          className="pixel-btn font-pixel-display text-[14px] px-8 py-4 flex items-center gap-3"
+          style={{ backgroundColor: "#f4c430", borderColor: "#c89820", color: "#1a1024" }}
+        >
+          <PixelIcon name="play" size={14} /> START GAME
+        </button>
+        <div className="font-pixel-body text-[18px] text-bone/60">
+          {credit
+            ? `Needs ${MIN_STAKED} players with stakes in. ${credit.botsFill ? "Empty seats are Hard bots." : "Empty seats stay empty."}`
+            : fillsEmptySeats
+              ? "Empty seats are filled with MEDIUM CPUs when you start."
+              : "Start with 2 to 4 players. Empty seats stay empty."}
+        </div>
+      </>
+    ) : (
+      <div className="font-pixel-display text-[10px] text-bone/70 blink">Waiting for {hostName} to start</div>
+    );
+
+  return (
+    <div className={`flex flex-col items-center gap-3 p-4 sm:p-5 text-center ${setup ? "w-full" : ""}`} style={{ ...BOX, maxWidth: setup ? 760 : 520 }}>
+      {credit && <PotBanner credit={credit} />}
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="font-pixel-display text-[14px] text-glow-gold">WAITING FOR PLAYERS</div>
+        <div className="font-pixel-body text-[22px] text-bone/80">
+          {seatedCount}/{table.seats.length} seated
+          {credit?.deciding > 0 && <span className="text-bone/60"> · {credit.deciding} deciding</span>}
+        </div>
       </div>
 
-      {credit && table.mySeat == null ? (
-        <>
-          <button
-            onClick={() => {
-              setRestaking(true);
-              onRestake();
-            }}
-            disabled={restaking}
-            className="pixel-btn font-pixel-display text-[14px] px-8 py-4 flex items-center gap-3"
-            style={{ backgroundColor: "#9bd14f", borderColor: "#6a9a30", color: "#1a1024" }}
-          >
-            <PixelIcon name="play" size={14} /> PLAY AGAIN · {fmt(credit.stake)}
-          </button>
-          <div className="font-pixel-body text-[18px] text-bone/60">Stake {fmt(credit.stake)} to take a seat for the next match, or EXIT.</div>
-        </>
-      ) : table.isHost ? (
-        <>
-          <button
-            onClick={() => {
-              setStarting(true);
-              onStart();
-            }}
-            disabled={starting || !canStart}
-            className="pixel-btn font-pixel-display text-[14px] px-8 py-4 flex items-center gap-3"
-            style={{ backgroundColor: "#f4c430", borderColor: "#c89820", color: "#1a1024" }}
-          >
-            <PixelIcon name="play" size={14} /> START GAME
-          </button>
-          <div className="font-pixel-body text-[18px] text-bone/60">
-            {credit
-              ? `Needs ${MIN_STAKED} players with stakes in. ${credit.botsFill ? "Empty seats are Hard bots." : "Empty seats stay empty."}`
-              : fillsEmptySeats
-                ? "Empty seats are filled with MEDIUM CPUs when you start."
-                : "Start with 2 to 4 players. Empty seats stay empty."}
+      {setup ? (
+        // The host's table builder shares the panel with the invite: two halves, a rule between them.
+        <div className="@container w-full" style={{ borderTop: "3px solid #1f1a3d", borderBottom: "3px solid #1f1a3d" }}>
+          <div className="grid grid-cols-1 @min-[640px]:grid-cols-2 items-center">
+            <div className="py-3 @min-[640px]:pr-5 border-[#1f1a3d] border-b-[3px] @min-[640px]:border-b-0 @min-[640px]:border-r-[3px]">{code}</div>
+            <section aria-label="Build your table" className="flex flex-col items-center gap-3 py-3 @min-[640px]:pl-5">
+              <div className="font-pixel-display text-[11px] text-glow-gold">BUILD YOUR TABLE</div>
+              {setup}
+            </section>
           </div>
-        </>
+        </div>
       ) : (
-        <div className="font-pixel-display text-[10px] text-bone/70 blink">Waiting for {hostName} to start</div>
+        code
       )}
+
+      {start}
       {credit && table.mySeat != null && (
         <div className="font-pixel-body text-[18px] text-bone/60">EXIT before the deal and your {fmt(credit.stake)} comes back.</div>
       )}
@@ -393,25 +416,17 @@ export default function WaitingTable({
   // The host's table builder sits beside the invite (not while a credit host is still deciding to stake again).
   const building = setup && table.isHost && !(table.credit && table.mySeat == null);
   const invite = (
-    <div className="flex flex-col items-center gap-3">
-      <div className="flex flex-wrap items-center justify-center gap-4">
-        <InvitePanel
-          table={table}
-          seatedCount={seatedCount}
-          hostName={hostName}
-          onStart={onStart}
-          onRestake={onRestake}
-          errorMessage={errorMessage}
-          fillsEmptySeats={fillsEmptySeats}
-          slim={building}
-        />
-        {building && (
-          <section aria-label="Build your table" className="flex flex-col gap-3 p-4" style={BOX}>
-            <div className="font-pixel-display text-[11px] text-glow-gold text-center">BUILD YOUR TABLE</div>
-            {setup}
-          </section>
-        )}
-      </div>
+    <div className="flex flex-col items-center gap-3 w-full">
+      <InvitePanel
+        table={table}
+        seatedCount={seatedCount}
+        hostName={hostName}
+        onStart={onStart}
+        onRestake={onRestake}
+        errorMessage={errorMessage}
+        fillsEmptySeats={fillsEmptySeats}
+        setup={building ? setup : null}
+      />
       {errorMessage && (
         <div role="alert" className="font-pixel-body text-[20px] px-3 py-1" style={{ backgroundColor: "#7a1530", color: "#ead8b1" }}>
           {errorMessage}
@@ -455,7 +470,7 @@ export default function WaitingTable({
             {slot("bottom")}
           </div>
         ) : (
-          <div className="relative flex flex-col items-center justify-between min-h-0 overflow-y-auto px-4 py-4">
+          <div className="relative flex flex-col items-center justify-between gap-3 min-h-0 overflow-y-auto px-4 py-3 [&>*]:shrink-0">
             {topRow.length > 0 ? <div className="flex justify-center gap-10">{topRow.map((pos) => <React.Fragment key={pos}>{slot(pos)}</React.Fragment>)}</div> : <div />}
             <div
               className="grid items-center gap-4 w-full mx-auto"

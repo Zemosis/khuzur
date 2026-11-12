@@ -13,7 +13,7 @@
 // every card held is a card to get rid of. The same once the table stalls
 // (see stalling).
 
-import { LEAD_SIZES, cardPower, isJoker, isTrump, isValidLead, shuffle } from "./cards.js";
+import { LEAD_SIZES, beats, cardPower, coverWith, isJoker, isTrump, isValidLead, shuffle } from "./cards.js";
 import { PHASES, beat, canSwapSeven, drawForDeal, isFreeForAll, lead, leadLimit, maxDrawDepth, pickUp, swapTrumpSeven, topLayer } from "./engine.js";
 
 const SMALL_STACK = 3; // a stack this small isn't worth a trump while the pile lasts
@@ -50,19 +50,33 @@ export function cheapestLead(hand, size, trumpSuit) {
 
 /**
  * Cover each card of the layer with the cheapest card that beats it, the
- * strongest layer card first. Returned in the layer's column order, or null.
+ * card with the fewest answers first. Returned in the layer's column order,
+ * or null. If that greedy pick strands a card, any cover that works will do.
  */
 export function cheapestCover(layer, hand, trumpSuit) {
-  const power = (card) => cardPower(card, trumpSuit);
   const free = [...hand].sort(byPower(trumpSuit));
+  const answers = (col) => free.filter((card) => beats(card, layer[col], trumpSuit)).length;
   const result = new Array(layer.length);
-  const columns = layer.map((_, i) => i).sort((a, b) => power(layer[b]) - power(layer[a]));
+  const columns = layer.map((_, i) => i).sort((a, b) => answers(a) - answers(b) || cardPower(layer[b], trumpSuit) - cardPower(layer[a], trumpSuit));
   for (const col of columns) {
-    const i = free.findIndex((card) => power(card) > power(layer[col]));
-    if (i < 0) return null;
+    const i = free.findIndex((card) => beats(card, layer[col], trumpSuit));
+    if (i < 0) return fallbackCover(layer, hand, trumpSuit);
     result[col] = free.splice(i, 1)[0];
   }
   return result;
+}
+
+/** Any cover of the layer from the hand, the cheapest cards tried first, or null. */
+function fallbackCover(layer, hand, trumpSuit) {
+  const usable = [...hand].filter((card) => layer.some((top) => beats(card, top, trumpSuit))).sort(byPower(trumpSuit));
+  if (usable.length < layer.length) return null;
+  // Grow the pool cheapest first until it covers: small hands, so this stays quick.
+  for (let n = layer.length; n <= usable.length; n++) {
+    const pool = usable.slice(0, n);
+    const cover = coverWith(layer, pool, trumpSuit);
+    if (cover) return cover;
+  }
+  return null;
 }
 
 const cardsLeftToDraw = (state) => state.drawPile.length + (state.trumpCard ? 1 : 0);

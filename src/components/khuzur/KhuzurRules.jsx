@@ -96,16 +96,19 @@ export default function KhuzurRules({ onClose }) {
           </div>
         </div>
         <p>
-          At the same rank the suit decides, lowest first: <Key>♦ ♣ ♥ ♠</Key>. From weakest to strongest every card falls in
-          one line: <Key>plain cards</Key> by rank then suit, then <Key>trumps</Key> by rank, then the <Key>gray joker</Key>,
-          then the <Key>colored joker</Key>. A card beats another only if it's <Key>strictly higher</Key>, so twins never beat
-          each other.
+          A plain card is beaten only by a <Key>higher card of its own suit</Key>, or by <Key>any trump</Key>. A trump is
+          beaten only by a <Key>higher trump</Key>. The <Key>gray joker</Key> beats every trump, and only the{" "}
+          <Key>colored joker</Key> beats it. Twins never beat each other.
         </p>
-        <Versus win="8♦" lose="7♠" caption="a higher rank wins, whatever the suit" />
-        <Versus win="9♠" lose="9♣" caption="same rank: the higher suit wins" />
+        <Versus win="9♠" lose="8♠" caption="a higher card of the same suit" />
         <Versus win="7♥" lose="A♠" caption="with hearts as trump, any trump beats any plain card" />
+        <Versus win="8♥" lose="7♥" caption="a trump only by a higher trump" />
         <Versus win="GJ" lose="A♥" caption="the gray joker beats every trump" />
         <Versus win="CJ" lose="GJ" caption="nothing beats the colored joker" />
+        <p>
+          A higher card of another suit doesn't beat: <Hi>A♣ can't beat 7♦</Hi> unless clubs are trump. Suits only rank (
+          <Key>♦ ♣ ♥ ♠</Key>, lowest first) to settle a tie in the draw for the deal.
+        </p>
       </Section>
 
       <Section id="table" n={2} title="The table">
@@ -177,6 +180,11 @@ export default function KhuzurRules({ onClose }) {
           top layer, and the next player must beat <Hi>your</Hi> cards. Teammates must beat each other too.
         </p>
         <p>
+          <Key>At the table</Key>: click a card and it goes on a top card it beats, or drag it onto the very card you mean.
+          Drag a placed card onto another card to move it, or click it to take it back, and press <Key>BEAT</Key> once every
+          card is covered. Until then the others see only a face-down card on each card you've covered.
+        </p>
+        <p>
           <Key>Pick up</Key>: take the whole stack, every layer, into your hand, even if you could beat. The player on your left
           leads next.
         </p>
@@ -224,7 +232,7 @@ export default function KhuzurRules({ onClose }) {
 
       <Section id="surrender" n={10} title="Time limit and surrender">
         <p>
-          Online tables give you <Key>45 seconds</Key> a turn: run out while leading and the next player leads; run out while
+          Online tables give you <Key>2 minutes</Key> a turn: run out while leading and the next player leads; run out while
           beating and you pick up. Practice tables have no timer.
         </p>
         <p>

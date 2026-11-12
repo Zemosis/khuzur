@@ -2,7 +2,7 @@
 // prepared engine state and the hand, the buttons and the stack are used.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import GameKhuzur from "../../src/pages/khuzur/GameKhuzur";
@@ -132,12 +132,99 @@ describe("leading", () => {
 describe("beating", () => {
   const facing = (mine) => playing({ mine, turn: 0, stack: { leader: 1, layers: [cs("9♣")], owners: [1], pending: [0] } });
 
-  it("BEAT lights up only when the picked cards beat the top layer", async () => {
+  it("a clicked card goes on the top card it beats, and BEAT lights up once every card is covered", async () => {
     open(facing("8♠ 10♣ 7♦ 7♣ 8♦"));
-    await pick("8♠");
     expect(btn("BEAT")).toBeDisabled();
-    await pick("8♠", "10♣");
+    await pick("10♣");
+    expect(screen.getByTestId("staged-card")).toHaveAttribute("data-staged-card", "10♣");
+    expect(screen.queryByRole("button", { name: "10♣" })).not.toBeInTheDocument();
     expect(btn("BEAT")).toBeEnabled();
+  });
+
+  it("a card that can't beat is refused with the reason: only its own suit or a trump beats", async () => {
+    open(facing("A♠ 10♣ 7♦ 7♣ 8♦"));
+    await pick("A♠");
+    expect(screen.getByRole("alert")).toHaveTextContent("A♠ can't beat 9♣: a higher ♣ or a trump does");
+    expect(screen.queryByTestId("staged-card")).not.toBeInTheDocument();
+    expect(btn("BEAT")).toBeDisabled();
+  });
+
+  it("clicking a placed card takes it back", async () => {
+    open(facing("8♠ 10♣ 7♦ 7♣ 8♦"));
+    await pick("10♣");
+    await userEvent.click(screen.getByTestId("staged-card"));
+    expect(screen.queryByTestId("staged-card")).not.toBeInTheDocument();
+    expect(btn("10♣")).toBeInTheDocument();
+    expect(btn("BEAT")).toBeDisabled();
+  });
+
+  describe("moving a placed card", () => {
+    // 9♣ and 9♦ to beat (trump ♥); 7♥ beats either, 10♣ only 9♣, 10♦ only 9♦.
+    const two = () => playing({ mine: "10♣ 10♦ 7♥ 8♠ 8♦", turn: 0, stack: { leader: 1, layers: [cs("9♣ 9♦")], owners: [1], pending: [0] } });
+    const placedOn = () => Object.fromEntries(screen.queryAllByTestId("staged-card").map((el) => [el.dataset.stagedCol, el.dataset.stagedCard]));
+    /** Drags the card placed on column `from` and lets it go over top card `to` (null: off the stack). */
+    const dragPlaced = (from, to) => {
+      const el = screen.getAllByTestId("staged-card").find((x) => x.dataset.stagedCol === String(from));
+      const target = to === null ? null : document.querySelector(`[data-beat-col="${to}"]`);
+      document.elementsFromPoint = () => (target ? [target] : [document.body]);
+      fireEvent.pointerDown(el, { button: 0, clientX: 10, clientY: 10 });
+      fireEvent.pointerMove(el, { clientX: 60, clientY: 10 });
+      fireEvent.pointerUp(el, { clientX: 60, clientY: 10 });
+      delete document.elementsFromPoint;
+    };
+
+    it("moves it onto another top card it beats", async () => {
+      open(two());
+      await pick("7♥");
+      const from = Object.keys(placedOn())[0];
+      const to = from === "0" ? 1 : 0;
+      dragPlaced(from, to);
+      expect(placedOn()).toEqual({ [to]: "7♥" });
+    });
+
+    it("swaps with the card already there when that card beats the other column", async () => {
+      open(two());
+      await pick("10♦"); // only beats 9♦: column 1
+      await pick("7♥"); // the column left: 0
+      expect(placedOn()).toEqual({ 0: "7♥", 1: "10♦" });
+      dragPlaced(0, 1);
+      // 10♦ can't beat 9♣, so it goes back to the hand instead of swapping.
+      expect(placedOn()).toEqual({ 1: "7♥" });
+      expect(btn("10♦")).toBeInTheDocument();
+    });
+
+    it("swaps places with the card there when both still beat", async () => {
+      open(playing({ mine: "7♥ 8♥ 8♠ 8♦ 7♣", turn: 0, stack: { leader: 1, layers: [cs("9♣ 9♦")], owners: [1], pending: [0] } }));
+      await pick("7♥");
+      await pick("8♥");
+      const before = placedOn();
+      dragPlaced(0, 1);
+      expect(placedOn()).toEqual({ 0: before[1], 1: before[0] });
+    });
+
+    it("refuses a column it can't beat", async () => {
+      open(two());
+      await pick("10♣");
+      dragPlaced(0, 1);
+      expect(screen.getByRole("alert")).toHaveTextContent("10♣ can't beat 9♦");
+      expect(placedOn()).toEqual({ 0: "10♣" });
+    });
+
+    it("goes back to the hand when let go off the stack", async () => {
+      open(two());
+      await pick("10♣");
+      dragPlaced(0, null);
+      expect(placedOn()).toEqual({});
+      expect(btn("10♣")).toBeInTheDocument();
+    });
+  });
+
+  it("BEAT plays the placed cards", async () => {
+    open(facing("8♠ 10♣ 7♦ 7♣ 8♦"));
+    await pick("10♣");
+    await userEvent.click(btn("BEAT"));
+    expect(screen.queryByRole("button", { name: "10♣" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("You beat with 10♣");
   });
 
   it("PICK UP takes the stack into your hand", async () => {
@@ -219,7 +306,7 @@ describe("the end of the match", () => {
       );
       expect(screen.queryByRole("button", { name: "SURRENDER" })).not.toBeInTheDocument();
       await act(async () => {
-        vi.advanceTimersByTime(300);
+        vi.advanceTimersByTime(1100);
       });
       expect(screen.getAllByTestId("stack-card").length).toBeGreaterThan(0);
     } finally {

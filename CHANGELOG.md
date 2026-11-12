@@ -8,18 +8,34 @@ The hall is in early access, so versions are 0.x: the middle number moves
 for a new game or a big new system, the last for everything else. 1.0.0 is
 the first stable release.
 
-## 0.7.0 — 6 November 2026
+## 0.7.0 — 11 November 2026
 
 ### A new game: Khuzur
 - **Mongolia's classic card game is in the hall.** Lead cards at the next player, who must beat every one or pick the whole stack up. Your hand refills from the pile after every play, and once the pile runs dry, the first to empty their hand wins.
 - **Play alone or in teams.** Free for all with 2 to 6 players, or 2v2, 2v2v2 and 3v3, with the 5-card game (one deck) or the 7-card game (two decks). Build your table at the waiting table, or before a practice game.
 - **Leads of 1, 3, 5 or 7 cards.** Pairs plus one more card, and the gray and colored jokers beat every trump.
-- **Play online with friends.** Host a table, share its code, and pick your own seat: your seat decides your team. Bots fill any seat left empty, and each turn has a 45-second clock.
+- **Jokers with a face.** The gray joker is a moonlit Pierrot with a single tear, and the colored joker a crowned harlequin on gold, with a foil shine across it now and then.
+- **Beat by suit or by trump.** A card is beaten only by a higher card of its own suit or by a trump, and a trump only by a higher trump.
+- **Put each card where you mean it.** When you beat, click a card and it goes on a card it beats, or drag it onto the very card you want to cover. Drag a placed card onto another card to try it there, or click it to take it back, and press BEAT once every card is covered: it counts how many you've covered, and PICK UP stays quieter beside it. The others see a face-down card on each card you've covered until you play.
+- **Play online with friends.** Host a table, share its code, and pick your own seat: your seat decides your team. Bots fill any seat left empty, and each turn has a 2-minute clock.
 - **Surrender together.** In a team game, a surrender goes through only once everyone on your team agrees.
 - **Play for credits.** Everyone stakes the same, and 1st place takes the pot.
 - **Three CPU levels.** Practice against Easy, Medium or Hard bots, or seat them at your online table.
 - **XP, gold and stats.** Online matches pay XP and gold by place, and every match, practice included, counts on your profile. Khuzur has its own profile tab, match pages and leaderboard column.
 - **The full rules** are in RULES on the main menu and at the table.
+- **A proper card room table.** Khuzur plays on the same oak-rimmed table as Muushig: everyone's cards face down in front of them, the trump tucked under the draw pile, the dealer button and a glow on whoever's turn it is. The sidebar shows every team and how many cards each player holds, and the LOG tab follows every lead, beat and pick-up.
+- **Every card moves.** Each match opens with a shuffle and the deal, card by card round the table. Then the trump is turned up in the middle and laid under the draw pile, and the table is told who leads first. Your own cards fly from your hand to the stack, drawn cards fly from the pile, a stack you can't beat flies into your hand, and a beaten stack stays on the table a moment, the winning beat on top, before it's swept to the dead pile. Swapping the trump 7 trades the cards across the table. Sorting by rank or suit, or picking up a stack, slides your hand into its new order.
+- **CPUs take their time.** Each CPU waits about two seconds before it plays, the cards it played glow as they land, LEAD or BEAT pops up over its seat, and the bar under your hand says what was just played.
+- **The stack piles up like Thirteen's.** Each beat lands right on the cards it beats, at a tilt, with the cards underneath peeking out, and nothing else on the table moves or resizes when it lands. A lead of 5 or 7 lies in two rows (3 over 2, 4 over 3), clear of the draw and dead piles.
+- **A bigger table on a wide screen.** The table stretches out to use the room, and in the draw for the deal every card lands in front of its player, clear of the pile.
+- **See what's happening at a glance.** PICK UP, BEATEN!, SWAP 7! and OUT · 1ST pop up over the player, whoever must beat shows BEAT and how many cards, and a player's cards on the felt grow with their hand, so a big hand looks big.
+- **The turn clock is in the header,** beside the game's name, with whose turn it is. It runs in the draw for the deal too.
+
+### Every table
+- **Faces are drawn crisp.** At some screen scalings, faces on the table plates could show thin dark lines across the eyes and mouth. Every face in the hall is now drawn without them.
+
+### Waiting tables
+- **Tidier for the host.** Add a CPU to an empty seat at Easy, Med or Hard from one row of buttons, and at a Khuzur table the invite and BUILD YOUR TABLE share one panel.
 
 ## 0.6.6 — 3 November 2026
 

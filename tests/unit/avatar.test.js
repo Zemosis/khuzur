@@ -10,6 +10,7 @@ import {
   serializeAvatar,
   snapAvatarSize,
   avatarPaths,
+  avatarRuns,
 } from "../../src/utils/avatarConstants.js";
 
 const grid = (n, fill) => Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => fill(r, c)));
@@ -81,5 +82,20 @@ describe("avatarPaths", () => {
       .flatMap(({ d }) => [...d.matchAll(/M(\d+) (\d+)h(\d+)/g)])
       .reduce((n, m) => n + Number(m[3]), 0);
     expect(cells).toBe(17 * 17);
+  });
+});
+
+describe("avatarRuns", () => {
+  it("is each row's run of one colour, as its own rectangle", () => {
+    const pixels = grid(17, (r, c) => (r === 0 && c < 3 ? "#111111" : r === 0 && c === 3 ? "#222222" : r === 2 && c === 5 ? "#111111" : null));
+    expect(avatarRuns({ pixels })).toEqual([
+      { color: "#111111", x: 0, y: 0, w: 3 },
+      { color: "#222222", x: 3, y: 0, w: 1 },
+      { color: "#111111", x: 5, y: 2, w: 1 },
+    ]);
+  });
+
+  it("covers every cell of a full avatar exactly once", () => {
+    expect(avatarRuns(presetAvatar(2)).reduce((n, run) => n + run.w, 0)).toBe(17 * 17);
   });
 });

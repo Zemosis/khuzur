@@ -271,6 +271,16 @@ const ICONS = {
     "...####.",
     "........",
   ],
+  clock: [
+    "..####..",
+    ".#....#.",
+    "#...#..#",
+    "#...#..#",
+    "#..##..#",
+    "#......#",
+    ".#....#.",
+    "..####..",
+  ],
 };
 
 export default function PixelIcon({ name, size = 16, color, className = "", title }) {

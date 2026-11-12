@@ -285,10 +285,10 @@ describe("beating", () => {
 
   it("covers every card of the top layer, column by column, and draws back up", () => {
     const hands = [...FOUR];
-    hands[1] = "Q♠ K♠ 10♣ 7♣ 8♣";
+    hands[1] = "Q♠ K♦ 10♣ 7♣ 8♣";
     let s = lead(playState({ hands, pile: PILE }), 0, ["J♠", "J♦", "9♣"]);
-    s = beat(s, 1, ["10♣", "K♠", "Q♠"]);
-    expect(idsOf(topLayer(s))).toEqual(["K♠", "Q♠", "10♣"]);
+    s = beat(s, 1, ["10♣", "K♦", "Q♠"]);
+    expect(idsOf(topLayer(s))).toEqual(["Q♠", "K♦", "10♣"]);
     expect(s.stack.owners).toEqual([0, 1]);
     expect(s.stack.pending).toEqual([2, 3]);
     expect(s.players[1].hand).toHaveLength(5);
@@ -303,17 +303,31 @@ describe("beating", () => {
     expect(() => beat(led(), 1, ["A♠", "10♣", "7♣"])).toThrow("Those cards don't beat the top layer");
   });
 
+  it("keeps the pairing picked, when it beats", () => {
+    const hands = [...FOUR];
+    hands[1] = "Q♠ K♦ 10♣ 7♥ 8♣";
+    const s = beat(lead(playState({ hands, pile: PILE }), 0, ["J♠", "J♦", "9♣"]), 1, ["7♥", "K♦", "10♣"]);
+    expect(idsOf(topLayer(s))).toEqual(["7♥", "K♦", "10♣"]);
+  });
+
+  it("refuses a higher card of another suit: only its own suit or a trump beats a card", () => {
+    const hands = [...FOUR];
+    hands[1] = "A♣ 10♣ Q♥ 7♣ 8♣";
+    expect(() => beat(lead(playState({ hands, pile: PILE }), 0, ["8♦"]), 1, ["A♣"])).toThrow("Those cards don't beat the top layer");
+  });
+
   it("refuses a beat from anyone but the next player", () => {
     expect(() => beat(led(), 2, ["K♦", "K♣", "10♦"])).toThrow("Not your turn");
   });
 
   it("a stack that goes all the way round goes dead, and the last beater leads", () => {
-    let s = lead(playState({ hands: FOUR, pile: PILE }), 0, ["8♦"]);
-    s = beat(s, 1, ["8♣"]);
-    s = beat(s, 2, ["9♦"]);
-    s = beat(s, 3, ["9♠"]);
+    const hands = ["8♦ J♠ J♦ 9♣ 7♦", "A♠ 10♣ Q♥ 7♣ 9♦", "K♦ K♣ 8♣ 10♦ 7♠", "Q♠ Q♦ 10♠ 9♠ 8♠"];
+    let s = lead(playState({ hands, pile: PILE }), 0, ["8♦"]);
+    s = beat(s, 1, ["9♦"]);
+    s = beat(s, 2, ["10♦"]);
+    s = beat(s, 3, ["Q♦"]);
     expect(s.stack).toBeNull();
-    expect(idsOf(s.deadPile).sort()).toEqual(["8♦", "8♣", "9♦", "9♠"].sort());
+    expect(idsOf(s.deadPile).sort()).toEqual(["8♦", "9♦", "10♦", "Q♦"].sort());
     expect(s.turn).toBe(3);
     expect(s.events.at(-1)).toMatchObject({ type: "dead", count: 4, seat: 3 });
   });
@@ -321,7 +335,7 @@ describe("beating", () => {
   it("in 1v1 one beat ends the stack and the beater leads", () => {
     const table = { perTeam: 1, teams: 2, handSize: 5 };
     let s = lead(playState({ table, hands: FOUR.slice(0, 2), pile: PILE }), 0, ["8♦"]);
-    s = beat(s, 1, ["8♣"]);
+    s = beat(s, 1, ["Q♥"]);
     expect(s.stack).toBeNull();
     expect(s.turn).toBe(1);
   });
@@ -330,10 +344,10 @@ describe("beating", () => {
 describe("picking up", () => {
   it("takes every layer into the hand, without drawing, and the player on the left leads", () => {
     let s = lead(playState({ hands: FOUR, pile: PILE }), 0, ["8♦"]);
-    s = beat(s, 1, ["8♣"]);
+    s = beat(s, 1, ["Q♥"]);
     const pileBefore = s.drawPile.length;
     s = pickUp(s, 2);
-    expect(handOf(s, 2)).toEqual(["K♦", "K♣", "9♦", "10♦", "7♠", "8♦", "8♣"].sort());
+    expect(handOf(s, 2)).toEqual(["K♦", "K♣", "9♦", "10♦", "7♠", "8♦", "Q♥"].sort());
     expect(s.drawPile).toHaveLength(pileBefore);
     expect(s.stack).toBeNull();
     expect(s.turn).toBe(3);
@@ -361,9 +375,9 @@ describe("drawing back up when the pile runs dry", () => {
     expect(s.trumpSuit).toBe("♥");
     expect(s.events.at(-1)).toMatchObject({ type: "draw", seat: 0, count: 2, tookTrump: true });
     const hands = [...FOUR];
-    hands[1] = "Q♠ K♠ 10♣ 7♣ 8♣";
+    hands[1] = "Q♠ K♦ 10♣ 7♣ 8♣";
     s = lead(playState({ hands, pile: "8♥", trumpCard: "A♥" }), 0, ["J♠", "J♦", "9♣"]);
-    s = beat(s, 1, ["10♣", "K♠", "Q♠"]);
+    s = beat(s, 1, ["10♣", "K♦", "Q♠"]);
     expect(s.players[1].hand).toHaveLength(2);
   });
 });
@@ -490,7 +504,7 @@ describe("going out", () => {
 
   it("the lead limit ignores players who are out", () => {
     let s = playState({ ...dry, hands: ["8♦ 8♣ 7♣ 9♠", "9♦", "10♦ 10♣ 10♠", "J♦ J♣ 8♠"] });
-    s = lead(s, 0, ["7♣"]);
+    s = lead(s, 0, ["8♦"]);
     s = beat(s, 1, ["9♦"]);
     expect(leadLimit(s)).toBe(3);
   });

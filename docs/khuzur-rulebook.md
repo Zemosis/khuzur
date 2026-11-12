@@ -56,16 +56,18 @@ Mongolia's classic card game, for 2 to 6 players, alone or in teams. Lead cards 
 | **Ranks** | 7 · 8 · 9 · 10 · J · Q · K · A |
 | **Suits** | ♦ Diamonds · ♣ Clubs · ♥ Hearts · ♠ Spades |
 
-From weakest to strongest, every card in the game falls in one line:
+### What beats what
 
-1. **Plain cards** (not trump), by rank first, then by suit when the ranks are equal.
-2. **Trumps**, by rank. Any trump beats any plain card.
-3. **The gray joker.** It beats every trump.
-4. **The colored joker.** The strongest card in the game. Nothing beats it.
+- A **plain card** (not trump) is beaten by a **higher card of its own suit**, or by **any trump**.
+- A **trump** is beaten only by a **higher trump**.
+- **The gray joker** beats every card but the colored joker.
+- **The colored joker** is the strongest card in the game. Nothing beats it.
 
-A card beats another only if it is **strictly higher** in this line. In the 7-card game, a card can't beat its twin.
+A higher card of another suit never beats. In the 7-card game, a card can't beat its twin.
 
-> **Examples** (trump ♥): 8♦ beats 7♠, because a higher rank wins whatever the suit. 9♠ beats 9♣, because at the same rank the higher suit wins. 7♥ beats A♠, because a trump beats any plain card. The gray joker beats A♥. Only the colored joker beats the gray joker.
+> **Examples** (trump ♥): 9♠ beats 8♠, a higher card of the same suit. 8♦ does **not** beat 7♠, and 9♠ does not beat 9♣: another suit never beats unless it's trump. 7♥ beats A♠, because a trump beats any plain card. 8♥ beats 7♥, a higher trump. The gray joker beats A♥. Only the colored joker beats the gray joker.
+
+The suits rank only to settle the draw for the deal (§3): there, every card falls in one line, weakest first: plain cards by rank, then by suit; then the jokers.
 
 ---
 
@@ -142,13 +144,15 @@ A lead is **1, 3, 5 or 7 cards**, and every card in it needs a **partner of the 
 
 After a lead, play goes clockwise. On your turn you either **beat** or **pick up**.
 
-**Beat.** Cover **every card of the top layer**, one card each, with a card that beats it. Your cards don't need to make a valid lead; any cards that beat will do. They become the new top layer, and the next player must beat **your** cards. Teammates must beat each other's cards too.
+**Beat.** Cover **every card of the top layer**, one card each, with a card that beats it (§1). Your cards don't need to make a valid lead; any cards that beat will do. They become the new top layer, and the next player must beat **your** cards. Teammates must beat each other's cards too.
+
+At the table you place your cards one by one: click a card and it goes on a top card it beats, or drag it onto the very card you mean. Drag a placed card onto another card to move it (two placed cards swap when both still beat), or click it to take it back, and press **BEAT** once every card is covered. Until then, the other players see a face-down card on each card you've covered.
 
 **Pick up.** Take the **whole stack**, every layer, into your hand. You may pick up even when you could beat. The player on **your left** leads next.
 
 **The stack goes all the way round** when every other player has beaten it. The last player to beat it ends the circle: the stack goes to the **dead pile**, and **that player leads next**.
 
-> **Example, 4 players, trump ♥.** Ana leads 9♣ 9♦ K♠. Bat beats them with 10♣ 10♦ A♠. Chuluun beats Bat's cards with J♦ Q♣ 7♥. Dorj can't beat 7♥, so he picks up all 9 cards, and Ana, on his left, leads the next stack.
+> **Example, 4 players, trump ♥.** Ana leads 9♣ 9♦ K♠. Bat beats them with 10♣ 10♦ A♠. Chuluun beats Bat's cards with Q♣ J♦ 7♥, the trump going on A♠. Dorj can't beat 7♥, so he picks up all 9 cards, and Ana, on his left, leads the next stack.
 
 ---
 
@@ -191,7 +195,7 @@ When someone goes out partway through a stack:
 
 ## 10. Time limit and surrender
 
-**Online tables** give you **45 seconds** a turn. Run out of time while leading and your turn is skipped: the player on your left leads instead. Run out of time while beating and you **pick up** the stack. Practice tables have no timer.
+**Online tables** give you **2 minutes** a turn. Run out of time while leading and your turn is skipped: the player on your left leads instead. Run out of time while beating and you **pick up** the stack. Practice tables have no timer.
 
 ### Surrender
 

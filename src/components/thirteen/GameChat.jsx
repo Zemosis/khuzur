@@ -187,6 +187,8 @@ const BLINDS = new Set(["sb", "bb"]);
 const isMove = (m) => MOVE_KINDS.has(m.kind) && !BLINDS.has(m.action) && m.move !== false;
 // Poker's and blackjack's moves, each a coloured chip: [label, background, text].
 const ACTION_CHIP = {
+  lead: ["LEAD", "#f08a4b", "#1a1024"],
+  beat: ["BEAT", "#f4c430", "#1a1024"],
   sb: ["SMALL BLIND", "#1f3a4d", "#5fd4d6"],
   bb: ["BIG BLIND", "#1f3a4d", "#5fd4d6"],
   fold: ["FOLD", "#2a234d", "#8a7fb0"],

@@ -215,4 +215,56 @@ describe("rematch", () => {
     expect(game.state.matchNumber).toBe(2);
     expect(game.state.phase).toBe(PHASES.PLAY);
   });
+
+  it("waits for the shuffle and the deal to show before anyone moves", () => {
+    newGame({ seats: [human(0), human(1)], delays: { ...FAST, deal: 1000, dealCard: 10, trumpReveal: 0 } });
+    game.load({ ...dealtState(T1v1, [human(0), human(1)]), phase: PHASES.MATCH_OVER, places: [1, 2] });
+    expect(game.rematch().ok).toBe(true);
+    // 1000 for the shuffle, then 2 seats × 5 cards × 10.
+    expect(game.dealMsLeft()).toBe(1100);
+    expect(khuzurView(game.state, game.state.turn, game).dealMsLeft).toBe(1100);
+    const seat = game.state.turn;
+    const card = game.state.players[seat].hand[0];
+    expect(game.move(seat, { type: "lead", cardIds: [card.id] })).toEqual({ ok: false, error: "Still dealing" });
+    // The turn clock starts once the deal is over.
+    expect(game.turnMsLeft()).toBe(1100 + 50);
+    vi.advanceTimersByTime(1100);
+    expect(game.move(seat, { type: "lead", cardIds: [card.id] }).ok).toBe(true);
+  });
+});
+
+describe("placing cards before a beat", () => {
+  /** P0 leads one card at P1, a person, who is to beat. */
+  const beating = () => {
+    newGame({ seats: [human(0), human(1)] });
+    const s = dealtState(T1v1, [human(0), human(1)], 0);
+    game.load(s);
+    expect(game.move(0, { type: "lead", cardIds: [s.players[0].hand[0].id] }).ok).toBe(true);
+    return game;
+  };
+
+  it("shows every seat which top cards the person beating has placed a card on, never the cards", () => {
+    beating();
+    expect(game.move(1, { type: "stage", cols: [0] }).ok).toBe(true);
+    expect(khuzurView(game.state, 0, game).staged).toEqual({ seat: 1, cols: [0] });
+    expect(khuzurView(game.state, -1, game).staged).toEqual({ seat: 1, cols: [0] });
+    expect(game.move(1, { type: "stage", cols: [] }).ok).toBe(true);
+    expect(khuzurView(game.state, 0, game).staged).toBeNull();
+  });
+
+  it("is only for the player on turn to beat, on columns of the top layer", () => {
+    beating();
+    game.move(0, { type: "stage", cols: [0] });
+    expect(khuzurView(game.state, 1, game).staged).toBeNull();
+    expect(game.move(1, { type: "stage", cols: [1] }).ok).toBe(false);
+    expect(game.move(1, { type: "stage", cols: [0, 0] }).ok).toBe(false);
+    expect(game.move(1, { type: "stage", cols: "0" }).ok).toBe(false);
+  });
+
+  it("clears once the table moves on", () => {
+    beating();
+    game.move(1, { type: "stage", cols: [0] });
+    expect(game.move(1, { type: "pickUp" }).ok).toBe(true);
+    expect(khuzurView(game.state, 0, game).staged).toBeNull();
+  });
 });
