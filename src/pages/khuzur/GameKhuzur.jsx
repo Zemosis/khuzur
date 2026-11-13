@@ -35,13 +35,14 @@ import TurnBanner from "../../components/TurnBanner";
 import YourTurnMark from "../../components/YourTurnMark";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { useTableMetrics, useViewport } from "../../hooks/useTableMetrics";
+import { CARD_RATIO, useTableMetrics, useViewport } from "../../hooks/useTableMetrics";
 import { ConnectionSignal, TableHeader, TableSidebar } from "../../components/TableChrome";
 import SettingsModal from "../../components/SettingsModal";
 import DealDraw from "../../components/muushig/DealDraw";
 import DealAnimation from "../../components/thirteen/DealAnimation";
 import CardFlights from "../../components/khuzur/CardFlights";
 import TrumpReveal, { TRUMP_REVEAL_MS } from "../../components/khuzur/TrumpReveal";
+import { DRAW_LAND_MS } from "../../components/muushig/flightTiming";
 import Callout from "../../components/Callout";
 import { KHUZUR_GEOMETRY, KHUZUR_SEAT_NAMES } from "../../components/khuzur/khuzurGeometry";
 import { turnAt } from "../../components/muushig/stadiumGeometry";
@@ -49,6 +50,7 @@ import Suit from "../../components/muushig/Suit";
 import KhuzurTable from "../../components/khuzur/KhuzurTable";
 import KhuzurSeat from "../../components/khuzur/KhuzurSeat";
 import KhuzurHand from "../../components/khuzur/KhuzurHand";
+import { handCardBox } from "../../components/khuzur/handCardBox";
 import KhuzurControls from "../../components/khuzur/KhuzurControls";
 import KhuzurScoreBoard from "../../components/khuzur/KhuzurScoreBoard";
 import Standings from "../../components/khuzur/Standings";
@@ -101,6 +103,8 @@ const DENSE_H = 640; // under this tall, the controls bar trims itself
 const MIN_DEAL_MS = 2500; // online, the least a deal you watched the draw for takes to show
 const HOLD_MS = 1000; // a beaten stack stays on the table this long, the last beat on top, before it's swept away
 const CLEAR_PAUSE = HOLD_MS + 600; // a CPU's extra wait after a stack is beaten: the hold, then the sweep and the draws
+const PLACE_FLY = 0.26; // seconds for a beat card to fly between your hand and the stack as you place it
+const SETTLE_MS = 900; // after another player's move, its cards land (520 ms), then a breath before your turn opens
 const validTable = (t) => (t && isValidTable(t) && [5, 7].includes(t.handSize) ? t : null);
 
 /** A practice move from `seat`: the engine's, with SURRENDER as concede. */
@@ -214,9 +218,17 @@ function autoColumn(card, top, placed, rest, trumpSuit) {
 
 const SUIT_ORDER = ["♠", "♥", "♣", "♦"];
 
-/** Your hand in order: by power (RANK), or by suit with the trumps and jokers last (SUIT). */
-function sortedHand(hand, trumpSuit, mode) {
+/**
+ * Your hand in order: by power (RANK), by suit with the trumps and jokers last (SUIT), or as
+ * you dragged it (`order`, card ids; cards new since then join on the right, by power).
+ */
+function sortedHand(hand, trumpSuit, mode, order = null) {
   const power = (c) => cardPower(c, trumpSuit);
+  if (mode === "custom" && order) {
+    const at = new Map(order.map((id, i) => [id, i]));
+    const known = hand.filter((c) => at.has(c.id)).sort((a, b) => at.get(a.id) - at.get(b.id));
+    return [...known, ...hand.filter((c) => !at.has(c.id)).sort((a, b) => power(a) - power(b))];
+  }
   if (mode !== "suit") return [...hand].sort((a, b) => power(a) - power(b));
   const group = (c) => (c.joker ? 9 : c.suit === trumpSuit ? 8 : SUIT_ORDER.indexOf(c.suit));
   return [...hand].sort((a, b) => group(a) - group(b) || power(a) - power(b));
@@ -668,6 +680,21 @@ const boxOf = (el) => {
 };
 
 /**
+ * The beaten stack to hold on the table, if `game` came from `prev` by a beat
+ * that finished it: the stack as it was, the finishing beat on top. Worked
+ * out while rendering (see useCardFlights), so the stack never leaves the
+ * table for a render and every card slides in again.
+ */
+function holdFor(prev, game, active) {
+  if (!prev || !active || reducedMotion() || prev.matchNumber !== game.matchNumber || !prev.stack) return null;
+  const fresh = game.events.length > prev.events.length ? game.events.slice(prev.events.length) : [];
+  const deadAt = fresh.findIndex((e) => e.type === "dead");
+  const finisher = deadAt > 0 ? fresh.slice(0, deadAt).reverse().find((e) => e.type === "beat") : null;
+  if (!finisher) return null;
+  return { key: `${game.matchNumber}:${game.events.length}`, layers: [...prev.stack.layers, finisher.cards], owners: [...prev.stack.owners, finisher.seat] };
+}
+
+/**
  * Where a stack card lies, from its layout box, not its painted one: a card
  * that just landed is still sliding in (kz-land), and a flight from it should
  * start where it comes to rest.
@@ -688,11 +715,20 @@ function restingBox(el) {
  * now. Cards coming into your hand keep their slot hidden until they land.
  * `active`: only during play (the deal has its own animation).
  */
-function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
+function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef, placing = null }) {
   const [flights, setFlights] = useState([]);
   const [incoming, setIncoming] = useState(() => new Set());
+  const [faceDown, setFaceDown] = useState(() => new Set()); // of those, the ones flying face down (drawn): they turn over as they land
   // A beaten stack, held on the table with the beat that finished it before it's swept away.
+  // Set in the render the finishing state arrives in, not after it: a render without it
+  // would unmount the stack, and every card on it would slide in again.
   const [held, setHeld] = useState(null);
+  const [heldSeen, setHeldSeen] = useState(game);
+  if (heldSeen !== game) {
+    setHeldSeen(game);
+    const hold = holdFor(heldSeen, game, active);
+    if (hold) setHeld(hold);
+  }
   // Your own cards on the stack, still flying in from your hand.
   const [stackHidden, setStackHidden] = useState(() => new Set());
   const ownPending = useRef(null); // your finishing beat: flown once the held stack is on the table
@@ -712,9 +748,12 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
     const prev = before.current;
     before.current = game;
     const root = rootRef.current;
-    if (!prev || !root || !active || reducedMotion() || prev.matchNumber !== game.matchNumber) return;
+    const key = `${game.matchNumber}:${game.events.length}`;
+    // A stack held for this state with nothing here to sweep it: it goes now.
+    const drop = () => setHeld((h) => (h?.key === key ? null : h));
+    if (!prev || !root || !active || reducedMotion() || prev.matchNumber !== game.matchNumber) return drop();
     const fresh = game.events.length > prev.events.length ? game.events.slice(prev.events.length) : [];
-    if (!fresh.length) return;
+    if (!fresh.length) return drop();
     const was = seen.current;
     const seatBox = (seat) => {
       const pos = posOf(seat);
@@ -722,9 +761,10 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
       const b = boxOf(el);
       return b && { ...b, w: Number(el.dataset.cardW) || 24 };
     };
-    const handBox = (id) => boxOf(root.querySelector(`[data-hand-card="${id}"]`));
+    const handBox = (id) => handCardBox(root.querySelector(`[data-hand-card="${id}"]`));
     const target = (seat, id) => (seat === mySeat ? handBox(id) : seatBox(seat));
-    const turn = (seat) => (seat === mySeat ? 0 : turnOf(seat));
+    // A card coming to your hand lands at its tilt in the fan; to another seat, at that seat's turn.
+    const turn = (seat, to) => (seat === mySeat ? (to?.rot ?? 0) : turnOf(seat));
 
     const prevHand = new Set((prev.players[mySeat]?.hand ?? []).map((c) => c.id));
     const stackBefore = prev.stack?.layers.flat() ?? [];
@@ -747,7 +787,7 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
             const el = root.querySelector(`[data-stack-card="${card.id}"]`);
             if (!from || !el) return;
             stackArriving.push(card.id);
-            add({ from, to: restingBox(el), card, delay: at + i * 0.05, arriveStack: card.id });
+            add({ from, to: restingBox(el), card, delay: at + i * 0.05, spin: from.rot ?? 0, arriveStack: card.id });
           });
           at += 0.1;
         } else if (e.type === "swapSeven") {
@@ -756,11 +796,11 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
           const pileW = boxOf(root.querySelector('[data-kz-pile="draw"]'))?.w;
           const old = prev.trumpCard;
           const from = e.seat === mySeat ? was.hand.get(e.card.id) : seatBox(e.seat);
-          if (from && spot && pileW) add({ from: { ...from, w: from.w > 4 ? from.w : pileW }, to: { ...spot, w: pileW }, card: e.card, delay: at, turn: 90 });
+          if (from && spot && pileW) add({ from: { ...from, w: from.w > 4 ? from.w : pileW }, to: { ...spot, w: pileW }, card: e.card, delay: at, spin: from.rot ?? 0, turn: 90 });
           const to = old && target(e.seat, old.id);
           if (old && was.trump && to && pileW) {
             if (e.seat === mySeat) arriving.push(old.id);
-            add({ from: { ...was.trump, w: pileW }, to, card: old, delay: at + 0.1, spin: 90, turn: turn(e.seat), arrive: e.seat === mySeat ? old.id : null });
+            add({ from: { ...was.trump, w: pileW }, to, card: old, delay: at + 0.1, spin: 90, turn: turn(e.seat, to), arrive: e.seat === mySeat ? old.id : null });
           }
           at += 0.5;
         } else if (e.type === "pickUp") {
@@ -769,7 +809,7 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
             const to = target(e.seat, card.id);
             if (!from || !to) return;
             if (e.seat === mySeat) arriving.push(card.id);
-            add({ from, to, card, delay: at + i * 0.035, turn: turn(e.seat), arrive: e.seat === mySeat ? card.id : null });
+            add({ from, to, card, delay: at + i * 0.035, turn: turn(e.seat, to), arrive: e.seat === mySeat ? card.id : null });
           });
           at += 0.25 + stackBefore.length * 0.035;
         } else if (e.type === "dead") {
@@ -788,7 +828,7 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
             const to = id ? handBox(id) : e.seat === mySeat ? null : seatBox(e.seat);
             if (!pile || !to) continue;
             if (id) arriving.push(id);
-            add({ from: pile, to, card: null, delay: at + i * 0.09, turn: turn(e.seat), arrive: id });
+            add({ from: pile, to, card: null, delay: at + i * 0.09, turn: turn(e.seat, to), arrive: id });
           }
           at += 0.12 + e.count * 0.09;
         }
@@ -805,6 +845,8 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
       }
       setFlights((list) => [...list, ...out]);
       if (arriving.length) setIncoming((set) => new Set([...set, ...arriving]));
+      const blind = out.filter((f) => f.arrive && !f.card).map((f) => f.arrive);
+      if (blind.length) setFaceDown((set) => new Set([...set, ...blind]));
     };
 
     // A beat that finished the stack: it lands on top, the stack stays a moment, then everything
@@ -812,8 +854,8 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
     const deadAt = fresh.findIndex((e) => e.type === "dead");
     const finisher = deadAt > 0 ? fresh.slice(0, deadAt).reverse().find((e) => e.type === "beat") : null;
     if (finisher && prev.stack) {
+      // The stack is already held (see holdFor): the moves before the finishing beat fly first.
       launch(plan(fresh.slice(0, deadAt).filter((e) => e !== finisher), was.stack, null));
-      setHeld({ layers: [...prev.stack.layers, finisher.cards], owners: [...prev.stack.owners, finisher.seat] });
       // Your own finishing beat flies from your hand once the held stack is on the table.
       if (finisher.seat === mySeat) {
         ownPending.current = finisher.cards.map((card) => ({ card, from: was.hand.get(card.id) })).filter((x) => x.from);
@@ -824,7 +866,7 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
       const run = () => {
         const lying = new Map();
         root.querySelectorAll("[data-stack-card]").forEach((el) => lying.set(el.dataset.stackCard, restingBox(el)));
-        setHeld(null);
+        drop();
         launch(plan(fresh.slice(deadAt), lying, finisher));
       };
       sweep.current = { run, timer: setTimeout(() => {
@@ -833,6 +875,7 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
       }, HOLD_MS) };
       return;
     }
+    drop();
     launch(plan(fresh, was.stack, fresh.slice(0, Math.max(0, deadAt)).reverse().find((e) => e.type === "beat") ?? null));
     // posOf / turnOf follow the seat and the table, which `game` already does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -849,13 +892,51 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
     const out = own
       .map(({ card, from }, i) => {
         const el = root.querySelector(`[data-stack-card="${card.id}"]`);
-        return el && { id: `kf-${nextId.current++}`, from, to: restingBox(el), card, delay: i * 0.05, arriveStack: card.id };
+        return el && { id: `kf-${nextId.current++}`, from, to: restingBox(el), card, delay: i * 0.05, spin: from.rot ?? 0, arriveStack: card.id };
       })
       .filter(Boolean);
     setFlights((list) => [...list, ...out]);
     // rootRef is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [held]);
+
+  // Your beat being placed: a card put on the stack flies there from your hand (or from where a
+  // drag let it go), one taken back flies home to its slot, one moved to another column flies over.
+  const lastPlaced = useRef({ key: null, ids: [] });
+  useLayoutEffect(() => {
+    const prev = lastPlaced.current;
+    const ids = placing?.ids ?? [];
+    lastPlaced.current = { key: placing?.key ?? null, ids };
+    const drop = placing?.dropAt.current ?? null;
+    if (placing) placing.dropAt.current = null;
+    const root = rootRef.current;
+    if (!placing || !root || !active || reducedMotion() || prev.key !== placing.key) return;
+    const colOf = (list) => new Map(list.flatMap((id, col) => (id ? [[id, col]] : [])));
+    const was = colOf(prev.ids);
+    const now = colOf(ids);
+    const out = [];
+    const toStack = [];
+    const toHand = [];
+    new Set([...was.keys(), ...now.keys()]).forEach((id) => {
+      if (was.get(id) === now.get(id)) return;
+      const card = placing.cardOf(id);
+      const onStack = now.has(id);
+      const el = root.querySelector(onStack ? `[data-staged-card="${id}"]` : `[data-hand-card="${id}"]`);
+      const to = onStack ? boxOf(el) : handCardBox(el);
+      const lay = seen.current.hand.get(id);
+      // A dragged card sets off from where it was let go: the carried copy's centre (see useCardDrag).
+      const from = drop?.id === id && lay ? { x: drop.x, y: drop.y - 0.1 * lay.w * CARD_RATIO, w: lay.w, rot: -4 } : lay;
+      if (!card || !from || !to) return;
+      (onStack ? toStack : toHand).push(id);
+      out.push({ id: `kf-${nextId.current++}`, from, to, card, spin: from.rot ?? 0, turn: to.rot ?? 0, duration: PLACE_FLY, arriveStack: onStack ? id : null, arrive: onStack ? null : id });
+    });
+    if (!out.length) return;
+    if (toStack.length) setStackHidden((set) => new Set([...set, ...toStack]));
+    if (toHand.length) setIncoming((set) => new Set([...set, ...toHand]));
+    setFlights((list) => [...list, ...out]);
+    // placing.ids is read with its key and its signature; rootRef is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placing?.key, placing?.sig, active]);
 
   // Where everything lies now, for the next state's flights to start from.
   useLayoutEffect(() => {
@@ -864,7 +945,8 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
     const stack = new Map();
     root.querySelectorAll("[data-stack-card]").forEach((el) => stack.set(el.dataset.stackCard, restingBox(el)));
     const hand = new Map();
-    root.querySelectorAll("[data-hand-card]").forEach((el) => hand.set(el.dataset.handCard, boxOf(el)));
+    // Your cards as painted: a picked one lifted, each at its tilt.
+    root.querySelectorAll("[data-hand-card]").forEach((el) => hand.set(el.dataset.handCard, handCardBox(el, true)));
     // Cards placed on the stack for a beat fly on from there.
     root.querySelectorAll("[data-staged-card]").forEach((el) => hand.set(el.dataset.stagedCard, boxOf(el)));
     seen.current = {
@@ -901,11 +983,47 @@ function useCardFlights({ game, mySeat, posOf, turnOf, active, rootRef }) {
   useEffect(() => {
     setFlights([]);
     setIncoming(new Set());
+    setFaceDown(new Set());
     setStackHidden(new Set());
     setHeld(null);
   }, [game.matchNumber]);
 
-  return { flights, incoming, land, held, stackHidden };
+  return { flights, incoming, faceDown, land, held, stackHidden };
+}
+
+/** Moves by another player that animate on the table: your turn waits for them. */
+const SETTLE_EVENTS = new Set(["lead", "beat", "pickUp", "draw", "swapSeven"]);
+
+/**
+ * Whether the table has settled: after another player's move, their cards
+ * slide onto the stack (kz-land) and any flights land, then a breath
+ * (SETTLE_MS) passes, before your turn opens: the YOUR TURN banner, the
+ * ping, your cards to click. `busy`: cards are flying, or a beaten stack is
+ * held. Once a turn has opened it stays open while it's the same player's
+ * turn (your own SWAP 7, say, doesn't close and reopen it).
+ */
+function useSettled(game, mySeat, busy) {
+  const moveKey = `${game.matchNumber}:${game.events?.length ?? 0}`;
+  const turnKey = `${game.matchNumber}:${game.turn}`;
+  const [seen, setSeen] = useState({ key: moveKey, game });
+  const [calmKey, setCalmKey] = useState(moveKey);
+  const [openTurn, setOpenTurn] = useState(null);
+  // A new move: if it was another player's, wait (set while rendering, so the turn never opens for a frame first).
+  if (seen.key !== moveKey) {
+    const prev = seen.game;
+    setSeen({ key: moveKey, game });
+    const fresh = prev.matchNumber === game.matchNumber && game.events.length > prev.events.length ? game.events.slice(prev.events.length) : [];
+    const othersMoved = !reducedMotion() && fresh.some((e) => SETTLE_EVENTS.has(e.type) && e.seat !== mySeat);
+    if (!othersMoved) setCalmKey(moveKey);
+  }
+  useEffect(() => {
+    if (calmKey === moveKey) return;
+    const timer = setTimeout(() => setCalmKey(moveKey), SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [calmKey, moveKey]);
+  const ready = calmKey === moveKey && !busy;
+  if (ready && openTurn !== turnKey) setOpenTurn(turnKey);
+  return ready || openTurn === turnKey;
 }
 
 /**
@@ -952,8 +1070,52 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
   const [dealShown, setDealShown] = useState(null);
   const stage = !skipDraw && drewForDeal(game) && !(revealed && game.phase !== PHASES.DRAW) ? "draw" : !dealt ? (dealShown === game.matchNumber ? "trump" : "deal") : "play";
   const me = game.players[mySeat] ?? { hand: [], out: true, team: -1 };
-  const myTurn = stage === "play" && game.phase === PHASES.PLAY && game.turn === mySeat;
-  const myDraw = game.phase === PHASES.DRAW && game.turn === mySeat;
+  // A card drawn for the deal takes a moment to slide out, fly and turn over. Until it
+  // has, the table shows nothing the draw decided: whose draw is next, or who deals.
+  // (A reload starts with every card already down.)
+  const drawCount = game.dealDraws?.length ?? 0;
+  const latestDraw = drawCount ? `${game.matchNumber}-${drawCount - 1}` : null;
+  const [landedDraw, setLandedDraw] = useState(latestDraw);
+  useEffect(() => {
+    if (!latestDraw) return;
+    const timer = setTimeout(() => setLandedDraw(latestDraw), reducedMotion() ? 0 : DRAW_LAND_MS + 100);
+    return () => clearTimeout(timer);
+  }, [latestDraw]);
+  const drawLanding = latestDraw !== null && landedDraw !== latestDraw;
+  const drawDecided = game.phase !== PHASES.DRAW && !drawLanding;
+  const rootRef = useRef(null);
+  const n = game.players.length;
+  const viewer = mySeat >= 0 ? mySeat : 0;
+  const posOf = (seat) => positionOf(seat, viewer, n);
+  // How each seat's face-down cards turn on the felt: dealt and drawn cards land turned so.
+  // The table picks its own shape for the room it has (see KhuzurTable).
+  const [shape, setShape] = useState(layout);
+  const geo = KHUZUR_GEOMETRY[layout === "compact" ? "compact" : shape] ?? KHUZUR_GEOMETRY[layout];
+  const seatTurns = Object.fromEntries(KHUZUR_SEAT_NAMES.filter((s) => s !== "bottom").map((s) => [s, geo.seats[s].fan ? turnAt(geo, geo.seats[s].t) : 0]));
+  // Your beat being placed: per top card, the id of the card you've put on it (or null).
+  // It belongs to this stack on this turn, and goes once the table moves on.
+  const placeKey = `${turnKey}:${game.stack?.layers.length ?? 0}:${game.events?.length ?? 0}`;
+  const [placing, setPlacing] = useState({ key: null, cols: [] });
+  const dropAt = useRef(null); // { id, x, y }: where a card was just let go of, for its flight to start from
+  /** A carried card let go at x, y: if that places it (in the render it brings), it flies from there. */
+  const letGo = (id, x, y) => {
+    dropAt.current = { id, x, y };
+    setTimeout(() => (dropAt.current = null));
+  };
+  const placingNow = placing.key === placeKey ? placing.cols : [];
+  const { flights, incoming, faceDown, land, held, stackHidden } = useCardFlights({
+    game,
+    mySeat,
+    posOf,
+    turnOf: (seat) => seatTurns[posOf(seat)] ?? 0,
+    active: stage === "play",
+    rootRef,
+    placing: { key: placeKey, ids: placingNow, sig: placingNow.join(","), cardOf: (id) => me.hand.find((c) => c.id === id), dropAt },
+  });
+  // Your turn opens once the table has settled from the moves before it (see useSettled).
+  const settled = useSettled(game, mySeat, flights.length > 0 || !!held);
+  const myTurn = stage === "play" && game.phase === PHASES.PLAY && game.turn === mySeat && settled;
+  const myDraw = game.phase === PHASES.DRAW && game.turn === mySeat && !drawLanding;
   const over = game.phase === PHASES.MATCH_OVER;
   const handleRevealed = useCallback(() => onRevealed?.(game.matchNumber), [onRevealed, game.matchNumber]);
   const handleDealt = useCallback(() => onDealt?.(game.matchNumber), [onDealt, game.matchNumber]);
@@ -962,7 +1124,6 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
   const [dealing, setDealing] = useState({ match: null, counts: [] });
   const dealtSoFar = (seat) => (dealing.match === game.matchNumber ? (dealing.counts[seat] ?? 0) : 0);
   const onDealProgress = useCallback((counts) => setDealing({ match: game.matchNumber, counts }), [game.matchNumber]);
-  const rootRef = useRef(null);
   useTurnTitle(myTurn || myDraw);
 
   const play = (sound) => {
@@ -984,14 +1145,10 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
     if (myTurn || myDraw) play("playTurnAlert");
   }, [myTurn, myDraw, game.turn]);
 
-  const sorted = useMemo(() => sortedHand(me.hand.filter((c) => !c.hidden), game.trumpSuit, handOrder.mode), [me.hand, game.trumpSuit, handOrder.mode]);
+  const sorted = useMemo(() => sortedHand(me.hand.filter((c) => !c.hidden), game.trumpSuit, handOrder.mode, handOrder.order), [me.hand, game.trumpSuit, handOrder.mode, handOrder.order]);
 
-  // Your beat being placed: per top card, the id of the card you've put on it (or null).
-  // It belongs to this stack on this turn, and goes once the table moves on.
   const top = topLayer(game);
   const beating = myTurn && !!game.stack;
-  const placeKey = `${turnKey}:${game.stack?.layers.length ?? 0}:${game.events?.length ?? 0}`;
-  const [placing, setPlacing] = useState({ key: null, cols: [] });
   const byId = new Map(sorted.map((c) => [c.id, c]));
   const placedIds = beating ? top.map((_, col) => (placing.key === placeKey && byId.has(placing.cols[col]) ? placing.cols[col] : null)) : [];
   const placedCards = placedIds.map((id) => (id ? byId.get(id) : null));
@@ -1011,9 +1168,12 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
     onStage([...placedSig].flatMap((on, col) => (on === "1" ? [col] : [])));
   }, [onStage, beating, placeKey, placedSig]);
 
-  // Nothing in your hand until it's dealt; while the deal plays, your cards arrive one by one in
-  // the order dealt; then they sort. Cards you've placed on the stack leave it.
-  const hand = stage === "draw" ? [] : stage === "deal" ? me.hand.slice(0, dealtSoFar(mySeat)) : sorted.filter((c) => !placedIds.includes(c.id));
+  // Nothing in your hand until it's dealt; while the deal plays, your cards arrive one by one,
+  // in the order they're dealt, and lie so while the trump is turned up. Once play starts the
+  // hand sorts itself, each card arcing to its place (see KhuzurHand), by the trump now shown.
+  // Cards you've placed on the stack leave it.
+  const dealOrder = stage === "deal" ? me.hand.slice(0, dealtSoFar(mySeat)) : stage === "trump" ? me.hand : null;
+  const hand = stage === "draw" ? [] : dealOrder ? dealOrder.filter((c) => !c.hidden) : sorted.filter((c) => !placedIds.includes(c.id));
   /** How many cards a seat shows holding: none before the deal, then as they're dealt. */
   const shownCount = (seat) => {
     const count = game.players[seat]?.hand.length ?? 0;
@@ -1055,6 +1215,7 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
    */
   const movePlaced = (from, x, y) => {
     const id = placedIds[from];
+    letGo(id, x, y);
     const col = columnAt(x, y);
     if (!id || col === from) return;
     if (col === null) return unplace(from);
@@ -1094,24 +1255,15 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
       : null;
   const staged = beating ? (placedCards.some(Boolean) ? placedCards.map((card) => (card ? { card } : null)) : null) : othersStaged;
 
-  const n = game.players.length;
-  const viewer = mySeat >= 0 ? mySeat : 0;
-  const posOf = (seat) => positionOf(seat, viewer, n);
   const colorOf = (seat) => seatColor(table, seat);
   const nameOf = (seat) => short(game.players[seat]?.name ?? "");
   const placeOf = (seat) => (game.players[seat]?.out ? game.places[game.players[seat].team] : null);
   const teamGame = table.perTeam > 1;
-  // How each seat's face-down cards turn on the felt: dealt and drawn cards land turned so.
-  // The table picks its own shape for the room it has (see KhuzurTable).
-  const [shape, setShape] = useState(layout);
-  const geo = KHUZUR_GEOMETRY[layout === "compact" ? "compact" : shape] ?? KHUZUR_GEOMETRY[layout];
-  const seatTurns = Object.fromEntries(KHUZUR_SEAT_NAMES.filter((s) => s !== "bottom").map((s) => [s, geo.seats[s].fan ? turnAt(geo, geo.seats[s].t) : 0]));
   const callouts = useSeatCallouts(game, stage === "play", mySeat);
   const [calloutDone, setCalloutDone] = useState(null); // the last of yours that has played
-  const { flights, incoming, land, held, stackHidden } = useCardFlights({ game, mySeat, posOf, turnOf: (seat) => seatTurns[posOf(seat)] ?? 0, active: stage === "play", rootRef });
 
   // Whose move the table waits on: their side of the rim glows (yours: your hand's mark).
-  const waitingOn = stage === "draw" ? (game.phase === PHASES.DRAW ? game.turn : null) : stage === "play" && game.phase === PHASES.PLAY ? game.turn : null;
+  const waitingOn = stage === "draw" ? (game.phase === PHASES.DRAW && !drawLanding ? game.turn : null) : stage === "play" && game.phase === PHASES.PLAY ? game.turn : null;
   const turnSeat = waitingOn != null && waitingOn !== mySeat ? posOf(waitingOn) : null;
 
   const seats = {};
@@ -1172,8 +1324,8 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
             draws={[...latestBySeat.values()]}
             latest={draws.length ? `${game.matchNumber}-${draws.length - 1}` : null}
             preview={myDraw ? pickDepth : 0}
-            label={game.phase === PHASES.DRAW ? "DRAW FOR THE DEAL" : "HIGHEST CARD DEALS"}
-            winner={game.phase === PHASES.DRAW ? null : posOf(game.dealer)}
+            label={drawDecided ? "HIGHEST CARD DEALS" : "DRAW FOR THE DEAL"}
+            winner={drawDecided ? posOf(game.dealer) : null}
             onDone={handleRevealed}
           />
         )
@@ -1218,7 +1370,10 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
   let message;
   let hint = null;
   let buttons = [];
-  if (game.phase === PHASES.DRAW) {
+  if (stage === "draw" && drawLanding) {
+    const last = game.dealDraws.at(-1);
+    message = `${last.seat === mySeat ? "You draw" : `${nameOf(last.seat)} draws`} the ${nth(last.depth)} card...`;
+  } else if (game.phase === PHASES.DRAW) {
     message = myDraw ? `Your draw: take a card 1 to ${drawMax} down. Highest card deals.` : `${nameOf(game.turn)} is drawing for the deal...`;
     if (myDraw) buttons = [{ label: "TAKE", tone: "gold", primary: true, onClick: () => send({ type: "drawForDeal", depth: pickDepth }) }];
   } else if (stage === "draw") message = `${nameOf(game.dealer)} drew the highest card and deals.`;
@@ -1356,10 +1511,16 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
                 cardW={Math.round(handW * 0.8)}
                 enabled={myTurn}
                 emptyMessage={stage === "draw" ? "DRAW FOR THE DEAL: THE HIGHEST CARD DEALS" : stage === "deal" || stage === "trump" ? null : mySeat < 0 ? "WATCHING" : me.out ? `YOU'RE OUT — ${ordinal(placeOf(mySeat) ?? 0)} PLACE` : null}
+                dealing={stage === "deal"}
+                dealSlots={table.handSize}
+                dealFrom={() => rootRef.current?.querySelector("[data-kz-felt]")}
                 hidden={incoming}
+                faceDown={faceDown}
+                onReorder={stage === "play" && mySeat >= 0 ? handOrder.reorder : null}
                 draggable={beating}
                 onDragOver={(id, x, y) => showDrop(id ? byId.get(id) : null, x, y)}
                 onDrop={(id, x, y) => {
+                  letGo(id, x, y);
                   const col = columnAt(x, y);
                   if (col !== null) placeOn(id, col);
                 }}
@@ -1392,7 +1553,7 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
               hint={hint}
               warning={error}
               buttons={buttons}
-              sortMode={handOrder.mode === "suit" ? "suit" : "rank"}
+              sortMode={handOrder.mode}
               onSortModeChange={(m) => {
                 handOrder.pick(m);
                 play("playClick");

@@ -3,7 +3,7 @@
 // drawn as a pixel grid of SVG squares so it stays crisp at every card size:
 //
 //   gray  — a moonlit Pierrot: silver three-horned hat with silver bells, a
-//           pale face with one black tear and a frown, under a crescent moon
+//           pale face with one blue tear and a frown, under a crescent moon
 //           and stars, with a cool silver shine.
 //   color — a grinning harlequin crowned in gold: rose, cyan and violet horns
 //           with gold bells, rosy cheeks and a gold ruff, on crimson and indigo
@@ -32,12 +32,13 @@ const HAT = [
   "...kgkgkgkgkgk...",
 ];
 const FACES = {
-  // A sad Pierrot: small eyes, one tear, a frown (its corners turned down).
+  // A sad Pierrot: small eyes, a frown (its corners turned down, evenly), and one blue tear
+  // just under the left eye, clear of the mouth (a dark tear beside it read as a smirk).
   gray: [
     "....FFFFFFFFF....",
     "....FFEFFFEFF....",
-    "....FFFFFFFFF....",
     "....FFTFFFFFF....",
+    "....FFFFFFFFF....",
     "....FFFmmmFFF....",
     ".....FmFFFmF.....",
   ],
@@ -71,7 +72,7 @@ const PALETTES = {
     g: "#cfd3e0",
     F: "#e6e8f0",
     E: "#1a1024",
-    T: "#1a1024",
+    T: "#5b8fd6",
     m: "#4a4d62",
     r: "#e6e8f0",
     D: "#cfd3e0",

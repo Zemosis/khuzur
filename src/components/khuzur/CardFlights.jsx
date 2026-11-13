@@ -16,7 +16,7 @@ import { toPixelCardProps } from "./cardProps";
 
 const FLY = 0.42; // seconds in the air
 
-/** One card in the air. from / to: { x, y, w } (centre and width, px); card: shown face up, else face down. */
+/** One card in the air. from / to: { x, y, w } (centre and width, px); card: shown face up, else face down; duration: seconds, else FLY. */
 function Sprite({ flight, onLand }) {
   const ref = useRef(null);
 
@@ -35,7 +35,7 @@ function Sprite({ flight, onLand }) {
         scale: to.w / w,
         autoAlpha: 1,
         delay,
-        duration: FLY,
+        duration: flight.duration ?? FLY,
         ease: "power2.inOut",
         immediateRender: true,
         onStart: () => gsap.set(el, { autoAlpha: 1 }),
@@ -52,7 +52,7 @@ function Sprite({ flight, onLand }) {
   );
 }
 
-/** flights: [{ id, from, to, card, delay, turn, spin }]. onLand(id): one has landed (keep it stable). */
+/** flights: [{ id, from, to, card, delay, turn, spin, duration }]. onLand(id): one has landed (keep it stable). */
 export default function CardFlights({ flights, onLand }) {
   if (!flights.length) return null;
   return (

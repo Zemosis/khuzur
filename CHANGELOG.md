@@ -8,6 +8,21 @@ The hall is in early access, so versions are 0.x: the middle number moves
 for a new game or a big new system, the last for everything else. 1.0.0 is
 the first stable release.
 
+## 0.7.1 — 13 November 2026
+
+### Khuzur's cards move like the other games'
+- **Dealt cards fly to you.** Each card of the deal flies face down from the deck into your hand and turns over as it lands, as in Thirteen and Muushig. Your hand sorts itself once the trump is turned up, every card arcing up and over to its place.
+- **Sorting arcs.** RANK and SUIT send each card up and over the others to its new place, one after another, instead of sliding straight there in a blink.
+- **Arrange your hand yourself.** Drag a card along your hand to put it where you like, as in Thirteen and Muushig. While you beat, carry it up onto the table instead to place it on a card of the stack, as before.
+- **Drawn cards turn over as they land.**
+- **Cards glide between your hand and the stack.** A card you place on the stack to beat flies there from your hand, or from where you let go of it, and one you take back flies home. Leads, beats and pick-ups start and land exactly where the cards lie, tilt included.
+
+### Fixes
+- **No more flicker when a stack is beaten.** The stack's cards no longer slide in all over again as the last beat lands, and nothing jumps when the deal ends or when picked-up and drawn cards land in your hand.
+- **No spoilers in the draw for the deal.** The table waits for the last drawn card to land before it lights up who deals, or whose draw is next.
+- **Your turn waits for the table.** YOUR TURN shows once the cards just played have landed, with a breath to see what happened.
+- **The gray joker's frown is even.** Its tear is now blue, just under its eye, so it no longer looks like a smirk.
+
 ## 0.7.0 — 11 November 2026
 
 ### A new game: Khuzur

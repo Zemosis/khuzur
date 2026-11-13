@@ -8,17 +8,18 @@
 // 3 over 2, 4 over 3.
 //
 // A card that just landed slides in from its owner's side of the table (CSS
-// kz-land; still under reduced motion), and the top layer glows a moment as
+// kz-land; still under reduced motion), unless it flew there (your own, see
+// CardFlights), and the top layer glows a moment as
 // it lands (kz-fresh), so a quick move is still seen.
 //
 // While a beat is being placed, its cards lie on top of the columns they
 // cover, ringed in gold: face up for the player placing them, face down for
-// everyone else. Yours can be clicked to take one back, or dragged: onto
+// everyone else. Yours fly here from your hand (hidden till they land). Yours can be clicked to take one back, or dragged: onto
 // another top card to move it there, or off the stack to take it back. The top layer's cards are drop
 // targets for a card dragged from your hand (data-beat-col), and the one
 // under the drag lights up.
 
-import React from "react";
+import React, { useState } from "react";
 import { PixelCard } from "../PixelCard";
 import { CARD_RATIO } from "../../hooks/useTableMetrics";
 import { toPixelCardProps } from "./cardProps";
@@ -57,6 +58,9 @@ function lie(key, k, depth, cardH, peeks) {
  */
 export default function StackColumns({ layers, owners, cardW, colorOf, fromOf, hidden = null, staged = null, stagedColor = null, onUnstage, targets = false, dropCol = null, onStagedMove, onStagedDrop }) {
   const { bind, onClick, dragging, ghost } = useCardDrag({ enabled: !!onStagedDrop, onMove: onStagedMove, onDrop: onStagedDrop });
+  // Cards that came in by a flight (hidden till it landed) don't slide in again once shown.
+  const [flown, setFlown] = useState(() => new Set());
+  if (hidden && [...hidden].some((id) => !flown.has(id))) setFlown(new Set([...flown, ...hidden]));
   if (!layers?.length) return null;
   const cardH = Math.round(cardW * CARD_RATIO);
   const columns = layers[0].length;
@@ -87,7 +91,7 @@ export default function StackColumns({ layers, owners, cardW, colorOf, fromOf, h
                       data-testid="stack-card"
                       data-stack-card={card.id}
                       data-beat-col={isTop && targets ? col : undefined}
-                      className="absolute inset-0 kz-land"
+                      className={flown.has(card.id) || hidden?.has(card.id) ? "absolute inset-0" : "absolute inset-0 kz-land"}
                       style={{
                         zIndex: k,
                         "--from-x": `${fx}px`,
@@ -122,13 +126,16 @@ export default function StackColumns({ layers, owners, cardW, colorOf, fromOf, h
                     onClick={onClick(() => place.card && onUnstage?.(col))}
                     {...(place.card ? bind(col, place.card, cardW) : {})}
                     aria-label={place.card ? `Take back ${place.card.rank === "JOKER" ? "the joker" : `${place.card.rank}${place.card.suit}`}` : "A card placed, not played yet"}
-                    className="absolute inset-0 p-0 bg-transparent border-0 kz-rise"
+                    // Yours flies here from your hand; someone else's (face down) rises into place.
+                    className={place.card ? "absolute inset-0 p-0 bg-transparent border-0" : "absolute inset-0 p-0 bg-transparent border-0 kz-rise"}
                     style={{
                       zIndex: layers.length + 1,
                       cursor: place.card ? "grab" : "default",
                       touchAction: place.card ? "none" : undefined,
                       // While it's carried, only the carried copy shows: no faded afterimage left behind.
                       opacity: dragging === col ? 0 : undefined,
+                      // Yours is still flying here from your hand (or another column).
+                      visibility: place.card && hidden?.has(place.card.id) ? "hidden" : undefined,
                       // Gold all round: placed, not played yet; the bar on top is the beater's colour, as on every layer.
                       boxShadow: `0 -3px 0 0 ${stagedColor ?? "#f4c430"}, 0 0 0 3px #f4c430, 4px 6px 0 rgba(10,7,18,0.45)`,
                       transform: lie(`staged-${col}`, layers.length, 0, cardH, peeks).transform,

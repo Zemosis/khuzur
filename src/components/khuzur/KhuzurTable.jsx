@@ -258,7 +258,8 @@ export default function KhuzurTable({ layout = "full", game, seats = {}, colorOf
           })}
           {dealerSeat && <DealerButton geo={geo} t={geo.seats[dealerSeat].t + geo.seats[dealerSeat].button} seat={dealerSeat} size={size.button} />}
 
-          <div className="absolute z-30 pointer-events-none" style={feltBox}>
+          {/* The deal's deck sits in the middle of this box: your dealt cards fly from there (see KhuzurHand). */}
+          <div className="absolute z-30 pointer-events-none" style={feltBox} data-kz-felt data-card-w={size.stack}>
             {overlay?.({ cardWidth: size.stack, drawCw, spots, ...drawLayout, pileW: size.pile, drawSpot: [Math.round((geo.drawAt[0] - 0.5) * feltW * scale), Math.round((geo.drawAt[1] - 0.5) * feltH * scale)] })}
           </div>
           {banner}
