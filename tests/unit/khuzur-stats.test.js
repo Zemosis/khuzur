@@ -46,4 +46,9 @@ describe("khuzurSummary", () => {
       highlights: null,
     });
   });
+
+  it("names a player of the team left in 1st when the others surrendered", () => {
+    const conceded = { ...state, places: [2, 1], events: [...state.events.slice(0, -1), { type: "concede", seat: 0, team: 0, place: 2 }] };
+    expect(khuzurSummary(conceded).winnerSeat).toBe(1);
+  });
 });

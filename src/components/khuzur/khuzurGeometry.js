@@ -95,7 +95,9 @@ export const KHUZUR_GEOMETRY = {
     width: 380,
     height: 562,
     felt: { x0: 34, y0: 52, x1: 346, y1: 548 },
-    minHeight: 440,
+    // Lower than Muushig's: Khuzur's controls take two rows under the hand (PICK UP and
+    // SURRENDER wrap), and a phone's table and hand should still fit without scrolling.
+    minHeight: 400,
     outside: false,
     plateW: 74,
     track: 34,

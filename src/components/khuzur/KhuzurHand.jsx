@@ -347,55 +347,53 @@ export default function KhuzurHand({
       {n === 0 && emptyMessage ? (
         <div className="absolute inset-0 flex items-center justify-center font-pixel-display text-[12px] text-glow-gold text-center px-4">{emptyMessage}</div>
       ) : (
-        // Rendered in a fixed order (by id), each card placed by GSAP from its slot in `cards`: a
-        // re-sort then moves no element, and every card can travel to its new place.
-        [...cards]
-          .sort((a, b) => (a.id < b.id ? -1 : 1))
-          .map((card) => {
-            const on = selected.includes(card.id);
-            return (
-              <div
-                key={card.id}
-                ref={setEl(card.id, "slot")}
-                data-hand-card={card.id}
-                className="absolute"
-                onPointerDown={(e) => startDrag(card.id, e)}
-                style={{
-                  left: "50%",
-                  bottom: base,
-                  width: cardW,
-                  height: cardH,
-                  marginLeft: -cardW / 2,
-                  transformOrigin: "50% 100%",
-                  visibility: hidden?.has(card.id) ? "hidden" : undefined,
-                  cursor: grab ? "grab" : undefined,
-                  // Carrying a card up onto the table needs every direction; reordering, only sideways (a vertical swipe still scrolls).
-                  touchAction: !grab ? undefined : canCarry ? "none" : "pan-y",
-                }}
-              >
-                <div ref={setEl(card.id, "flip")} className="relative w-full h-full">
-                  <button
-                    type="button"
-                    aria-label={cardLabel(card)}
-                    aria-pressed={on}
-                    disabled={!enabled}
-                    onClick={() => {
-                      if (swallow.current) return void (swallow.current = false);
-                      onToggle(card.id);
-                    }}
-                    className="block w-full h-full p-0 bg-transparent border-0"
-                    // Off your turn the card can't be picked, but still dragged: the press goes to its slot.
-                    style={{ cursor: enabled ? (grab ? "grab" : "pointer") : undefined, pointerEvents: enabled ? undefined : "none" }}
-                  >
-                    <PixelCard {...toPixelCardProps(card)} width={cardW} selected={on} selectable={enabled} style={liftVars} />
-                  </button>
-                  <div ref={setEl(card.id, "back")} className="absolute inset-0 pointer-events-none invisible">
-                    <PixelCard faceDown width={cardW} />
-                  </div>
+        // In the order shown, so Tab goes left to right; where each card lies (and over which) is
+        // GSAP's, so a re-sort still sends every card travelling to its new place.
+        cards.map((card) => {
+          const on = selected.includes(card.id);
+          return (
+            <div
+              key={card.id}
+              ref={setEl(card.id, "slot")}
+              data-hand-card={card.id}
+              className="absolute"
+              onPointerDown={(e) => startDrag(card.id, e)}
+              style={{
+                left: "50%",
+                bottom: base,
+                width: cardW,
+                height: cardH,
+                marginLeft: -cardW / 2,
+                transformOrigin: "50% 100%",
+                visibility: hidden?.has(card.id) ? "hidden" : undefined,
+                cursor: grab ? "grab" : undefined,
+                // Carrying a card up onto the table needs every direction; reordering, only sideways (a vertical swipe still scrolls).
+                touchAction: !grab ? undefined : canCarry ? "none" : "pan-y",
+              }}
+            >
+              <div ref={setEl(card.id, "flip")} className="relative w-full h-full">
+                <button
+                  type="button"
+                  aria-label={cardLabel(card)}
+                  aria-pressed={on}
+                  disabled={!enabled}
+                  onClick={() => {
+                    if (swallow.current) return void (swallow.current = false);
+                    onToggle(card.id);
+                  }}
+                  className="block w-full h-full p-0 bg-transparent border-0"
+                  // Off your turn the card can't be picked, but still dragged: the press goes to its slot.
+                  style={{ cursor: enabled ? (grab ? "grab" : "pointer") : undefined, pointerEvents: enabled ? undefined : "none" }}
+                >
+                  <PixelCard {...toPixelCardProps(card)} width={cardW} selected={on} selectable={enabled} style={liftVars} />
+                </button>
+                <div ref={setEl(card.id, "back")} className="absolute inset-0 pointer-events-none invisible">
+                  <PixelCard faceDown width={cardW} />
                 </div>
               </div>
-            );
-          })
+            </div>
+          );
+        })
       )}
       {carry &&
         createPortal(

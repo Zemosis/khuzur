@@ -43,6 +43,7 @@ import DealAnimation from "../../components/thirteen/DealAnimation";
 import CardFlights from "../../components/khuzur/CardFlights";
 import TrumpReveal, { TRUMP_REVEAL_MS } from "../../components/khuzur/TrumpReveal";
 import { DRAW_LAND_MS } from "../../components/muushig/flightTiming";
+import { potText } from "../../components/credits/potText";
 import Callout from "../../components/Callout";
 import { KHUZUR_GEOMETRY, KHUZUR_SEAT_NAMES } from "../../components/khuzur/khuzurGeometry";
 import { turnAt } from "../../components/muushig/stadiumGeometry";
@@ -301,10 +302,11 @@ function logEntry(e, game) {
 
 /**
  * The move log: each new engine event of `game` goes into the chat's LOG tab
- * once. Joining mid-match starts from the last deal.
+ * once. Joining mid-match starts from the last deal. `holdDraw`: a card drawn
+ * for the deal is still landing; its line, and what it decided, wait for it.
  */
-function useMoveLog(game, setMessages) {
-  const logged = useRef({ match: null, count: 0, caughtUp: false });
+function useMoveLog(game, setMessages, holdDraw = false, creditResult = null) {
+  const logged = useRef({ match: null, count: 0, caughtUp: false, pot: null });
   useEffect(() => {
     if (!game?.events || !setMessages) return;
     const log = logged.current;
@@ -312,19 +314,33 @@ function useMoveLog(game, setMessages) {
       log.match = game.matchNumber;
       log.count = 0;
     }
-    if (!log.caughtUp) {
+    const catchingUp = !log.caughtUp;
+    if (catchingUp) {
       log.caughtUp = true;
       log.count = Math.max(0, game.events.findLastIndex((e) => e.type === "deal"));
     }
     if (game.events.length < log.count) log.count = 0; // a fresh state
-    const fresh = game.events.slice(log.count);
-    log.count = game.events.length;
-    if (!fresh.length) return;
+    const upTo = holdDraw ? Math.max(log.count, game.events.findLastIndex((e) => e.type === "dealDraw")) : game.events.length;
+    const fresh = game.events.slice(log.count, upTo);
+    log.count = upTo;
+    // A credit match's pot, once, as the result shows (not before).
+    const pot = creditResult && log.pot !== game.matchNumber ? [{ kind: "pot", text: potText(creditResult, game.players.map((p) => p.name)) }] : [];
+    if (pot.length) log.pot = game.matchNumber;
+    if (!fresh.length && !pot.length) return;
+    // Cards hitting the table snap, as in the other games (not for moves caught up on joining).
+    if (!catchingUp && fresh.some((e) => e.type === "lead" || e.type === "beat")) {
+      try {
+        soundManager.playSnap?.();
+      } catch {
+        /* audio not ready */
+      }
+    }
     const entries = fresh
       .flatMap((e) => [logEntry(e, game)].flat().filter(Boolean))
+      .concat(pot)
       .map((fields) => ({ id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type: "SYSTEM", timestamp: now(), ...fields }));
     if (entries.length) setMessages((m) => [...m, ...entries]);
-  }, [game, setMessages]);
+  }, [game, setMessages, holdDraw, creditResult]);
 }
 
 function DepthPicker({ depth, max, onChange }) {
@@ -1064,7 +1080,6 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
   const unread = useUnread(messages, panelOpen);
   const bubbles = useChatBubbles(messages);
   const handOrder = useHandOrder(`${game.matchNumber}`);
-  useMoveLog(game, setMessages);
 
   // The deal's animation has played (then the trump is turned up and the first leader named).
   const [dealShown, setDealShown] = useState(null);
@@ -1083,6 +1098,7 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
   }, [latestDraw]);
   const drawLanding = latestDraw !== null && landedDraw !== latestDraw;
   const drawDecided = game.phase !== PHASES.DRAW && !drawLanding;
+  useMoveLog(game, setMessages, drawLanding, online?.credit?.result ?? null);
   const rootRef = useRef(null);
   const n = game.players.length;
   const viewer = mySeat >= 0 ? mySeat : 0;
@@ -1606,7 +1622,11 @@ function KhuzurPlay({ game, mySeat, table, badge, onMove, onStage = null, reject
         <Standings rows={rows} playAgain={playAgain} onLeave={onLeave}>
           {online?.credit?.result && (
             <p className="font-pixel-display text-[10px] text-center text-glow-gold">
-              {myPayout ? `YOU WIN ${myPayout.amount}` : `POT ${online.credit.result.pot}${online.credit.result.payouts.length ? " TO 1ST" : " LOST: NO PLAYER IN 1ST"}`}
+              {online.credit.result.void
+                ? "THE MATCH WAS VOID: EVERY STAKE WENT BACK"
+                : myPayout
+                  ? `YOU WIN ${myPayout.amount}`
+                  : `POT ${online.credit.result.pot}${online.credit.result.payouts.length ? " TO 1ST" : " LOST: NO PLAYER IN 1ST"}`}
             </p>
           )}
           {online && mySeat >= 0 && <RewardPanel reward={online.reward} />}

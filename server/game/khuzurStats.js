@@ -27,10 +27,13 @@ export function khuzurSeatStats(state, seat) {
 
 /** The match as one round summary, for game_rounds and the match page. */
 export function khuzurSummary(state) {
+  // The first player out; or, when the others surrendered, a player of the team left in 1st.
   const first = state.events.find((e) => e.type === "out" && e.place === 1);
+  const team = state.places.indexOf(1);
+  const winnerSeat = first ? first.seat : (state.players.find((p) => p.team === team)?.id ?? null);
   return {
     roundNumber: 1,
-    winnerSeat: first ? first.seat : null,
+    winnerSeat,
     seatResults: state.players.map((p) => ({ seat_index: p.id, place: state.places[p.team], cards_left: p.hand.length, eliminated: false })),
     highlights: null,
   };
