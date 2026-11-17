@@ -1,12 +1,31 @@
 # What's new
 
-Every version of Khuzur Card Hall, newest first. The site reads this file:
+Every version of Khuzur, newest first. The site reads this file:
 the newest version here is the one the main menu shows, and the PATCH NOTES
 page lists them all. Write for players.
 
 The hall is in early access, so versions are 0.x: the middle number moves
 for a new game or a big new system, the last for everything else. 1.0.0 is
 the first stable release.
+
+## 0.7.2 — 16 November 2026
+
+### Khuzur's CPUs think much harder
+- **Medium counts the cards.** It remembers what's gone dead and what each player picked up, so it knows what its own cards are worth now. It leads what the next player is least likely to beat, sheds weak cards while the pile lasts, and once the pile is dry won't lead into a player who'd go out on it. It wins about 6 matches in 10 against the old Medium.
+- **Hard reads the table.** It knows who's holding the stacks they picked up and the trump they drew, and that a pick-up usually means the player couldn't beat. Then it plays its best moves out to the end of the match hundreds of times, against guesses of the hidden cards that fit all of that. It wins about 7 matches in 10 against the new Medium.
+- **Easy plays like a real beginner.** No more random cards: it knows a good move from a bad one, but counts nothing and often settles for its second choice.
+- **No CPU ever peeks.** They still see only what you'd see from their seat, and new tests check every game's CPU makes the same choice however the hidden cards are dealt.
+
+### How it works
+- **A new page explains the math.** HOW IT WORKS, in the main menu's footer, is laid out like the patch notes: chapters on how every shuffle is provably fair, how your cards stay secret, the AI behind each game's CPU (Monte Carlo search, Bayes' rule, constraint satisfaction), and how XP, gold and credits are worked out.
+- **The evidence is there too.** The page shows the results of thousands of CPU-against-CPU matches in every game, and chi-square tests of every game's shuffle.
+
+### Fixes
+- **Khuzur fits a phone.** The table and your hand fit on a phone screen without scrolling.
+- **The draw for the deal waits for the card.** The log names a drawn card, and who deals, only once the card has landed.
+- **Cards snap as they hit Khuzur's table**, as in the other games.
+- **A credit match's pot shows in the log** once the result is in, and a void match now says every stake went back.
+- **Surrendering no longer loses the winner.** When the other teams surrender, the match record names a player of the team left in 1st.
 
 ## 0.7.1 — 13 November 2026
 

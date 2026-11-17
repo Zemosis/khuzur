@@ -218,13 +218,13 @@ Host a table from the Khuzur lobby, public or private. It starts as 2v2 with the
 
 ## 12. The CPU
 
-CPU players come in three levels. Pick one for a practice table; online, the host picks each CPU seat's level. A CPU never sees anyone's cards: it knows only its own hand, the face-up trump, every card that's been played, and how many cards each player holds.
+CPU players come in three levels. Pick one for a practice table; online, the host picks each CPU seat's level. A CPU never sees anyone's cards: it knows only its own hand, the face-up trump, every card that's been played or picked up, and how many cards each player holds.
 
 | Level | How it plays |
 | --- | --- |
-| **Easy** | A beginner. Often leads a random card, and picks up about one stack in three it could have beaten. |
-| **Medium** | A steady player. Leads its weakest cards, saves its trumps and jokers, beats with the cheapest cards that hold, and picks up small stacks rather than spend a trump while there are cards left to draw. |
-| **Hard** | A strong player. Plays each choice out many times against guesses of the cards it can't see, and picks the one that ends best for its team. |
+| **Easy** | A beginner. It knows a good move from a bad one, but counts no cards, never thinks about the player it plays into, and doesn't always play the move it likes best. |
+| **Medium** | A steady player. It counts the cards (what's gone dead, what each player picked up) so it knows what its own cards are worth. It sheds weak cards while the pile lasts, saves trumps and jokers for when they count, leads what the next player is least likely to beat, and once the pile is dry races to go out without leading into a player who'd go out on it. |
+| **Hard** | A strong player. It remembers what Medium does and reads pick-ups too (a player who picked up probably couldn't beat). Then it plays its best few moves out to the end of the match hundreds of times, against guesses of the hidden cards that fit everything the table has shown, and picks the one that ends best for its team. |
 
 ---
 
@@ -257,4 +257,4 @@ Signed in, every online match with at least two people pays **XP** and **gold** 
 
 ---
 
-<sub>**For contributors:** `src/utils/khuzur/cards.js` (card order, leads, covering) and `src/utils/khuzur/engine.js` (the match) implement exactly these rules, and the CPU is `src/utils/khuzur/ai.js`; the server runs byte-identical copies in `server/game/khuzur/`, wrapped by `server/game/khuzurGame.js` (turn clock, surrender votes, redacted views). The in-game rulebook is `src/components/khuzur/KhuzurRules.jsx`. Change them together.</sub>
+<sub>**For contributors:** `src/utils/khuzur/cards.js` (card order, leads, covering) and `src/utils/khuzur/engine.js` (the match) implement exactly these rules, and the CPU is `src/utils/khuzur/ai.js` (with `aiView.js`, `aiPolicy.js` and `aiSearch.js`); the server runs byte-identical copies in `server/game/khuzur/`, wrapped by `server/game/khuzurGame.js` (turn clock, surrender votes, redacted views). The in-game rulebook is `src/components/khuzur/KhuzurRules.jsx`. Change them together.</sub>

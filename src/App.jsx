@@ -22,6 +22,7 @@ const JoinTable = lazy(() => import("./pages/JoinTable"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const PatchNotes = lazy(() => import("./pages/PatchNotes"));
+const HowItWorks = lazy(() => import("./pages/HowItWorks"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const Admin = lazy(() => import("./pages/Admin"));
 
@@ -51,6 +52,7 @@ function App() {
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/patch-notes" element={<PatchNotes />} />
+              <Route path="/how-it-works" element={<HowItWorks />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/admin" element={<Admin />} />
             </Routes>

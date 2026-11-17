@@ -78,9 +78,19 @@ describe("aiAction", () => {
     expect(action.cardIds).not.toContain("A♥");
   });
 
-  it("picks up rather than spend a joker while the pile has cards", () => {
-    const s = lead(playState({ hands: ["9♣ 8♦ 7♦ 10♠ J♠", "GJ 7♣ 8♣ 7♠ 8♠"] }), 0, ["9♣"]);
-    expect(aiAction(s, seededRandom(1))).toEqual({ type: "pickUp", seat: 1 });
+  it("while the pile has cards, beats with a plain card rather than a joker", () => {
+    const s = lead(playState({ hands: ["9♣ 8♦ 7♦ 10♠ J♠", "GJ 10♣ 8♣ 7♠ 8♠"] }), 0, ["9♣"]);
+    expect(aiAction(s, seededRandom(1))).toEqual({ type: "beat", seat: 1, cardIds: ["10♣"] });
+  });
+
+  it("once the pile is dry, MEDIUM leads what the next player can't go out on, and HARD sees further", () => {
+    // Seat 1 holds one card: whatever single it beats, it's out. Only the colored joker beats the gray one,
+    // so MEDIUM leads it. HARD plays it out: seat 1 picks the gray joker up, beats the next lead with
+    // it and leads its last card. Leading the 7♦ risks that only if seat 1's card beats it.
+    const s = playState({ hands: ["8♠ 7♦ GJ", "9♣"], pile: "", trumpCard: null });
+    const at = (level) => aiAction({ ...s, players: s.players.map((p) => ({ ...p, level })) }, seededRandom(2));
+    expect(at("MEDIUM")).toEqual({ type: "lead", seat: 0, cardIds: ["GJ"] });
+    expect(at("HARD")).toEqual({ type: "lead", seat: 0, cardIds: ["7♦"] });
   });
 
   it("beats with the joker once the pile is dry", () => {

@@ -1,25 +1,40 @@
-// KHUZUR CPU — three levels, as pure functions over the engine's state. The
-// policy below is MEDIUM; EASY and HARD are at the end. It decides from what its seat could know: its own hand,
-// the face-up trump, the stack, and how many cards are left to draw. It never
-// reads another player's hand.
+// KHUZUR CPU — three levels, as pure functions over the engine's state.
 //
-// Leading: go out if the whole hand is a lead. While cards are left to draw,
-// lead the biggest lead made of plain cards (it sheds the most, and the hand
-// refills), keeping trumps and jokers. Once the pile is dry, lead as many
-// cards as the table allows.
-// Beating: cover each card with the cheapest card that holds. While cards are
-// left to draw, pick up instead of spending a joker, or trumps on a small
-// stack or on a teammate's cards. Once the pile is dry, beat whenever it can:
-// every card held is a card to get rid of. The same once the table stalls
-// (see stalling).
+// None of them sees a card its seat couldn't: every level reads the table
+// through readTable (aiView.js), which takes the seat's own hand, what's
+// face up and what the table's history showed, and other hands only for how
+// many cards they hold.
+//
+//   EASY    a beginner. It plays by MEDIUM's sense of a good move but counts
+//           no cards (every card it can't see might still be out), doesn't
+//           think about the player it plays into, and doesn't always pick
+//           the move it thinks best: the better a move looks, the likelier
+//           it plays it, but a close second often wins.
+//   MEDIUM  a steady club player. It counts the cards (what's gone dead,
+//           what each player picked up), so it knows what its cards are
+//           worth now; it weighs the chance the next player can't beat a
+//           lead, sheds weak cards while the pile lasts, keeps trumps and
+//           jokers for when they count, picks up when beating would cost
+//           more than the stack, and once the pile is dry races to go out
+//           without leading into a player who'd go out on it. See
+//           aiPolicy.js.
+//   HARD    a strong player. It weighs MEDIUM's best few moves and more by
+//           playing the match out in its head, hundreds of times, against
+//           deals of the cards it can't see that fit everything the table
+//           has shown, and plays the move whose team ends best. See
+//           aiSearch.js.
+//
+// Every level swaps the trump 7 for the face-up trump the moment it can.
 
-import { LEAD_SIZES, beats, cardPower, coverWith, isJoker, isTrump, isValidLead, shuffle } from "./cards.js";
-import { PHASES, beat, canSwapSeven, drawForDeal, isFreeForAll, lead, leadLimit, maxDrawDepth, pickUp, swapTrumpSeven, topLayer } from "./engine.js";
+import { LEAD_SIZES, beats, cardPower, isJoker, isTrump, isValidLead } from "./cards.js";
+import { PHASES, beat, canSwapSeven, drawForDeal, lead, maxDrawDepth, pickUp, swapTrumpSeven } from "./engine.js";
+import { readTable, outsideCards } from "./aiView.js";
+import { WEIGHTS, cheapCover, makeCounter, naiveCounter, scoredMoves, situation, stalling } from "./aiPolicy.js";
+import { bestMove } from "./aiSearch.js";
 
-const SMALL_STACK = 3; // a stack this small isn't worth a trump while the pile lasts
+// ---- Kept for the table: a timed-out leader's card, and the tests -----------
 
 const byPower = (trumpSuit) => (a, b) => cardPower(a, trumpSuit) - cardPower(b, trumpSuit);
-const idOf = (card) => card.id;
 
 /**
  * The cheapest lead of `size` cards: pairs from the lowest-powered ranks,
@@ -51,197 +66,87 @@ export function cheapestLead(hand, size, trumpSuit) {
 /**
  * Cover each card of the layer with the cheapest card that beats it, the
  * card with the fewest answers first. Returned in the layer's column order,
- * or null. If that greedy pick strands a card, any cover that works will do.
+ * or null.
  */
 export function cheapestCover(layer, hand, trumpSuit) {
-  const free = [...hand].sort(byPower(trumpSuit));
-  const answers = (col) => free.filter((card) => beats(card, layer[col], trumpSuit)).length;
-  const result = new Array(layer.length);
-  const columns = layer.map((_, i) => i).sort((a, b) => answers(a) - answers(b) || cardPower(layer[b], trumpSuit) - cardPower(layer[a], trumpSuit));
-  for (const col of columns) {
-    const i = free.findIndex((card) => beats(card, layer[col], trumpSuit));
-    if (i < 0) return fallbackCover(layer, hand, trumpSuit);
-    result[col] = free.splice(i, 1)[0];
-  }
-  return result;
+  if (hand.filter((c) => layer.some((top) => beats(c, top, trumpSuit))).length < layer.length) return null;
+  return cheapCover(layer, hand, trumpSuit, (c) => cardPower(c, trumpSuit));
 }
 
-/** Any cover of the layer from the hand, the cheapest cards tried first, or null. */
-function fallbackCover(layer, hand, trumpSuit) {
-  const usable = [...hand].filter((card) => layer.some((top) => beats(card, top, trumpSuit))).sort(byPower(trumpSuit));
-  if (usable.length < layer.length) return null;
-  // Grow the pool cheapest first until it covers: small hands, so this stays quick.
-  for (let n = layer.length; n <= usable.length; n++) {
-    const pool = usable.slice(0, n);
-    const cover = coverWith(layer, pool, trumpSuit);
-    if (cover) return cover;
-  }
-  return null;
+// ---- The levels ----------------------------------------------------------------
+
+/** What a seat knows, set out for scoring moves. `counting` false forgets every card seen. */
+function judge(state, seat, { counting }) {
+  const view = readTable(state, seat);
+  const counter = counting ? makeCounter(outsideCards(view), state.trumpSuit) : naiveCounter(view.hand, state.trumpSuit, view.handSize);
+  const players = counting ? view.players : view.players.map((p) => ({ ...p, known: [] }));
+  return { view, sit: situation(state, seat, players, counter) };
 }
 
-const cardsLeftToDraw = (state) => state.drawPile.length + (state.trumpCard ? 1 : 0);
-
-// Players holding extra cards lead without drawing, so pick-ups by choice can
-// pass the same cards round the table forever while the pile never shrinks.
-// Two pick-ups with no draw or dead stack between them is a stall: from then
-// on the CPU beats whenever it can, and leads single cards, since big leads
-// nobody can cover can loop too. It reads only the public table history.
-const STALL_PICKUPS = 2;
-function stalling(state) {
-  let pickUps = 0;
-  for (let i = state.events.length - 1; i >= 0; i--) {
-    const type = state.events[i].type;
-    if (type === "draw" || type === "dead" || type === "deal") break;
-    if (type === "pickUp") pickUps++;
-  }
-  return pickUps >= STALL_PICKUPS;
-}
-
-function chooseLead(state, seat) {
-  const hand = state.players[seat].hand;
-  const trump = state.trumpSuit;
-  const limit = leadLimit(state);
-  const dry = cardsLeftToDraw(state) === 0;
-  if (dry && hand.length <= limit && isValidLead(hand)) return hand; // goes out
-  // A stall where nobody can beat the big leads: a single gets the stack round.
-  if (stalling(state)) return cheapestLead(hand, 1, trump);
-  const sizes = LEAD_SIZES.filter((n) => n <= limit).sort((a, b) => b - a);
-  if (!dry) {
-    const plain = hand.filter((card) => !isJoker(card) && !isTrump(card, trump));
-    for (const size of sizes) {
-      const choice = cheapestLead(plain, size, trump);
-      if (choice) return choice;
-    }
-    return cheapestLead(hand, 1, trump);
-  }
-  for (const size of sizes) {
-    const choice = cheapestLead(hand, size, trump);
-    if (choice) return choice;
-  }
-  return cheapestLead(hand, 1, trump);
-}
-
-function chooseDefense(state, seat) {
-  const trump = state.trumpSuit;
-  const cover = cheapestCover(topLayer(state), state.players[seat].hand, trump);
-  if (!cover) return null;
-  if (cardsLeftToDraw(state) === 0 || stalling(state)) return cover;
-  if (cover.some(isJoker)) return null;
-  const trumps = cover.filter((card) => isTrump(card, trump)).length;
-  if (!trumps) return cover;
-  const stackSize = state.stack.layers.flat().length;
-  if (stackSize <= SMALL_STACK) return null;
-  const topOwner = state.stack.owners.at(-1);
-  const teammates = !isFreeForAll(state) && state.players[topOwner].team === state.players[seat].team;
-  return teammates ? null : cover;
-}
-
-/** MEDIUM's move in PLAY. */
 function mediumMove(state, seat) {
-  if (!state.stack) return { type: "lead", seat, cardIds: chooseLead(state, seat).map(idOf) };
-  const cover = chooseDefense(state, seat);
-  return cover ? { type: "beat", seat, cardIds: cover.map(idOf) } : { type: "pickUp", seat };
+  const { sit } = judge(state, seat, { counting: true });
+  return scoredMoves(state, seat, sit, WEIGHTS)[0].move;
 }
 
-// ---- EASY: a beginner ------------------------------------------------------
-// Leads a random single most of the time, else what MEDIUM would; beats about
-// two times in three when it can, and picks up the rest. It keeps the stall
-// rule, so it never loops a table.
+// EASY picks among its moves at random, each as likely as e^(score / EASY_TEMPER)
+// (a softmax): a move a full point worse is about a third as likely.
+const EASY_TEMPER = 1.0;
 
 function easyMove(state, seat, rng) {
-  const hand = state.players[seat].hand;
-  if (!state.stack) {
-    if (stalling(state) || rng() < 0.6) return { type: "lead", seat, cardIds: [hand[Math.floor(rng() * hand.length)].id] };
-    return mediumMove(state, seat);
+  const { sit } = judge(state, seat, { counting: false });
+  const moves = scoredMoves(state, seat, sit, WEIGHTS, { aware: false });
+  if (moves[0].score >= 1000) return moves[0].move; // going out is never missed
+  const top = moves[0].score;
+  const odds = moves.map((m) => Math.exp((m.score - top) / EASY_TEMPER));
+  let roll = rng() * odds.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < moves.length; i++) {
+    roll -= odds[i];
+    if (roll <= 0) return moves[i].move;
   }
-  const cover = cheapestCover(topLayer(state), hand, state.trumpSuit);
-  if (cover && (stalling(state) || cardsLeftToDraw(state) === 0 || rng() < 2 / 3)) return { type: "beat", seat, cardIds: cover.map(idOf) };
-  return { type: "pickUp", seat };
+  return moves[0].move;
 }
 
-// ---- HARD: plays each choice out ------------------------------------------
-// Candidates: MEDIUM's move, picking up, and the cheapest lead of each size
-// (with and without trumps). Each is played out HARD_SAMPLES times: the cards
-// this seat can't see (other hands and the draw pile) are dealt again at
-// random, keeping every count, and every seat plays MEDIUM to the end, or to
-// ROLLOUT_CAP moves. The candidate whose team ends best is played.
+// HARD's budget: moves played out in its head per decision, all worlds and moves together.
+const HARD_BUDGET = 6000;
+// The moves HARD plays out: MEDIUM's best, and any within HARD_REACH of its
+// score, HARD_MOVES at most, picking up whenever it may, and the cheapest
+// plain moves. Fewer moves means more worlds for each.
+const HARD_MOVES = 6;
+const HARD_REACH = 1.5;
 
-const HARD_SAMPLES = 16;
-const ROLLOUT_CAP = 300;
-
-function hardCandidates(state, seat) {
-  const medium = mediumMove(state, seat);
-  const list = [medium];
+function hardMove(state, seat, rng) {
+  const { view, sit } = judge(state, seat, { counting: true });
+  const scored = scoredMoves(state, seat, sit, WEIGHTS, { wide: true });
+  if (scored[0].score >= 1000) return scored[0].move;
+  const moves = scored
+    .filter((m) => m.score >= scored[0].score - HARD_REACH)
+    .slice(0, HARD_MOVES)
+    .map((m) => m.move);
+  const pick = scored.find((m) => m.move.type === "pickUp");
+  if (pick && !moves.includes(pick.move)) moves.push(pick.move);
+  // And the plain moves MEDIUM's scores might pass over: the cheapest cover,
+  // and the cheapest lead of each size, with and without trumps.
+  const key = (m) => `${m.type}:${[...(m.cardIds ?? [])].sort().join(",")}`;
+  const have = new Set(moves.map(key));
+  const add = (m) => {
+    if (have.has(key(m))) return;
+    have.add(key(m));
+    moves.push(m);
+  };
   const hand = state.players[seat].hand;
-  const trump = state.trumpSuit;
   if (state.stack) {
-    const cover = cheapestCover(topLayer(state), hand, trump);
-    if (cover) list.push({ type: "beat", seat, cardIds: cover.map(idOf) });
-    list.push({ type: "pickUp", seat });
-  } else {
-    const limit = leadLimit(state);
-    const plain = hand.filter((card) => !isJoker(card) && !isTrump(card, trump));
-    for (const size of LEAD_SIZES.filter((n) => n <= limit)) {
+    const cover = cheapestCover(state.stack.layers.at(-1), hand, state.trumpSuit);
+    if (cover && !stalling(state)) add({ type: "beat", seat, cardIds: cover.map((c) => c.id) });
+  } else if (!stalling(state)) {
+    const plain = hand.filter((c) => !isJoker(c) && !isTrump(c, state.trumpSuit));
+    for (const size of LEAD_SIZES.filter((n) => n <= sit.limit)) {
       for (const from of [plain, hand]) {
-        const choice = cheapestLead(from, size, trump);
-        if (choice) list.push({ type: "lead", seat, cardIds: choice.map(idOf) });
+        const cards = cheapestLead(from, size, state.trumpSuit);
+        if (cards) add({ type: "lead", seat, cardIds: cards.map((c) => c.id) });
       }
     }
   }
-  const seen = new Set();
-  return list.filter((m) => {
-    const key = `${m.type}:${[...(m.cardIds ?? [])].sort().join(",")}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-/** The state with every card `seat` can't see dealt again at random, counts kept. */
-function redeal(state, seat, rng) {
-  const others = state.players.filter((p) => p.id !== seat);
-  const pool = [...others.flatMap((p) => p.hand), ...state.drawPile].sort((a, b) => (a.id < b.id ? -1 : 1));
-  const dealt = shuffle(pool, rng);
-  let next = 0;
-  const take = (n) => dealt.slice(next, (next += n));
-  const players = state.players.map((p) => (p.id === seat ? p : { ...p, hand: take(p.hand.length) }));
-  return { ...state, players, drawPile: take(state.drawPile.length), events: state.events.slice(-6) };
-}
-
-/** How a played-out match went for `team`: its place, or a guess from hand sizes. Lower is better. */
-function outcome(state, team) {
-  if (state.places[team] != null) return state.places[team];
-  const smallest = (t) => Math.min(...state.players.filter((p) => p.team === t && !p.out).map((p) => p.hand.length));
-  const mine = smallest(team);
-  const ahead = state.places.filter((p, t) => p != null || (t !== team && smallest(t) < mine)).length;
-  return ahead + 1.5;
-}
-
-function rollout(state, rng) {
-  let s = state;
-  for (let i = 0; i < ROLLOUT_CAP && s.phase === PHASES.PLAY; i++) {
-    const seat = s.turn;
-    s = applyAction(s, canSwapSeven(s, seat) ? { type: "swapSeven", seat } : mediumMove(s, seat), rng);
-  }
-  return s;
-}
-
-function hardMove(state, seat, rng) {
-  const candidates = hardCandidates(state, seat);
-  if (candidates.length === 1) return candidates[0];
-  const team = state.players[seat].team;
-  const totals = candidates.map(() => 0);
-  for (let k = 0; k < HARD_SAMPLES; k++) {
-    const world = redeal(state, seat, rng);
-    candidates.forEach((move, i) => {
-      totals[i] += outcome(rollout(applyAction(world, move, rng), rng), team);
-    });
-  }
-  let best = 0;
-  totals.forEach((t, i) => {
-    if (t < totals[best]) best = i;
-  });
-  return candidates[best];
+  return bestMove(state, view, moves, applyAction, rng, { budget: HARD_BUDGET });
 }
 
 const LEVEL_MOVES = { EASY: easyMove, MEDIUM: mediumMove, HARD: hardMove };

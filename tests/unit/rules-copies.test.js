@@ -15,7 +15,7 @@ const COPIES = [
   ["muushig", ["engine.js", "ai.js"]],
   ["poker", ["hands.js", "pots.js", "engine.js", "ai.js", "table.js", "tiers.js"]],
   ["blackjack", ["rules.js", "engine.js", "table.js"]],
-  ["khuzur", ["cards.js", "engine.js", "ai.js"]],
+  ["khuzur", ["cards.js", "engine.js", "ai.js", "aiView.js", "aiPolicy.js", "aiSearch.js"]],
 ].flatMap(([game, files]) => files.map((file) => [game, file]));
 
 describe.each(COPIES)("%s/%s", (game, file) => {

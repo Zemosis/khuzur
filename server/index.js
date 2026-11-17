@@ -1,4 +1,4 @@
-// KHUZUR CARD HALL — authoritative game server.
+// KHUZUR — authoritative game server.
 // All game state lives in RAM here. Clients only send move requests; the
 // server validates everything and emits redacted state (hidden hands stripped).
 

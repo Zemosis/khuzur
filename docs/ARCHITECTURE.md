@@ -1,6 +1,6 @@
 # Architecture
 
-How Khuzur Card Hall is built: a React site, a Node game server that owns every table, and a Postgres database for accounts and match history. For what the project is, see the [README](../README.md).
+How Khuzur is built: a React site, a Node game server that owns every table, and a Postgres database for accounts and match history. For what the project is, see the [README](../README.md).
 
 ## Contents
 

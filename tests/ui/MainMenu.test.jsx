@@ -46,6 +46,7 @@ describe("MainMenu", () => {
     renderMenu();
     expect(screen.getByText(new RegExp(`v${VERSION.replace(/\./g, "\\.")} — patch`))).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Patch notes" })).toHaveAttribute("href", "/patch-notes");
+    expect(screen.getByRole("link", { name: "How it works" })).toHaveAttribute("href", "/how-it-works");
   });
 
   it("is branded Khuzur, with no kicker, tagline or per-game kickers", () => {

@@ -33,20 +33,27 @@ const LEVELS = [
   {
     id: "EASY",
     who: "A beginner",
-    traits: ["Often leads a random card.", "Picks up about one stack in three it could have beaten."],
+    traits: [
+      "Knows a good move from a bad one, but counts no cards and never thinks about who it plays into.",
+      "Doesn't always play the move it likes best: a close second often wins.",
+    ],
   },
   {
     id: "MEDIUM",
     who: "A steady player",
     traits: [
-      "Leads its weakest cards and saves its trumps and jokers.",
-      "Beats with the cheapest cards that hold, and picks up small stacks rather than spend a trump while there are cards to draw.",
+      "Counts the cards: what's gone dead and what each player picked up, so it knows what its own cards are worth.",
+      "Sheds weak cards while the pile lasts, saves trumps and jokers for when they count, and leads what the next player is least likely to beat.",
+      "Once the pile is dry it races to go out, and won't lead into a player who'd go out on it.",
     ],
   },
   {
     id: "HARD",
     who: "A strong player",
-    traits: ["Plays each choice out many times against guesses of the cards it can't see.", "Picks the one that ends best for its team."],
+    traits: [
+      "Remembers everything MEDIUM does, and reads pick-ups: a player who picked up probably couldn't beat.",
+      "Plays its best few moves out to the end of the match hundreds of times, against guesses of the hidden cards that fit everything the table has shown, and picks the one that ends best for its team.",
+    ],
   },
 ];
 
@@ -267,7 +274,7 @@ export default function KhuzurRules({ onClose }) {
       </Section>
 
       <Section id="levels" n={12} title="CPU levels">
-        <p>A CPU never sees anyone's cards: only its own hand, the trump, the cards played, and how many each player holds.</p>
+        <p>A CPU never sees anyone's cards: only its own hand, the trump, the cards played and picked up, and how many each player holds.</p>
         <CpuLevels levels={LEVELS} />
       </Section>
 

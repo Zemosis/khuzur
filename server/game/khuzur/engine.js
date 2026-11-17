@@ -359,7 +359,7 @@ export function swapTrumpSeven(prev, seat) {
   const hand = state.players[seat].hand;
   const i = hand.findIndex((c) => c.rank === "7" && c.suit === state.trumpSuit);
   const [seven] = hand.splice(i, 1, state.trumpCard);
-  state.events.push({ type: "swapSeven", seat, card: state.trumpCard });
+  state.events.push({ type: "swapSeven", seat, card: state.trumpCard, seven });
   state.trumpCard = seven;
   return state;
 }

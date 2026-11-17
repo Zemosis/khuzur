@@ -298,6 +298,10 @@ const MainMenu = () => {
               Patch notes
             </Link>
             <span className="text-mist mx-2">|</span>
+            <Link to="/how-it-works" className="underline hover:text-parchment">
+              How it works
+            </Link>
+            <span className="text-mist mx-2">|</span>
             <Link to="/privacy" className="underline hover:text-parchment">
               Privacy
             </Link>
